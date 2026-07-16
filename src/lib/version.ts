@@ -1,0 +1,435 @@
+export interface ChangelogItem {
+  version: string;
+  date: string;
+  content: string;
+}
+
+export const CHANGELOGS: ChangelogItem[] = [
+  {
+    version: 'v2.5.4',
+    date: '2026-07-15',
+    content: `
+- 換源時背景刷新集數變少時自動校正當前集，並加換源 race 守衛。
+- E2E 測試改用 production build 執行，消除 CI dev 模式編譯逾時問題。
+- 補強 titleParser 單元測試（中文數字、季數標記、羅馬數字、Part 容錯）。
+- 補強 play-records 單元測試（繁簡去重、年份隔離、hydrate 補全）。
+    `.trim(),
+  },
+  {
+    version: 'v2.5.3',
+    date: '2026-07-15',
+    content: `
+- 來源級熔斷機制：連續逾時的來源自動冷卻跳過，搜尋不再被死源拖慢。
+- 換源時自動刷新集數資訊，確保顯示最新集數。
+- README 通用化重構與授權標示修正。
+    `.trim(),
+  },
+  {
+    version: 'v2.5.2',
+    date: '2026-07-14',
+    content: `
+- 修復封面圖片直連被封鎖的問題。
+    `.trim(),
+  },
+  {
+    version: 'v2.5.1',
+    date: '2026-07-14',
+    content: `
+- 版本常規更新與 README 通用化重構。
+    `.trim(),
+  },
+  {
+    version: 'v2.5.0',
+    date: '2026-07-13',
+    content: `
+- 集數更新修復：
+  - cron 刷新播放記錄／收藏集數時改為詳情 API 優先，不再吃到搜尋快取的舊資料。
+  - 播放頁從搜尋結果進入時也會在背景刷新最新詳情（原本僅直連載入會刷新）。
+  - cron 執行順序調整：集數刷新優先於直播源刷新，避免時間預算被吃光。
+  - 放寬 m3u8 網址判斷，支援帶簽名參數的來源（xxx.m3u8?sign=...）。
+- 搜尋比對精準度優化（hybrid LCS）：
+  - 以最長公共子字串（連續匹配）為主路徑，子序列僅在已有足夠連續核心時輔助放寬。
+  - 修復純子序列造成的散落同字誤配（例如不同作品僅共享部分字根）。
+  - 清除 strictDirection 死碼，統一 titleParser 的 Part/pt/prat 與季數解析。
+  - 播放頁類型判斷收斂動漫關鍵字，避免單字「漫」誤判。
+- 專案清理：移除無人引用的 getCoreTokens 與過期版本常數、偵錯測試檔移出正式測試。
+    `.trim(),
+  },
+  {
+    version: 'v2.4.8',
+    date: '2026-07-12',
+    content: `
+- 搜尋引擎重構：
+  - 統一標題季數／Part 解析至 titleParser。
+  - 調整模糊比對覆蓋門檻，改善繁簡與季數標記的片源命中。
+    `.trim(),
+  },
+  {
+    version: 'v2.4.6',
+    date: '2026-07-12',
+    content: `
+- 核心安全性與穩定性全面重構：
+  - 徹底移除 \`next-pwa\` 套件，改用原生 Service Worker 實作 PWA，消除 17 個建置鏈資安弱點。
+  - 根除 SSRF TOCTOU 漏洞：引入 \`undici\` 鎖定遠端連線的安全解析 IP。
+  - Session 強制撤銷機制：Cookie 簽章加入會話版本號，密碼變更與封鎖時所有裝置立即登出。
+  - 登入限流分散式化：由單機記憶體改為共用 Redis/Kvrocks 狀態，防堵暴力破解。
+  - 新增片源健康度追蹤，並引入 Playwright E2E 測試保護登入與 PWA 流程。
+    `.trim(),
+  },
+  {
+    version: 'v2.4.5',
+    date: '2026-07-11',
+    content: `
+- 台灣繁體搜尋中國大陸片源全面優化：
+  - 導入伺服器端 OpenCC 台灣繁體轉簡體，不增加前端 bundle。
+  - 新增台灣／中國片名別名、長標題拆分與可信結果 fallback。
+  - 搜尋變體改為循序執行並命中即停，提升速度並降低下游請求量。
+  - 保留 CMS 原始片名與內容，並補強搜尋負快取與回歸測試。
+- 安全與穩定性：修正觀看紀錄誤刪、限制圖片代理資源、補強安全標頭與相依版本。
+    `.trim(),
+  },
+  {
+    version: 'v2.4.4',
+    date: '2026-07-06',
+    content: `
+- 全面品質提升與視覺大改造：
+  - 科技暗黑主題：深色背景升級、霓虹青光效、科技感 UI。
+  - 播放頁瘦身：抽離 helpers、FavoriteIcon、useFavorite hook。
+  - 搜尋過濾優化：移除過嚴的季數過濾，改用標題評分自然排序。
+  - 安全強化：password.ts 明文比對改用 timingSafeEqual。
+  - 依賴漏洞修復：48 → 37（0 critical）。
+  - 測試覆蓋：auth.ts +18 測試，總計 174 tests。
+    `.trim(),
+  },
+
+  {
+    version: 'v2.4.3',
+    date: '2026-07-05',
+    content: `
+- 專案架構與維護性大幅升級：
+  - 重構 Admin 控制台：將原本 5,740 行的巨型元件拆分為 11 個模組化元件。
+  - 重構 NetflixHome 首頁：將 1,655 行的單一元件乾淨拆分為 13 個獨立職責模組。
+  - TypeScript 型別衛生優化：收斂環境變數與型別斷言，清除危險的 'any' 債務。
+    `.trim(),
+  },
+
+  {
+    version: 'v2.4.1',
+    date: '2026-07-04',
+    content: `
+- UI 體質大升級與清理：
+  - 全站深色系全面統一為冷灰色調 (zinc)
+  - 修正所有舊有寫死的 accent 色碼並改用 Tailwind CSS 變數，增進主題擴展性
+  - 完美支援行動端，修復了手機端在繼續觀看與歷史紀錄無法按下刪除按鈕的問題
+  - 全站 Shimmer (載入閃光) 動畫實裝
+  - 各種卡片陰影與進度條的視覺微調
+    `.trim(),
+  },
+  {
+    version: 'v2.4.0',
+    date: '2026-07-03',
+    content: `
+- UI/UX 頂級美學大升級：
+  - 玻璃質感的系統通知 (Toast) 支援多種狀態提示
+  - 繼續觀看、播放紀錄全域無框化與漸層遮罩 (Fade-out Mask)
+  - 影片卡片導入微動畫與高質感半透明來源徽章 (Pill Badge)
+  - 全新的播放手勢動畫回饋 (Play/Pause 居中圖示)
+  - 側邊導覽列加入發光螢光紅指示條
+- 搜尋體驗進化：首頁與搜尋頁面預設顯示「最近搜尋」與「大家都在搜」
+- 修復自動恢復播放時的手勢閃爍問題
+- 清理未使用模組與不必要的 import 警告
+    `.trim(),
+  },
+  {
+    version: 'v2.3.1',
+    date: '2026-06-24',
+    content: `
+- Add an owner-only, read-only health page for storage, Cron, source, and uptime status.
+- Track Cron completion status and expose actionable diagnostics without leaking credentials.
+    `.trim(),
+  },
+  {
+    version: 'v2.3.0',
+    date: '2026-06-13',
+    content: `
+- Persist Bangumi alias cache in Redis, Kvrocks, and Upstash so anime alias lookups survive container restarts.
+- Keep the existing in-memory alias cache as the fastest layer, then fall back to persistent cache before calling Bangumi.
+- Preserve best-effort behavior: cache read/write failures do not block search or playback.
+- Add route coverage for persistent alias cache hit, miss, and storage failure fallback.
+    `.trim(),
+  },
+  {
+    version: 'v2.2.9',
+    date: '2026-06-09',
+    content: `
+- 新增播放頁 ErrorBoundary 與行為檢查清單，降低播放頁重構或例外錯誤造成白屏的風險。
+- 補上 Playwright E2E 測試，覆蓋播放頁載入、切集、切源、關頁保存與去廣告初始狀態。
+- 抽離播放紀錄保存 hook，保留切源刪除舊紀錄、sendBeacon/keepalive 關頁保存與 saveLockRef 防競態行為。
+- 抽離播放頁純函式與片源搜尋 hook，讓優選測速、搜尋過濾與播放頁 UI 更容易維護。
+- 修正優選測速工具中的中文狀態字串，確保「未知」「測量中...」與「影片標題」可被正確判斷。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.8',
+    date: '2026-06-05',
+    content: `
+- Cron 改為快速回應並在背景執行，避免資料較多時被 HTTP timeout 中斷，同時加入執行中防重入保護。
+- 保留低併發處理策略，降低 1C1G 小機在更新播放紀錄、收藏與直播源時的負載。
+- 影片詳情失效時新增同片源保守 fallback，可在原 ID 失效時用標題匹配校正集數，並避免不同季、特別篇或外傳誤配。
+- 補充 fetchVideoDetail 回歸測試，鎖定集數同步 fallback 的正確行為。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.7',
+    date: '2026-06-03',
+    content: `
+- 修復播放紀錄以片名匹配造成的同名影片誤合併與 Cron 集數同步失準問題。
+- 播放紀錄改回以 source + id 精準匹配，並保留舊紀錄顯示相容。
+- 移除首頁封面補圖時回寫播放紀錄的副作用，避免無關 UI 更新污染紀錄。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.6',
+    date: '2026-06-02',
+    content: `
+- 修正繼續觀看卡牌總集數可能被舊詳情快取卡住的問題。
+- 首頁會以最新影片詳情校正卡牌顯示，並避開舊快取，不改播放紀錄資料格式或資料鍵值。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.5',
+    date: '2026-06-02',
+    content: `
+- 修正首頁繼續觀看卡牌總集數顯示可能停在舊集數的問題。
+- 以最新影片詳情在前端顯示層向上校正總集數，不改播放紀錄格式、鍵值或資料語意。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.4',
+    date: '2026-06-01',
+    content: `
+- 修復設定頁聚合搜尋開關 key 不一致，並保留舊 key 讀取相容。
+- 修復換源失敗時 loading 遮罩卡住、來源清單排序 mutate state、搜尋與播放紀錄 API 邊界驗證問題。
+- 補強直播節目單來源讀取、AlertModal 計時器清理、Douban Top250 pageSize 與搜尋歷史數量一致性。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.3',
+    date: '2026-05-31',
+    content: `
+- 修正首頁「繼續觀看」卡牌缺圖時只顯示片名的問題，會自動從詳情快取或影片詳情 API 補齊封面。
+- 補到封面後會回寫播放紀錄，避免重新整理或下次登入後再次缺圖。
+- 播放頁保存進度時會保留既有封面，不再因片源詳情暫時缺 poster 而覆蓋成空值。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.2',
+    date: '2026-05-31',
+    content: `
+- 修正動漫單集（話/集）被誤判為季數而導致搜尋比對被過濾的問題。
+- 為搜尋、單一搜尋與搜尋建議 API 補上逾時 Race Timeout 與定時器清理，避免連線堆積與記憶體洩漏。
+- 修正直播節目單 EpgScrollableRow 的 wheel 事件監聽範圍，避免懸停時網頁全域滾動凍結。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.1',
+    date: '2026-05-30',
+    content: `
+- 修正動漫季數與分部（Part）提取邏輯，解決類似「石紀元 科學與未來 第3部分」與片源「石紀元第四季Part3」匹配失敗問題。
+- 引入 Part 標記比對機制與常見動漫副標題季數自動推導（如「科學與未來」-> 第四季），加強搜尋比對容錯。
+    `.trim(),
+  },
+  {
+    version: 'v2.2.0',
+    date: '2026-05-30',
+    content: `
+- 動漫「番劇」與「劇場版」改為固定走服務端豆瓣 API，避免瀏覽器端代理或 CORS 造成卡牌空白。
+- 豆瓣推薦結果為空時新增穩定備援：番劇改查最近熱門動畫，劇場版改查動畫電影列表。
+- 保留每日放送繁體中文標題顯示，不影響播放搜尋與觀看紀錄。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.9',
+    date: '2026-05-30',
+    content: `
+- 動漫「番劇」與「劇場版」恢復使用原本豆瓣資料流程。
+- 保留「每日放送」卡牌標題繁體中文顯示修正。
+- 移除未使用的 Bangumi subjects 目錄 API，避免多餘維護成本。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.8',
+    date: '2026-05-30',
+    content: `
+- 動漫「番劇」與「劇場版」改用 Bangumi 番組計劃資料來源，避免豆瓣動畫篩選回空造成卡牌不顯示。
+- Bangumi 動漫列表會在伺服器端過濾成人內容、轉為繁體中文顯示，豆瓣資料僅作為備援。
+- 支援透過 BANGUMI_ACCESS_TOKEN 使用自己的 Bangumi API Token，不會把 Token 寫入程式碼。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.7',
+    date: '2026-05-30',
+    content: `
+- Bangumi 動漫卡牌進入播放頁時改用嚴格標題匹配，避免誤配到不同季或不同作品。
+- 手動搜尋仍保留繁簡轉換、特殊符號與別名容錯，不影響一般搜尋體驗。
+- 新增 Dr.STONE / Bangumi 卡牌匹配回歸測試，防止同類問題再次發生。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.6',
+    date: '2026-05-30',
+    content: `
+- 優化 Bangumi 動漫卡牌播放搜尋，中文與簡體別名優先，日文名稱只作為備援。
+- 搜尋播放源時會累積多個高價值標題變體的結果，不再因第一個弱命中就提前停止。
+- 觀看紀錄改用正規化片名去重，避免同一部作品因不同片源重複顯示。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.5',
+    date: '2026-05-28',
+    content: `
+- 刪除觀看紀錄時會同步清除同片名與同片源的殘留紀錄。
+- 首頁「繼續觀看」與觀看紀錄頁在單筆刪除、批量刪除後保持同步。
+- 刪除請求會帶上片名與片源資訊，避免舊快取資料重新出現。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.4',
+    date: '2026-05-28',
+    content: `
+- 觀看紀錄頁改用與首頁「繼續觀看」一致的最新紀錄去重邏輯。
+- 刪除播放紀錄時會清除同一 source/id 的所有匹配紀錄，避免舊格式 key 殘留。
+- 刪除後會從伺服器重新整理播放紀錄快取，避免已刪除紀錄再次出現。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.3',
+    date: '2026-05-28',
+    content: `
+- 優化影片別名擷取邏輯，排除作者、原作、系列構成等非片名資料。
+- 排除日文假名與羅馬拼音變體，並限制英文備援數量，減少多餘搜尋。
+- 清理播放頁載入畫面，移除「正在嘗試 xxx」文字與細節查詢按鈕。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.2',
+    date: '2026-05-28',
+    content: `
+- 修正伺服器端觀看紀錄刪除邏輯，避免冗餘處理與錯誤被吞掉。
+- 儲存播放紀錄成功後會從 API 重新整理快取，修正客戶端 key 不一致問題。
+- 搜尋歷史、觀看紀錄與跳過片頭片尾設定加入 rollback 與資料庫錯誤恢復機制。
+- 設定頁資料庫操作失敗時會正確拋出錯誤，不再靜默失敗。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.1',
+    date: '2026-05-27',
+    content: `
+- 從播放頁進入本地設定再返回時，保留片名、片源與集數 URL 狀態。
+- 切換集數時同步更新播放 URL，重新整理、返回設定、瀏覽器返回都能恢復正確集數。
+- 防止「影片標題」等佔位文字覆蓋真實觀看紀錄或收藏資料。
+- 調整小字對比度，讓次要文字清楚可讀且不過度刺眼。
+    `.trim(),
+  },
+  {
+    version: 'v2.1.0',
+    date: '2026-05-27',
+    content: `
+- 改善首頁卡牌、片源標籤、手機操作面板與播放頁換源列表的小字可讀性。
+- 加強深色與淺色主題下的資訊文字、集數、速度、延遲與次要標籤對比。
+- 保持播放流程、搜尋邏輯、片源名稱與既有儲存資料不變。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.9',
+    date: '2026-05-27',
+    content: `
+- 移除多餘 debug build 與第三方 workflow 清理 action，穩定 Docker 映像建置流程。
+- 將已測試的花旗片源加入內建預設設定，新的安裝可直接使用，且不改動既有片源名稱。
+- 清理應用內版本紀錄，避免更新頁顯示舊版亂碼文字。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.8',
+    date: '2026-05-26',
+    content: `
+- 改善含標點、冒號、破折號、括號與混合空格片名的搜尋命中率。
+- 一般搜尋與 Bangumi 播放源匹配新增忽略標點的查詢變體。
+- 保持片源名稱、儲存資料、播放流程與 UI 不變。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.7',
+    date: '2026-05-26',
+    content: `
+- 為 cron 設定訂閱、直播播放清單與 EPG 取得流程加入安全重新導向檢查。
+- 管理後台片源驗證與下游搜尋/詳情請求套用一致的遠端 URL 安全防護。
+- 保持播放流程、片源名稱、儲存 key 與 UI 行為不變。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.6',
+    date: '2026-05-26',
+    content: `
+- 加固遠端代理重新導向處理，跟隨 Location 前會重新驗證目標 URL。
+- 圖片代理只允許安全圖片類型回應，並加入 nosniff 防護。
+- 修正備份匯入流程，已雜湊的使用者密碼會直接還原，不再被二次雜湊。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.5',
+    date: '2026-05-26',
+    content: `
+- 加強直播代理 URL 驗證，拒絕 localhost 與私有網路等不安全目標。
+- 保留直播代理相容參數，同時提升請求安全性。
+- 改善 Docker build context 清理，降低 VPS 部署負擔。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.4',
+    date: '2026-05-26',
+    content: `
+- 改善手機主題對比，穩定淺色/深色模式底部導航配色。
+- 優化 Bangumi 別名處理與錯誤 fallback。
+- 保持播放 URL 與片源 key 的安全編碼處理。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.3',
+    date: '2026-05-26',
+    content: `
+- 優化手機 UI 與 PWA 導航體驗。
+- 修正「繼續觀看」卡牌圖片 fallback 行為。
+- UI 清理過程中保留既有觀看紀錄與片源 key，不影響資料。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.2',
+    date: '2026-05-25',
+    content: `
+- 將 Bangumi 別名取得移到伺服器端 API，避免客戶端 CORS 問題。
+- 減少正式環境中的播放 URL debug log。
+- 保留舊版儲存 key，確保 Kvrocks、Redis、Upstash 與 localStorage 相容。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.1',
+    date: '2026-05-25',
+    content: `
+- 保留使用者自訂站名，只遷移舊版預設 MoonTV 名稱。
+- 將舊版詳情快取遷移到 BerserkerTV 詳情快取，不遺失既有播放上下文。
+- 改善日文、繁體中文與簡體中文混合片名的播放源查詢產生邏輯。
+    `.trim(),
+  },
+  {
+    version: 'v2.0.0',
+    date: '2026-05-25',
+    content: `
+- 啟動 BerserkerTV v2 重構，同時保留既有儲存資料與觀看紀錄。
+- 集中管理一般搜尋與 Bangumi 播放匹配使用的片源/片名搜尋變體。
+- 保持 Kvrocks、Redis、Upstash 與 localStorage 資料相容，不影響既有部署。
+    `.trim(),
+  },
+];
+
+export const CURRENT_VERSION = CHANGELOGS[0]?.version || 'v2.0.9';

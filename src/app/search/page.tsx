@@ -1,0 +1,946 @@
+/* eslint-disable react-hooks/exhaustive-deps, @typescript-eslint/no-explicit-any,@typescript-eslint/no-non-null-assertion,no-empty */
+'use client';
+
+import { ChevronUp, Search, X } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import React, {
+  startTransition,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+
+import { cleanQueryForApi } from '@/lib/chinese';
+import { addSearchHistory } from '@/lib/db.client';
+import { isFuzzyMatch } from '@/lib/searchEngine';
+import { SearchResult } from '@/lib/types';
+
+import PageLayout from '@/components/PageLayout';
+import PageLoading from '@/components/PageLoading';
+import SearchFilterSheet from '@/components/SearchFilterSheet';
+import SearchQueryNotice from '@/components/SearchQueryNotice';
+import SearchResultFilter, {
+  SearchFilterCategory,
+} from '@/components/SearchResultFilter';
+import SearchSuggestions from '@/components/SearchSuggestions';
+import VideoCard, { VideoCardHandle } from '@/components/VideoCard';
+import VirtualGrid from '@/components/VirtualGrid';
+
+function parseStoredBoolean(value: string | null, fallback: boolean): boolean {
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return fallback;
+}
+
+function SearchPageClient() {
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const showBackToTopRef = useRef(false);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentQueryRef = useRef<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [resolvedSearchQuery, setResolvedSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
+  const [totalSources, setTotalSources] = useState(0);
+  const [completedSources, setCompletedSources] = useState(0);
+  const pendingResultsRef = useRef<SearchResult[]>([]);
+  const flushTimerRef = useRef<number | null>(null);
+  const [useFluidSearch, setUseFluidSearch] = useState(true);
+  const groupRefs = useRef<Map<string, React.RefObject<VideoCardHandle>>>(
+    new Map()
+  );
+  const groupStatsRef = useRef<
+    Map<
+      string,
+      { douban_id?: number; episodes?: number; source_names: string[] }
+    >
+  >(new Map());
+
+  const getGroupRef = (key: string) => {
+    let ref = groupRefs.current.get(key);
+    if (!ref) {
+      ref = React.createRef<VideoCardHandle>();
+      groupRefs.current.set(key, ref);
+    }
+    return ref;
+  };
+
+  const computeGroupStats = (group: SearchResult[]) => {
+    const episodes = (() => {
+      const countMap = new Map<number, number>();
+      group.forEach((g) => {
+        const len = g.episodes?.length || 0;
+        if (len > 0) countMap.set(len, (countMap.get(len) || 0) + 1);
+      });
+      let max = 0;
+      let res = 0;
+      countMap.forEach((v, k) => {
+        if (v > max) {
+          max = v;
+          res = k;
+        }
+      });
+      return res;
+    })();
+    const source_names = Array.from(
+      new Set(group.map((g) => g.source_name).filter(Boolean))
+    ) as string[];
+
+    const douban_id = (() => {
+      const countMap = new Map<number, number>();
+      group.forEach((g) => {
+        if (g.douban_id && g.douban_id > 0) {
+          countMap.set(g.douban_id, (countMap.get(g.douban_id) || 0) + 1);
+        }
+      });
+      let max = 0;
+      let res: number | undefined;
+      countMap.forEach((v, k) => {
+        if (v > max) {
+          max = v;
+          res = k;
+        }
+      });
+      return res;
+    })();
+
+    const type_name = (() => {
+      const countMap = new Map<string, number>();
+      group.forEach((g) => {
+        if (g.type_name) {
+          countMap.set(g.type_name, (countMap.get(g.type_name) || 0) + 1);
+        }
+      });
+      let max = 0;
+      let res: string | undefined;
+      countMap.forEach((v, k) => {
+        if (v > max) {
+          max = v;
+          res = k;
+        }
+      });
+      return res;
+    })();
+
+    return { episodes, source_names, douban_id, type_name };
+  };
+
+  const [filterAll, setFilterAll] = useState<{
+    source: string;
+    title: string;
+    year: string;
+    yearOrder: 'none' | 'asc' | 'desc';
+  }>({
+    source: 'all',
+    title: 'all',
+    year: 'all',
+    yearOrder: 'none',
+  });
+  const filterAllRef = useRef(filterAll);
+
+  const [filterAgg, setFilterAgg] = useState<{
+    source: string;
+    title: string;
+    year: string;
+    yearOrder: 'none' | 'asc' | 'desc';
+  }>({
+    source: 'all',
+    title: 'all',
+    year: 'all',
+    yearOrder: 'none',
+  });
+  const filterAggRef = useRef(filterAgg);
+
+  const getDefaultAggregate = () => {
+    if (typeof window !== 'undefined') {
+      const userSetting =
+        localStorage.getItem('defaultAggregateSearch') ??
+        localStorage.getItem('defaultAggregateResults');
+      if (userSetting !== null) {
+        try {
+          return JSON.parse(userSetting);
+        } catch {
+          return true;
+        }
+      }
+    }
+    return true;
+  };
+
+  const [viewMode, setViewMode] = useState<'agg' | 'all'>(() => {
+    return getDefaultAggregate() ? 'agg' : 'all';
+  });
+
+  const activeFilterCount = useMemo(() => {
+    const values = viewMode === 'agg' ? filterAgg : filterAll;
+    return (
+      [values.source, values.title, values.year].filter(
+        (value) => value !== 'all'
+      ).length + (values.yearOrder === 'none' ? 0 : 1)
+    );
+  }, [filterAgg, filterAll, viewMode]);
+  const viewModeRef = useRef(viewMode);
+
+  useEffect(() => {
+    filterAllRef.current = filterAll;
+    filterAggRef.current = filterAgg;
+    viewModeRef.current = viewMode;
+  }, [filterAll, filterAgg, viewMode]);
+
+  const sortBatchForNoOrder = (items: SearchResult[]) => {
+    const q = currentQueryRef.current.trim();
+    return items.slice().sort((a, b) => {
+      const aExact = (a.title || '').trim() === q;
+      const bExact = (b.title || '').trim() === q;
+      if (aExact && !bExact) return -1;
+      if (!aExact && bExact) return 1;
+
+      const aNum = Number.parseInt(a.year, 10);
+      const bNum = Number.parseInt(b.year, 10);
+      const aValid = !Number.isNaN(aNum);
+      const bValid = !Number.isNaN(bNum);
+      if (aValid && !bValid) return -1;
+      if (!aValid && bValid) return 1;
+      if (aValid && bValid) return bNum - aNum;
+      return 0;
+    });
+  };
+
+  const compareYear = (
+    aYear: string,
+    bYear: string,
+    order: 'none' | 'asc' | 'desc'
+  ) => {
+    if (order === 'none') return 0;
+    const aIsEmpty = !aYear || aYear === 'unknown';
+    const bIsEmpty = !bYear || bYear === 'unknown';
+    if (aIsEmpty && bIsEmpty) return 0;
+    if (aIsEmpty) return 1;
+    if (bIsEmpty) return -1;
+    const aNum = parseInt(aYear, 10);
+    const bNum = parseInt(bYear, 10);
+    return order === 'asc' ? aNum - bNum : bNum - aNum;
+  };
+
+  // 核心更新：對 API 返回的結果進行模糊匹配過濾，根治譯名差異導致的空畫面
+  const fuzzySearchResults = useMemo(() => {
+    const query = searchQuery.trim();
+    if (!query) return searchResults;
+    return searchResults.filter((item) => isFuzzyMatch(item.title, query));
+  }, [searchResults, searchQuery]);
+
+  const aggregatedResults = useMemo(() => {
+    const map = new Map<string, SearchResult[]>();
+    const keyOrder: string[] = [];
+
+    fuzzySearchResults.forEach((item) => {
+      const key = `${item.title.replaceAll(' ', '')}-${
+        item.year || 'unknown'
+      }-${item.episodes.length === 1 ? 'movie' : 'tv'}`;
+      const arr = map.get(key) || [];
+      if (arr.length === 0) keyOrder.push(key);
+      arr.push(item);
+      map.set(key, arr);
+    });
+
+    return keyOrder.map(
+      (key) => [key, map.get(key)!] as [string, SearchResult[]]
+    );
+  }, [fuzzySearchResults]);
+
+  useEffect(() => {
+    aggregatedResults.forEach(([mapKey, group]) => {
+      const stats = computeGroupStats(group);
+      const prev = groupStatsRef.current.get(mapKey);
+      if (!prev) {
+        groupStatsRef.current.set(mapKey, stats);
+        return;
+      }
+      const ref = groupRefs.current.get(mapKey);
+      if (ref && ref.current) {
+        if (prev.episodes !== stats.episodes) {
+          ref.current.setEpisodes(stats.episodes);
+        }
+        const prevNames = (prev.source_names || []).join('|');
+        const nextNames = (stats.source_names || []).join('|');
+        if (prevNames !== nextNames) {
+          ref.current.setSourceNames(stats.source_names);
+        }
+        if (prev.douban_id !== stats.douban_id) {
+          ref.current.setDoubanId(stats.douban_id);
+        }
+        groupStatsRef.current.set(mapKey, stats);
+      }
+    });
+  }, [aggregatedResults]);
+
+  const filterOptions = useMemo(() => {
+    const sourcesSet = new Map<string, string>();
+    const titlesSet = new Set<string>();
+    const yearsSet = new Set<string>();
+
+    fuzzySearchResults.forEach((item) => {
+      if (item.source && item.source_name) {
+        sourcesSet.set(item.source, item.source_name);
+      }
+      if (item.title) titlesSet.add(item.title);
+      if (item.year) yearsSet.add(item.year);
+    });
+
+    const sourceOptions: { label: string; value: string }[] = [
+      { label: '全部來源', value: 'all' },
+      ...Array.from(sourcesSet.entries())
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([value, label]) => ({ label, value })),
+    ];
+
+    const titleOptions: { label: string; value: string }[] = [
+      { label: '全部標題', value: 'all' },
+      ...Array.from(titlesSet.values())
+        .sort((a, b) => a.localeCompare(b))
+        .map((t) => ({ label: t, value: t })),
+    ];
+
+    const years = Array.from(yearsSet.values());
+    const knownYears = years
+      .filter((y) => y !== 'unknown')
+      .sort((a, b) => parseInt(b) - parseInt(a));
+    const hasUnknown = years.includes('unknown');
+    const yearOptions: { label: string; value: string }[] = [
+      { label: '全部年份', value: 'all' },
+      ...knownYears.map((y) => ({ label: y, value: y })),
+      ...(hasUnknown ? [{ label: '未知', value: 'unknown' }] : []),
+    ];
+
+    const categoriesAll: SearchFilterCategory[] = [
+      { key: 'source', label: '來源', options: sourceOptions },
+      { key: 'title', label: '標題', options: titleOptions },
+      { key: 'year', label: '年份', options: yearOptions },
+    ];
+
+    const categoriesAgg: SearchFilterCategory[] = [
+      { key: 'source', label: '來源', options: sourceOptions },
+      { key: 'title', label: '標題', options: titleOptions },
+      { key: 'year', label: '年份', options: yearOptions },
+    ];
+
+    return { categoriesAll, categoriesAgg };
+  }, [fuzzySearchResults]);
+
+  const filteredAllResults = useMemo(() => {
+    const { source, title, year, yearOrder } = filterAll;
+    const filtered = fuzzySearchResults.filter((item) => {
+      if (source !== 'all' && item.source !== source) return false;
+      if (title !== 'all' && item.title !== title) return false;
+      if (year !== 'all' && item.year !== year) return false;
+      return true;
+    });
+
+    if (yearOrder === 'none') {
+      return filtered;
+    }
+
+    return filtered.sort((a, b) => {
+      const yearComp = compareYear(a.year, b.year, yearOrder);
+      if (yearComp !== 0) return yearComp;
+
+      const aExactMatch = a.title === searchQuery.trim();
+      const bExactMatch = b.title === searchQuery.trim();
+      if (aExactMatch && !bExactMatch) return -1;
+      if (!aExactMatch && bExactMatch) return 1;
+
+      return yearOrder === 'asc'
+        ? a.title.localeCompare(b.title)
+        : b.title.localeCompare(a.title);
+    });
+  }, [fuzzySearchResults, filterAll, searchQuery]);
+
+  const filteredAggResults = useMemo(() => {
+    const { source, title, year, yearOrder } = filterAgg;
+    const filtered = aggregatedResults.filter(([_, group]) => {
+      const gTitle = group[0]?.title ?? '';
+      const gYear = group[0]?.year ?? 'unknown';
+      const hasSource =
+        source === 'all' ? true : group.some((item) => item.source === source);
+      if (!hasSource) return false;
+      if (title !== 'all' && gTitle !== title) return false;
+      if (year !== 'all' && gYear !== year) return false;
+      return true;
+    });
+
+    if (yearOrder === 'none') {
+      return filtered;
+    }
+
+    return filtered.sort((a, b) => {
+      const aYear = a[1][0]?.year ?? 'unknown';
+      const bYear = b[1][0]?.year ?? 'unknown';
+      const yearComp = compareYear(aYear, bYear, yearOrder);
+      if (yearComp !== 0) return yearComp;
+
+      const aExactMatch = a[1][0]?.title === searchQuery.trim();
+      const bExactMatch = b[1][0]?.title === searchQuery.trim();
+      if (aExactMatch && !bExactMatch) return -1;
+      if (!aExactMatch && bExactMatch) return 1;
+
+      const aTitle = a[1][0]?.title ?? '';
+      const bTitle = b[1][0]?.title ?? '';
+      return yearOrder === 'asc'
+        ? aTitle.localeCompare(bTitle)
+        : bTitle.localeCompare(aTitle);
+    });
+  }, [aggregatedResults, filterAgg, searchQuery]);
+
+  useEffect(() => {
+    if (!searchParams.get('q')) {
+      document.getElementById('searchInput')?.focus();
+    }
+
+    if (typeof window !== 'undefined') {
+      const savedFluidSearch = localStorage.getItem('fluidSearch');
+      const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
+      setUseFluidSearch(
+        parseStoredBoolean(savedFluidSearch, defaultFluidSearch)
+      );
+    }
+
+    const handleScroll = () => {
+      const shouldShow = (document.body.scrollTop || 0) > 300;
+      if (showBackToTopRef.current !== shouldShow) {
+        showBackToTopRef.current = shouldShow;
+        setShowBackToTop(shouldShow);
+      }
+    };
+
+    handleScroll();
+    document.body.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      document.body.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    const query = searchParams.get('q') || '';
+    currentQueryRef.current = query.trim();
+
+    if (query) {
+      addSearchHistory(query);
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
+      setSearchQuery(query);
+      if (eventSourceRef.current) {
+        try {
+          eventSourceRef.current.close();
+        } catch {}
+        eventSourceRef.current = null;
+      }
+      setSearchResults([]);
+      setResolvedSearchQuery('');
+      setTotalSources(0);
+      setCompletedSources(0);
+      pendingResultsRef.current = [];
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      setIsLoading(true);
+      setShowResults(true);
+
+      const trimmed = query.trim();
+      let currentFluidSearch = useFluidSearch;
+      if (typeof window !== 'undefined') {
+        const savedFluidSearch = localStorage.getItem('fluidSearch');
+        const defaultFluidSearch =
+          window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
+        currentFluidSearch = parseStoredBoolean(
+          savedFluidSearch,
+          defaultFluidSearch
+        );
+      }
+
+      if (currentFluidSearch !== useFluidSearch) {
+        setUseFluidSearch(currentFluidSearch);
+      }
+
+      if (currentFluidSearch) {
+        // 核心修正：在發起請求前，將查詢詞極簡化以提昇採集站命中率
+        const cleanedQuery = cleanQueryForApi(trimmed);
+        const es = new EventSource(
+          `/api/search/ws?q=${encodeURIComponent(cleanedQuery)}`
+        );
+        eventSourceRef.current = es;
+
+        let closed = false;
+        es.onmessage = (event) => {
+          if (closed) return;
+          if (!event.data) return;
+          try {
+            const payload = JSON.parse(event.data);
+            if (currentQueryRef.current !== trimmed) return;
+            switch (payload.type) {
+              case 'start':
+                setTotalSources(payload.totalSources || 0);
+                setCompletedSources(0);
+                setResolvedSearchQuery(payload.primaryQuery || '');
+                break;
+              case 'source_result': {
+                setCompletedSources((prev) => prev + 1);
+                if (
+                  Array.isArray(payload.results) &&
+                  payload.results.length > 0
+                ) {
+                  const activeYearOrder =
+                    viewModeRef.current === 'agg'
+                      ? filterAggRef.current.yearOrder
+                      : filterAllRef.current.yearOrder;
+                  const incoming: SearchResult[] =
+                    activeYearOrder === 'none'
+                      ? sortBatchForNoOrder(payload.results as SearchResult[])
+                      : (payload.results as SearchResult[]);
+                  pendingResultsRef.current.push(...incoming);
+                  if (!flushTimerRef.current) {
+                    flushTimerRef.current = window.setTimeout(() => {
+                      const toAppend = pendingResultsRef.current;
+                      pendingResultsRef.current = [];
+                      startTransition(() => {
+                        setSearchResults((prev) => prev.concat(toAppend));
+                      });
+                      flushTimerRef.current = null;
+                    }, 80);
+                  }
+                }
+                break;
+              }
+              case 'source_error':
+                setCompletedSources((prev) => prev + 1);
+                break;
+              case 'complete':
+                closed = true;
+                setCompletedSources(payload.completedSources || totalSources);
+                if (pendingResultsRef.current.length > 0) {
+                  const toAppend = pendingResultsRef.current;
+                  pendingResultsRef.current = [];
+                  if (flushTimerRef.current) {
+                    clearTimeout(flushTimerRef.current);
+                    flushTimerRef.current = null;
+                  }
+                  startTransition(() => {
+                    setSearchResults((prev) => prev.concat(toAppend));
+                  });
+                }
+                setIsLoading(false);
+                try {
+                  es.close();
+                } catch {}
+                if (eventSourceRef.current === es) {
+                  eventSourceRef.current = null;
+                }
+                break;
+            }
+          } catch {}
+        };
+
+        es.onerror = () => {
+          closed = true;
+          setIsLoading(false);
+          if (pendingResultsRef.current.length > 0) {
+            const toAppend = pendingResultsRef.current;
+            pendingResultsRef.current = [];
+            if (flushTimerRef.current) {
+              clearTimeout(flushTimerRef.current);
+              flushTimerRef.current = null;
+            }
+            startTransition(() => {
+              setSearchResults((prev) => prev.concat(toAppend));
+            });
+          }
+          try {
+            es.close();
+          } catch {}
+          if (eventSourceRef.current === es) {
+            eventSourceRef.current = null;
+          }
+        };
+      } else {
+        const trimmedQuery = query.trim();
+        const cleanedQuery = cleanQueryForApi(trimmedQuery);
+        const controller = new AbortController();
+        searchAbortRef.current = controller;
+        fetch(`/api/search?q=${encodeURIComponent(cleanedQuery)}`, {
+          signal: controller.signal,
+        })
+          .then((response) => response.json())
+          .then((data) => {
+            if (currentQueryRef.current !== trimmedQuery) return;
+
+            if (data.results && Array.isArray(data.results)) {
+              setResolvedSearchQuery(data.primaryQuery || '');
+              const activeYearOrder =
+                viewModeRef.current === 'agg'
+                  ? filterAggRef.current.yearOrder
+                  : filterAllRef.current.yearOrder;
+              const results: SearchResult[] =
+                activeYearOrder === 'none'
+                  ? sortBatchForNoOrder(data.results as SearchResult[])
+                  : (data.results as SearchResult[]);
+
+              setSearchResults(results);
+              setTotalSources(1);
+              setCompletedSources(1);
+            }
+            setIsLoading(false);
+          })
+          .catch(() => {
+            if (!controller.signal.aborted) {
+              setIsLoading(false);
+            }
+          })
+          .finally(() => {
+            if (searchAbortRef.current === controller) {
+              searchAbortRef.current = null;
+            }
+          });
+      }
+      setShowSuggestions(false);
+    } else {
+      setShowResults(false);
+      setShowSuggestions(false);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    return () => {
+      const es = eventSourceRef.current;
+      if (es) {
+        try {
+          es.close();
+        } catch {}
+        eventSourceRef.current = null;
+      }
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
+      pendingResultsRef.current = [];
+    };
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    if (value.trim()) {
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleInputFocus = () => {
+    if (searchQuery.trim()) {
+      setShowSuggestions(true);
+    }
+  };
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = searchQuery.trim().replace(/\s+/g, ' ');
+    if (!trimmed) return;
+    setSearchQuery(trimmed);
+    setIsLoading(true);
+    setShowResults(true);
+    setShowSuggestions(false);
+    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+  };
+
+  const handleSuggestionSelect = (suggestion: string) => {
+    setSearchQuery(suggestion);
+    setShowSuggestions(false);
+    setIsLoading(true);
+    setShowResults(true);
+    router.push(`/search?q=${encodeURIComponent(suggestion)}`);
+  };
+
+  const scrollToTop = () => {
+    try {
+      document.body.scrollTo({
+        top: 0,
+        behavior: 'smooth',
+      });
+    } catch (error) {
+      document.body.scrollTop = 0;
+    }
+  };
+
+  return (
+    <PageLayout activePath='/search'>
+      <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible mb-10'>
+        <div className='mb-8'>
+          <form onSubmit={handleSearch} className='max-w-2xl mx-auto'>
+            <div className='relative'>
+              <Search className='absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 dark:text-zinc-500' />
+              <input
+                id='searchInput'
+                type='text'
+                value={searchQuery}
+                onChange={handleInputChange}
+                onFocus={handleInputFocus}
+                placeholder='搜尋電影、電視劇...'
+                autoComplete='off'
+                className='w-full h-12 rounded-lg bg-zinc-50/80 py-3 pl-10 pr-12 text-sm text-zinc-700 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-accent focus:bg-white border border-zinc-200/50 shadow-sm dark:bg-zinc-800 dark:text-zinc-300 dark:placeholder-zinc-500 dark:focus:bg-zinc-700 dark:border-zinc-700'
+              />
+              {searchQuery && (
+                <button
+                  type='button'
+                  onClick={() => {
+                    setSearchQuery('');
+                    setShowSuggestions(false);
+                    document.getElementById('searchInput')?.focus();
+                  }}
+                  className='absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors dark:text-zinc-500 dark:hover:text-zinc-300'
+                  aria-label='清除搜尋內容'
+                >
+                  <X className='h-5 w-5' />
+                </button>
+              )}
+              <SearchSuggestions
+                query={searchQuery}
+                isVisible={showSuggestions}
+                onSelect={handleSuggestionSelect}
+                onClose={() => setShowSuggestions(false)}
+                onEnterKey={() => {
+                  const trimmed = searchQuery.trim().replace(/\s+/g, ' ');
+                  if (!trimmed) return;
+                  setSearchQuery(trimmed);
+                  setIsLoading(true);
+                  setShowResults(true);
+                  setShowSuggestions(false);
+                  router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+                }}
+              />
+            </div>
+          </form>
+          {showResults && (
+            <SearchQueryNotice
+              query={searchQuery}
+              resolvedQuery={resolvedSearchQuery}
+            />
+          )}
+        </div>
+        <div className='max-w-[95%] mx-auto mt-12 overflow-visible'>
+          {showResults ? (
+            <section className='mb-12'>
+              <div className='mb-4'>
+                <h2 className='text-xl font-bold text-zinc-800 dark:text-zinc-200'>
+                  搜尋結果
+                  {totalSources > 0 && useFluidSearch && (
+                    <span className='ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400'>
+                      {completedSources}/{totalSources}
+                    </span>
+                  )}
+                  {isLoading && useFluidSearch && (
+                    <span className='ml-2 inline-block align-middle'>
+                      <span className='inline-block h-3 w-3 border-2 border-zinc-300 border-t-accent rounded-full animate-spin'></span>
+                    </span>
+                  )}
+                </h2>
+              </div>
+              <div className='mb-8 flex items-center justify-between gap-3'>
+                <div className='hidden flex-1 min-w-0 sm:block'>
+                  {viewMode === 'agg' ? (
+                    <SearchResultFilter
+                      categories={filterOptions.categoriesAgg}
+                      values={filterAgg}
+                      onChange={(v) => setFilterAgg(v as any)}
+                    />
+                  ) : (
+                    <SearchResultFilter
+                      categories={filterOptions.categoriesAll}
+                      values={filterAll}
+                      onChange={(v) => setFilterAll(v as any)}
+                    />
+                  )}
+                </div>
+                <SearchFilterSheet
+                  open={showMobileFilters}
+                  activeCount={activeFilterCount}
+                  categories={
+                    viewMode === 'agg'
+                      ? filterOptions.categoriesAgg
+                      : filterOptions.categoriesAll
+                  }
+                  values={viewMode === 'agg' ? filterAgg : filterAll}
+                  onChange={(values) =>
+                    viewMode === 'agg'
+                      ? setFilterAgg({
+                          ...values,
+                          yearOrder: values.yearOrder as
+                            'none' | 'asc' | 'desc',
+                        })
+                      : setFilterAll({
+                          ...values,
+                          yearOrder: values.yearOrder as
+                            'none' | 'asc' | 'desc',
+                        })
+                  }
+                  onOpen={() => setShowMobileFilters(true)}
+                  onClose={() => setShowMobileFilters(false)}
+                />
+                <label className='flex items-center gap-2 cursor-pointer select-none shrink-0'>
+                  <span className='text-xs sm:text-sm text-zinc-700 dark:text-zinc-300'>
+                    聚合
+                  </span>
+                  <div className='relative'>
+                    <input
+                      type='checkbox'
+                      className='sr-only peer'
+                      checked={viewMode === 'agg'}
+                      onChange={() =>
+                        setViewMode(viewMode === 'agg' ? 'all' : 'agg')
+                      }
+                    />
+                    <div className='w-9 h-5 bg-zinc-300 rounded-full peer-checked:bg-accent transition-colors dark:bg-zinc-600'></div>
+                    <div className='absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4'></div>
+                  </div>
+                </label>
+              </div>
+              {fuzzySearchResults.length === 0 ? (
+                isLoading ? (
+                  <div className='flex justify-center items-center h-40'>
+                    <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-accent'></div>
+                  </div>
+                ) : (
+                  <div className='text-center text-zinc-500 py-8 dark:text-zinc-400'>
+                    未找到相關結果
+                  </div>
+                )
+              ) : (
+                <div key={`search-results-${viewMode}`}>
+                  {viewMode === 'agg' ? (
+                    <VirtualGrid
+                      items={filteredAggResults}
+                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
+                      rowGapClass='pb-14 sm:pb-20'
+                      estimateRowHeight={320}
+                      renderItem={([mapKey, group]) => {
+                        const title = group[0]?.title || '';
+                        const poster = group[0]?.poster || '';
+                        const year = group[0]?.year || 'unknown';
+                        const { episodes, source_names, douban_id, type_name } =
+                          computeGroupStats(group);
+                        const type = episodes === 1 ? 'movie' : 'tv';
+                        if (!groupStatsRef.current.has(mapKey)) {
+                          groupStatsRef.current.set(mapKey, {
+                            episodes,
+                            source_names,
+                            douban_id,
+                          });
+                        }
+                        return (
+                          <div key={`agg-${mapKey}`} className='w-full'>
+                            <VideoCard
+                              ref={getGroupRef(mapKey)}
+                              from='search'
+                              isAggregate={true}
+                              title={title}
+                              poster={poster}
+                              year={year}
+                              episodes={episodes}
+                              source_names={source_names}
+                              douban_id={douban_id}
+                              query={
+                                searchQuery.trim() !== title
+                                  ? searchQuery.trim()
+                                  : ''
+                              }
+                              type={type}
+                              type_name={type_name}
+                            />
+                          </div>
+                        );
+                      }}
+                    />
+                  ) : (
+                    <VirtualGrid
+                      items={filteredAllResults}
+                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
+                      rowGapClass='pb-14 sm:pb-20'
+                      estimateRowHeight={320}
+                      renderItem={(item) => (
+                        <div
+                          key={`all-${item.source}-${item.id}`}
+                          className='w-full'
+                        >
+                          <VideoCard
+                            id={item.id}
+                            title={item.title}
+                            poster={item.poster}
+                            episodes={item.episodes.length}
+                            source={item.source}
+                            source_name={item.source_name}
+                            douban_id={item.douban_id}
+                            query={
+                              searchQuery.trim() !== item.title
+                                ? searchQuery.trim()
+                                : ''
+                            }
+                            year={item.year}
+                            from='search'
+                            type={item.episodes.length > 1 ? 'tv' : 'movie'}
+                            type_name={item.type_name}
+                          />
+                        </div>
+                      )}
+                    />
+                  )}
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className='mb-12 flex flex-col items-center justify-center h-[50vh]'>
+              <div className='w-20 h-20 bg-zinc-100 dark:bg-[#1a1a1a] rounded-full flex items-center justify-center mb-6 shadow-inner'>
+                <Search className='w-10 h-10 text-zinc-300 dark:text-zinc-600' />
+              </div>
+              <h2 className='text-xl font-bold text-zinc-800 dark:text-zinc-200 mb-2'>
+                探索影音世界
+              </h2>
+              <p className='text-zinc-500 dark:text-zinc-400'>
+                輸入你想看的電影、電視劇或動漫名稱
+              </p>
+            </section>
+          )}
+        </div>
+      </div>
+      <button
+        onClick={scrollToTop}
+        className={`fixed bottom-20 md:bottom-6 right-6 z-[500] w-12 h-12 bg-accent/90 hover:bg-accent text-white rounded-full shadow-lg backdrop-blur-sm transition-all duration-300 ease-in-out flex items-center justify-center group ${
+          showBackToTop
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 translate-y-4 pointer-events-none'
+        }`}
+        aria-label='返回頂部'
+      >
+        <ChevronUp className='w-6 h-6 transition-transform group-hover:scale-110' />
+      </button>
+    </PageLayout>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <SearchPageClient />
+    </Suspense>
+  );
+}

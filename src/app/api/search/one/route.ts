@@ -1,0 +1,129 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+import {
+  isValidApiSearchQuery,
+  isValidApiSource,
+} from '@/lib/api-input-validation';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+import { toSearchSimplified } from '@/lib/chinese';
+import { getAvailableApiSites, getConfig, getValidUser } from '@/lib/config';
+import { searchFromApi } from '@/lib/downstream';
+import { yellowWords } from '@/lib/yellow';
+
+export const runtime = 'nodejs';
+const PRIVATE_NO_STORE_HEADERS = {
+  'Cache-Control': 'private, no-store',
+};
+
+function normalizeSearchOneTitle(value: string): string {
+  return toSearchSimplified(value)
+    .toLowerCase()
+    .replace(
+      /[\s\-_.,:;!?()[\]{}'"`~@#$%^&*+=|\\/，。、《》〈〉「」『』（）【】［］：；！？．·・]/g,
+      ''
+    )
+    .trim();
+}
+
+// OrionTV 兼容接口
+export async function GET(request: NextRequest) {
+  const authInfo = getAuthInfoFromCookie(request);
+  const user = await getValidUser(authInfo?.username);
+  if (!user) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get('q');
+  const resourceId = searchParams.get('resourceId');
+
+  if (!query || !resourceId) {
+    return NextResponse.json(
+      { result: null, results: [], error: '缺少必要參數: q 或 resourceId' },
+      {
+        headers: PRIVATE_NO_STORE_HEADERS,
+      }
+    );
+  }
+
+  if (!isValidApiSearchQuery(query) || !isValidApiSource(resourceId)) {
+    return NextResponse.json(
+      { result: null, results: [], error: 'Invalid query parameter' },
+      { status: 400, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+
+  const config = await getConfig();
+  const apiSites = await getAvailableApiSites(user.username);
+
+  try {
+    // 根據 resourceId 查找對應的 API 站點
+    const targetSite = apiSites.find((site) => site.key === resourceId);
+    if (!targetSite) {
+      return NextResponse.json(
+        {
+          error: `未找到指定的影片源: ${resourceId}`,
+          result: null,
+          results: [],
+        },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    }
+
+    let timeoutId: NodeJS.Timeout | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`${targetSite.name} timeout`)),
+        6000
+      );
+    });
+
+    const results = await Promise.race([
+      searchFromApi(targetSite, query).finally(() => {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      }),
+      timeoutPromise,
+    ]);
+    const normalizedQuery = normalizeSearchOneTitle(query);
+    let result = results.filter(
+      (r) => normalizeSearchOneTitle(r.title) === normalizedQuery
+    );
+    if (!config.SiteConfig.DisableYellowFilter) {
+      result = result.filter((result) => {
+        const typeName = result.type_name || '';
+        return !yellowWords.some((word: string) => typeName.includes(word));
+      });
+    }
+    if (result.length === 0) {
+      return NextResponse.json(
+        {
+          error: '未找到結果',
+          result: null,
+          results: [],
+        },
+        { status: 404, headers: PRIVATE_NO_STORE_HEADERS }
+      );
+    } else {
+      return NextResponse.json(
+        { result, results: result },
+        {
+          headers: PRIVATE_NO_STORE_HEADERS,
+        }
+      );
+    }
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: '搜尋失敗',
+        result: null,
+        results: [],
+      },
+      { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
+    );
+  }
+}

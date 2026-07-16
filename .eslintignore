@@ -1,0 +1,6 @@
+public/sw.js
+public/workbox-*.js
+.next/
+node_modules/
+dist/
+build/

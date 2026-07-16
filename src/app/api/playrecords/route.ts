@@ -1,0 +1,202 @@
+/* eslint-disable no-console */
+
+import { NextRequest, NextResponse } from 'next/server';
+
+import {
+  isValidApiTextParam,
+  parseAndValidateApiStorageKey,
+} from '@/lib/api-input-validation';
+import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getConfig } from '@/lib/config';
+import { db } from '@/lib/db';
+import { PlayRecord } from '@/lib/types';
+
+export const runtime = 'nodejs';
+
+export async function GET(request: NextRequest) {
+  try {
+    // 從 cookie 獲取使用者資訊
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const config = await getConfig();
+    if (authInfo.username !== process.env.USERNAME) {
+      // 非站長，檢查使用者存在或被封禁
+      const user = config.UserConfig.Users.find(
+        (u) => u.username === authInfo.username
+      );
+      if (!user) {
+        return NextResponse.json({ error: '使用者不存在' }, { status: 401 });
+      }
+      if (user.banned) {
+        return NextResponse.json({ error: '使用者已被封禁' }, { status: 401 });
+      }
+    }
+
+    const records = await db.getAllPlayRecords(authInfo.username);
+    return NextResponse.json(records, { status: 200 });
+  } catch (err) {
+    console.error('獲取播放記錄失敗', err);
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    // 從 cookie 獲取使用者資訊
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const config = await getConfig();
+    if (authInfo.username !== process.env.USERNAME) {
+      // 非站長，檢查使用者存在或被封禁
+      const user = config.UserConfig.Users.find(
+        (u) => u.username === authInfo.username
+      );
+      if (!user) {
+        return NextResponse.json({ error: '使用者不存在' }, { status: 401 });
+      }
+      if (user.banned) {
+        return NextResponse.json({ error: '使用者已被封禁' }, { status: 401 });
+      }
+    }
+
+    const body = await request.json();
+    const { key, record }: { key: string; record: PlayRecord } = body;
+
+    if (!key || !record) {
+      return NextResponse.json(
+        { error: 'Missing key or record' },
+        { status: 400 }
+      );
+    }
+
+    // 驗證播放記錄資料
+    // 只檢查必要欄位與安全相關驗證，數值欄位改為「有值才驗證」
+    // 以避免影片未載入時 (total_time=0) 觸發 400 錯誤
+    if (
+      !record.title ||
+      !record.source_name ||
+      !isValidApiTextParam(record.title) ||
+      !isValidApiTextParam(record.source_name) ||
+      typeof record.index !== 'number' ||
+      !Number.isInteger(record.index) ||
+      record.index < 1 ||
+      (record.total_episodes !== undefined &&
+        (!Number.isInteger(record.total_episodes) ||
+          record.total_episodes < 1)) ||
+      (record.play_time !== undefined &&
+        (!Number.isFinite(record.play_time) || record.play_time < 0)) ||
+      (record.total_time !== undefined &&
+        (!Number.isFinite(record.total_time) || record.total_time < 0)) ||
+      (record.play_time !== undefined &&
+        record.total_time !== undefined &&
+        record.total_time > 0 &&
+        record.play_time > record.total_time + 5) ||
+      (record.save_time !== undefined &&
+        (!Number.isFinite(record.save_time) || record.save_time <= 0))
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid record data' },
+        { status: 400 }
+      );
+    }
+
+    // 從key中解析source和id
+    const parsedKey = parseAndValidateApiStorageKey(key);
+    if (!parsedKey) {
+      return NextResponse.json(
+        { error: 'Invalid key format' },
+        { status: 400 }
+      );
+    }
+    const { source, id } = parsedKey;
+
+    const finalRecord = {
+      ...record,
+      save_time: record.save_time ?? Date.now(),
+    } as PlayRecord;
+
+    await db.savePlayRecord(authInfo.username, source, id, finalRecord);
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (err) {
+    console.error('儲存播放記錄失敗', err);
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    // 從 cookie 獲取使用者資訊
+    const authInfo = getAuthInfoFromCookie(request);
+    if (!authInfo || !authInfo.username) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const config = await getConfig();
+    if (authInfo.username !== process.env.USERNAME) {
+      // 非站長，檢查使用者存在或被封禁
+      const user = config.UserConfig.Users.find(
+        (u) => u.username === authInfo.username
+      );
+      if (!user) {
+        return NextResponse.json({ error: '使用者不存在' }, { status: 401 });
+      }
+      if (user.banned) {
+        return NextResponse.json({ error: '使用者已被封禁' }, { status: 401 });
+      }
+    }
+
+    const username = authInfo.username;
+    const { searchParams } = new URL(request.url);
+    const key = searchParams.get('key');
+    const title = searchParams.get('title') || undefined;
+    const sourceName = searchParams.get('source_name') || undefined;
+
+    if (
+      (title && !isValidApiTextParam(title)) ||
+      (sourceName && !isValidApiTextParam(sourceName))
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid query parameter' },
+        { status: 400 }
+      );
+    }
+
+    if (key) {
+      // 如果提供了 key，刪除單條播放記錄
+      const parsedKey = parseAndValidateApiStorageKey(key);
+      if (!parsedKey) {
+        return NextResponse.json(
+          { error: 'Invalid key format' },
+          { status: 400 }
+        );
+      }
+      const { source, id } = parsedKey;
+
+      await db.deletePlayRecord(username, source, id, { title, sourceName });
+    } else {
+      // 未提供 key，則清空全部播放記錄
+      await db.deleteAllPlayRecords(username);
+    }
+
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (err) {
+    console.error('刪除播放記錄失敗', err);
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
+      { status: 500 }
+    );
+  }
+}
