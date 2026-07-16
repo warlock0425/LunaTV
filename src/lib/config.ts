@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console, @typescript-eslint/no-non-null-assertion, @typescript-eslint/no-require-imports */
+/* eslint-disable @typescript-eslint/no-explicit-any, no-console, @typescript-eslint/no-require-imports */
 
 import { db } from '@/lib/db';
 

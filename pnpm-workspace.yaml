@@ -1,0 +1,20 @@
+# pnpm 設定檔（pnpm 10+ 起官方建議設定放這裡，取代 package.json 的 "pnpm" 欄位）
+#
+# overrides：強制修復相依樹中的已知漏洞版本（皆為開發工具鏈相依，同大版本內升級）。
+# 注意：帶範圍的選擇器（如 pkg@>=a <b）比對的是「相依宣告的範圍」而非解析出的
+# 版本，容易失效；此處僅使用無選擇器或大版本選擇器兩種可靠形式。
+# 驗證方式：scratchpad audit 腳本（npm bulk advisory API）+ git grep 版本號。
+overrides:
+  # GHSA-fv7c-fp4j-7gwp：惡意輸入可產生任意代碼（<=7.29.3）
+  '@babel/plugin-transform-modules-systemjs': '^7.29.7'
+  # GHSA-25h7-pfq9-p65f / GHSA-rf6f-7fwh-wjgh：parse() DoS 與原型污染（<=3.4.1）
+  flatted: '^3.4.2'
+  # GHSA-xpqw-6gx7-v673：DOCTYPE 實體展開 DoS（<3.3.3）
+  svgo: '^3.3.4'
+  # GHSA-48c2-rrv3-qjmp：深層巢狀 YAML 堆疊溢位（<2.8.3）
+  yaml: '^2.9.0'
+  # GHSA-qx2v-qp2m-jg93：next 內嵌固定 postcss@8.4.31，XSS 修復於 8.5.10
+  'postcss@8.4.31': '>=8.5.10'
+  # GHSA-mh29-5h37-fv8m / GHSA-h67p-54hq-rp68：merge key 原型污染與二次方 DoS
+  'js-yaml@3': '^3.15.0'
+  'js-yaml@4': '^4.3.0'

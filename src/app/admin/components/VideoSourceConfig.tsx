@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, no-console, @typescript-eslint/no-non-null-assertion, react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
 import {
   closestCenter,
   DndContext,

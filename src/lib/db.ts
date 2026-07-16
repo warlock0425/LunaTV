@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
+/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
 
 import { AdminConfig } from './admin.types';
 import type { BangumiAliasCacheEntry } from './bangumi-alias-storage';
@@ -27,7 +27,7 @@ function warnStorageDisabled(message: string): void {
 }
 
 // noop 空儲存：後端儲存未配置時使用，避免 500 Internal Server Error
-/* eslint-disable @typescript-eslint/no-empty-function */
+
 class NoopStorage implements IStorage {
   async getPlayRecord(): Promise<null> {
     return null;
@@ -82,7 +82,6 @@ class NoopStorage implements IStorage {
   }
   async clearAllData(): Promise<void> {}
 }
-/* eslint-enable @typescript-eslint/no-empty-function */
 
 function createStorage(): IStorage {
   const status = getStorageRuntimeStatus();

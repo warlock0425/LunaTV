@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-function */
+/* eslint-disable no-console */
 'use client';
 
 import { fetchFromApi } from './api';

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
 'use client';
 
 import type { PlayRecord } from '@/lib/db.client';

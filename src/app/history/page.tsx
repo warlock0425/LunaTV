@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console, @next/next/no-img-element */
+/* eslint-disable no-console, @next/next/no-img-element */
 
 'use client';
 

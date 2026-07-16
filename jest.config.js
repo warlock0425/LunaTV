@@ -24,7 +24,7 @@ const customJestConfig = {
     '!src/lib/version.ts',
   ],
   // 防倒退門檻（2026-07 現況：lines 48% / branches 73-75%）
-  // 注意：V8 coverage 數字隨 Node 版本浮動（CI 為 Node 20），門檻需留足容差
+  // 注意：V8 coverage 數字隨 Node 版本浮動（CI 為 Node 24），門檻需留足容差
   coverageThreshold: {
     global: {
       lines: 42,

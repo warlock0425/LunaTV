@@ -18,7 +18,7 @@ const standaloneCommand = [
 ].join('');
 
 const devCommand =
-  'pnpm gen:manifest && pnpm exec next dev -H 127.0.0.1 -p 3100';
+  'pnpm gen:manifest && pnpm exec next dev --webpack -H 127.0.0.1 -p 3100';
 
 export default defineConfig({
   testDir: './e2e',

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
 'use client';
 
 import { Plus, Trash2, X } from 'lucide-react';

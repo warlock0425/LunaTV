@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-empty-function, @typescript-eslint/no-explicit-any, no-console, @typescript-eslint/no-non-null-assertion, react-hooks/exhaustive-deps */
 import React, { useEffect, useState } from 'react';
 
 import { AdminConfig } from '@/lib/admin.types';

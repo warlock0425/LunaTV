@@ -4,10 +4,6 @@
 const nextConfig = {
   output: process.platform === 'win32' ? undefined : 'standalone',
   outputFileTracingRoot: __dirname,
-  eslint: {
-    dirs: ['src'],
-    ignoreDuringBuilds: false,
-  },
   typescript: {
     ignoreBuildErrors: false,
   },

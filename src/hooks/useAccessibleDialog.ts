@@ -11,7 +11,7 @@ const FOCUSABLE_SELECTOR = [
 
 export function useAccessibleDialog(
   open: boolean,
-  dialogRef: RefObject<HTMLElement>,
+  dialogRef: RefObject<HTMLElement | null>,
   onClose: () => void
 ): void {
   const onCloseRef = useRef(onClose);

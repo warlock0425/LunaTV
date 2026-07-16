@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
 'use client';
 
 import { Sparkles } from 'lucide-react';

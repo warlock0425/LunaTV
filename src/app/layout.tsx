@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type { Metadata, Viewport } from 'next';
 import { Inter, Noto_Sans_TC } from 'next/font/google';
 
@@ -149,7 +147,7 @@ export default async function RootLayout({
           />
         ))}
         {/* 將配置序列化後直接寫入腳本，瀏覽器端可通過 window.RUNTIME_CONFIG 獲取 */}
-        {/* eslint-disable-next-line @next/next/no-sync-scripts */}
+        {}
         <script
           dangerouslySetInnerHTML={{
             __html: `window.RUNTIME_CONFIG = ${serializeForInlineScript(

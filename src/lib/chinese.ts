@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, unused-imports/no-unused-vars */
+/* eslint-disable unused-imports/no-unused-vars */
 
 import { convertS2T, convertT2S } from './s2t';
 

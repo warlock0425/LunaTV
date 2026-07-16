@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/exhaustive-deps, @typescript-eslint/no-explicit-any,@typescript-eslint/no-non-null-assertion,no-empty */
+/* eslint-disable react-hooks/exhaustive-deps, @typescript-eslint/no-explicit-any,no-empty */
 'use client';
 
 import { ChevronUp, Search, X } from 'lucide-react';
@@ -55,9 +55,9 @@ function SearchPageClient() {
   const pendingResultsRef = useRef<SearchResult[]>([]);
   const flushTimerRef = useRef<number | null>(null);
   const [useFluidSearch, setUseFluidSearch] = useState(true);
-  const groupRefs = useRef<Map<string, React.RefObject<VideoCardHandle>>>(
-    new Map()
-  );
+  const groupRefs = useRef<
+    Map<string, React.RefObject<VideoCardHandle | null>>
+  >(new Map());
   const groupStatsRef = useRef<
     Map<
       string,

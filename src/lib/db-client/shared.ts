@@ -1,4 +1,3 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-function */
 'use client';
 
 import { parseStorageKey } from '../storage-key';

@@ -1,5 +1,5 @@
 # ---- Stage 1: dependencies ----
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 
@@ -11,7 +11,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ---- Stage 2: builder ----
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 RUN apk add --no-cache python3 make g++ libc6-compat
 
@@ -31,7 +31,7 @@ ENV KVROCKS_URL=redis://localhost:6666
 RUN pnpm run build
 
 # ---- Stage 3: runner ----
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 
 RUN addgroup -g 1001 -S nodejs && adduser -u 1001 -S nextjs -G nodejs
 

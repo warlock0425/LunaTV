@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,react-hooks/exhaustive-deps,@typescript-eslint/no-empty-function,no-console */
+/* eslint-disable @typescript-eslint/no-explicit-any,react-hooks/exhaustive-deps,no-console */
 
 import {
   Clapperboard,

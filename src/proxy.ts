@@ -1,12 +1,10 @@
-/* eslint-disable no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
 import { getFreshAdminUser } from '@/lib/config';
 import { getSessionVersion } from '@/lib/security-store';
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // 跳過不需要認證的路徑
@@ -118,9 +116,8 @@ function shouldSkipAuth(pathname: string): boolean {
   return skipPaths.some((path) => pathname.startsWith(path));
 }
 
-// 設定 middleware 匹配規則
+// 設定 proxy 匹配規則（Next 16 起 middleware 更名為 proxy，固定 Node.js runtime）
 export const config = {
-  runtime: 'nodejs',
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|sw.js|login|warning|api/login|api/register|api/logout|api/cron|api/server-config).*)',
   ],

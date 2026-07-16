@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
+/* eslint-disable no-console */
 
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 'use client';
 
 import { AlertCircle, CheckCircle, Eye, EyeOff, Film } from 'lucide-react';

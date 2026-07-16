@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
+/* eslint-disable no-console */
 import he from 'he';
 import type { ErrorData, Events, FragLoadedData } from 'hls.js';
 import Hls from 'hls.js';

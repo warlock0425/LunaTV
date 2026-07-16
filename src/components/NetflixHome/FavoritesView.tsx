@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { BookMarked, Plus, Settings2, Tag } from 'lucide-react';
