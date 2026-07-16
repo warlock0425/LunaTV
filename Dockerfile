@@ -5,7 +5,8 @@ RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml 內含 overrides，frozen-lockfile 驗證需要它
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
 # Install dependencies without running git hooks inside the image build.
 RUN pnpm install --frozen-lockfile --ignore-scripts
