@@ -1,11 +1,11 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps, @next/next/no-img-element */
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps */
 
 'use client';
 
 import Artplayer from 'artplayer';
 import Hls, { ErrorData, Events } from 'hls.js';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import {
   getCachedBangumiAliases,
@@ -20,7 +20,6 @@ import {
   type PlayRecord,
   saveSkipConfig,
 } from '@/lib/db.client';
-import { filterAdsFromM3U8Detailed } from '@/lib/hls-ad-filter';
 import { logger } from '@/lib/logger';
 import { formatPlayerTime, getStableTitle } from '@/lib/play-page-utils';
 import {
@@ -31,10 +30,12 @@ import {
 } from '@/lib/play-search';
 import { isFuzzyMatch } from '@/lib/searchEngine';
 import { SearchResult } from '@/lib/types';
-import { getProxiedImageUrl, processImageUrl } from '@/lib/utils';
+import { processImageUrl } from '@/lib/utils';
 import { useFavorite } from '@/hooks/useFavorite';
 import { usePlaybackSourceSearch } from '@/hooks/usePlaybackSourceSearch';
+import { usePlayerKeyboardShortcuts } from '@/hooks/usePlayerKeyboardShortcuts';
 import { usePlayRecordPersistence } from '@/hooks/usePlayRecordPersistence';
+import { useWakeLock } from '@/hooks/useWakeLock';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -42,7 +43,7 @@ import PageLayout from '@/components/PageLayout';
 import PageLoading from '@/components/PageLoading';
 import PlayerGestureLayer from '@/components/PlayerGestureLayer';
 
-import { FavoriteIcon } from './FavoriteIcon';
+import { CustomHlsJsLoader } from './custom-hls-loader';
 import {
   clearCachedDetail,
   DEFAULT_SKIP_CONFIG,
@@ -52,20 +53,21 @@ import {
   setCachedDetail,
 } from './play-page-helpers';
 import { PlayErrorView, PlayLoadingView } from './play-views';
+import { buildSkipSettings } from './player-skip-settings';
+import {
+  AutoNextCountdownOverlay,
+  EpisodeCollapseToggle,
+  ShortcutsHelpPanel,
+  SkipButton,
+  VideoDetailsPanel,
+  VideoLoadingOverlay,
+} from './player-ui';
 
 // 擴展 HTMLVideoElement 類型以支持 hls 屬性
 declare global {
   interface HTMLVideoElement {
     hls?: Hls;
   }
-}
-
-// Wake Lock API 類型聲明
-interface WakeLockSentinel {
-  released: boolean;
-  release(): Promise<void>;
-  addEventListener(type: 'release', listener: () => void): void;
-  removeEventListener(type: 'release', listener: () => void): void;
 }
 
 function PlayPageClient() {
@@ -158,7 +160,6 @@ function PlayPageClient() {
     return !val || val === 'undefined' || val === 'null' ? '' : val;
   });
   const [videoCover, setVideoCover] = useState('');
-  const [coverImgError, setCoverImgError] = useState(false);
   const [videoDoubanId, setVideoDoubanId] = useState(0);
   // 當前源和ID
   const [currentSource, setCurrentSource] = useState(() => {
@@ -306,8 +307,8 @@ function PlayPageClient() {
   const artPlayerRef = useRef<any>(null);
   const artRef = useRef<HTMLDivElement | null>(null);
 
-  // Wake Lock 相關
-  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  // Wake Lock（螢幕常亮）
+  const { requestWakeLock, releaseWakeLock } = useWakeLock();
 
   // -----------------------------------------------------------------------------
   // 工具函數（Utils）
@@ -370,32 +371,6 @@ function PlayPageClient() {
     }
   };
 
-  // Wake Lock 相關函數
-  const requestWakeLock = async () => {
-    try {
-      if ('wakeLock' in navigator) {
-        wakeLockRef.current = await (navigator as any).wakeLock.request(
-          'screen'
-        );
-        logger.debug('Wake Lock 已啟用');
-      }
-    } catch (err) {
-      logger.warn('Wake Lock 請求失敗:', err);
-    }
-  };
-
-  const releaseWakeLock = async () => {
-    try {
-      if (wakeLockRef.current) {
-        await wakeLockRef.current.release();
-        wakeLockRef.current = null;
-        logger.debug('Wake Lock 已釋放');
-      }
-    } catch (err) {
-      logger.warn('Wake Lock 釋放失敗:', err);
-    }
-  };
-
   // 清理播放器資源的統一函數
   const cleanupPlayer = (resetCountdownUi = true) => {
     if (countdownTimerRef.current) {
@@ -427,6 +402,14 @@ function PlayPageClient() {
     }
   };
 
+  // 跳過片頭片尾設定項（Artplayer 建立與設定面板重設共用）
+  const buildSkipSettingsForPlayer = () =>
+    buildSkipSettings({
+      getPlayer: () => artPlayerRef.current,
+      skipConfigRef,
+      onChange: (cfg) => handleSkipConfigChange(cfg),
+    });
+
   // 跳過片頭片尾配置相關函數
   const handleSkipConfigChange = async (newConfig: {
     enable: boolean;
@@ -440,63 +423,10 @@ function PlayPageClient() {
       skipConfigRef.current = newConfig;
       if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
-        artPlayerRef.current.setting.update({
-          name: '跳過片頭片尾',
-          html: '跳過片頭片尾',
-          switch: skipConfigRef.current.enable,
-          onSwitch: function (item: any) {
-            const newConfig = {
-              ...skipConfigRef.current,
-              enable: !item.switch,
-            };
-            handleSkipConfigChange(newConfig);
-            return !item.switch;
-          },
-        });
-        artPlayerRef.current.setting.update({
-          name: '設定片頭',
-          html: '設定片頭',
-          icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#ffffff"/><path d="M9 12L17 12" stroke="#ffffff" stroke-width="2"/><path d="M17 6L17 18" stroke="#ffffff" stroke-width="2"/></svg>',
-          tooltip:
-            skipConfigRef.current.intro_time === 0
-              ? '設定片頭時間'
-              : `${formatPlayerTime(skipConfigRef.current.intro_time)}`,
-          onClick: function () {
-            const currentTime = artPlayerRef.current?.currentTime || 0;
-            if (currentTime > 0) {
-              const newConfig = {
-                ...skipConfigRef.current,
-                intro_time: currentTime,
-              };
-              handleSkipConfigChange(newConfig);
-              return `${formatPlayerTime(currentTime)}`;
-            }
-          },
-        });
-        artPlayerRef.current.setting.update({
-          name: '設定片尾',
-          html: '設定片尾',
-          icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 6L7 18" stroke="#ffffff" stroke-width="2"/><path d="M7 12L15 12" stroke="#ffffff" stroke-width="2"/><circle cx="19" cy="12" r="2" fill="#ffffff"/></svg>',
-          tooltip:
-            skipConfigRef.current.outro_time >= 0
-              ? '設定片尾時間'
-              : `-${formatPlayerTime(-skipConfigRef.current.outro_time)}`,
-          onClick: function () {
-            const outroTime =
-              -(
-                artPlayerRef.current?.duration -
-                artPlayerRef.current?.currentTime
-              ) || 0;
-            if (outroTime < 0) {
-              const newConfig = {
-                ...skipConfigRef.current,
-                outro_time: outroTime,
-              };
-              handleSkipConfigChange(newConfig);
-              return `-${formatPlayerTime(-outroTime)}`;
-            }
-          },
-        });
+        const { skipToggle, setIntro, setOutro } = buildSkipSettingsForPlayer();
+        artPlayerRef.current.setting.update(skipToggle);
+        artPlayerRef.current.setting.update(setIntro);
+        artPlayerRef.current.setting.update(setOutro);
       } else {
         await saveSkipConfig(
           currentSourceRef.current,
@@ -536,46 +466,6 @@ function PlayPageClient() {
       abortActiveSpeedTests();
     };
   }, [abortActiveSpeedTests]);
-
-  const CustomHlsJsLoader = useMemo(
-    () =>
-      class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
-        constructor(config: any) {
-          super(config);
-          const load = this.load.bind(this);
-          this.load = function (context: any, config: any, callbacks: any) {
-            // 攔截manifest和level請求
-            if (
-              (context as any).type === 'manifest' ||
-              (context as any).type === 'level'
-            ) {
-              const onSuccess = callbacks.onSuccess;
-              callbacks.onSuccess = function (
-                response: any,
-                stats: any,
-                context: any
-              ) {
-                // 如果是m3u8文件，處理內容以移除廣告分段
-                if (response.data && typeof response.data === 'string') {
-                  // 過濾掉廣告段 - 實現更精確的廣告過濾邏輯
-                  const filtered = filterAdsFromM3U8Detailed(response.data);
-                  response.data = filtered.content;
-                  if (filtered.removedSegments > 0) {
-                    logger.debug(
-                      `去廣告已移除 ${filtered.removedSegments} 個 HLS 廣告片段`
-                    );
-                  }
-                }
-                return onSuccess(response, stats, context, null);
-              };
-            }
-            // 執行原始load方法
-            load(context, config, callbacks);
-          };
-        }
-      },
-    []
-  );
 
   // 當集數索引變化時自動更新影片地址
   useEffect(() => {
@@ -1331,152 +1221,14 @@ function PlayPageClient() {
   // ---------------------------------------------------------------------------
   // 鍵盤快捷鍵
   // ---------------------------------------------------------------------------
-  // 處理全局快捷鍵
-  const handleKeyboardShortcuts = (e: KeyboardEvent) => {
-    // 忽略輸入框中的按鍵事件
-    if (
-      (e.target as HTMLElement).tagName === 'INPUT' ||
-      (e.target as HTMLElement).tagName === 'TEXTAREA'
-    )
-      return;
-
-    // Alt + 左箭頭 = 上一集
-    if (e.altKey && e.key === 'ArrowLeft') {
-      if (detailRef.current && currentEpisodeIndexRef.current > 0) {
-        handlePreviousEpisode();
-        e.preventDefault();
-      }
-    }
-
-    // Alt + 右箭頭 = 下一集
-    if (e.altKey && e.key === 'ArrowRight') {
-      const d = detailRef.current;
-      const idx = currentEpisodeIndexRef.current;
-      if (d && idx < d.episodes.length - 1) {
-        handleNextEpisode();
-        e.preventDefault();
-      }
-    }
-
-    // 左箭頭 = 快退
-    if (!e.altKey && e.key === 'ArrowLeft') {
-      if (artPlayerRef.current && artPlayerRef.current.currentTime > 5) {
-        artPlayerRef.current.currentTime -= 10;
-        e.preventDefault();
-      }
-    }
-
-    // 右箭頭 = 快進
-    if (!e.altKey && e.key === 'ArrowRight') {
-      if (
-        artPlayerRef.current &&
-        artPlayerRef.current.currentTime < artPlayerRef.current.duration - 5
-      ) {
-        artPlayerRef.current.currentTime += 10;
-        e.preventDefault();
-      }
-    }
-
-    // 上箭頭 = 音量+
-    if (e.key === 'ArrowUp') {
-      if (artPlayerRef.current && artPlayerRef.current.volume < 1) {
-        artPlayerRef.current.volume =
-          Math.round((artPlayerRef.current.volume + 0.1) * 10) / 10;
-        artPlayerRef.current.notice.show = `音量: ${Math.round(
-          artPlayerRef.current.volume * 100
-        )}`;
-        e.preventDefault();
-      }
-    }
-
-    // 下箭頭 = 音量-
-    if (e.key === 'ArrowDown') {
-      if (artPlayerRef.current && artPlayerRef.current.volume > 0) {
-        artPlayerRef.current.volume =
-          Math.round((artPlayerRef.current.volume - 0.1) * 10) / 10;
-        artPlayerRef.current.notice.show = `音量: ${Math.round(
-          artPlayerRef.current.volume * 100
-        )}`;
-        e.preventDefault();
-      }
-    }
-
-    // 空格 = 播放/暫停
-    if (e.key === ' ') {
-      if (artPlayerRef.current) {
-        artPlayerRef.current.toggle();
-        e.preventDefault();
-      }
-    }
-
-    // f 鍵 = 切換全屏
-    if (e.key === 'f' || e.key === 'F') {
-      if (artPlayerRef.current) {
-        artPlayerRef.current.fullscreen = !artPlayerRef.current.fullscreen;
-        e.preventDefault();
-      }
-    }
-
-    // [ 或 < = 減速一檔
-    if (e.key === '[' || e.key === '<') {
-      if (artPlayerRef.current) {
-        const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
-        const currentRate = artPlayerRef.current.playbackRate;
-        const idx = rates.findIndex((r) => Math.abs(r - currentRate) < 0.01);
-        let newRate = 1;
-        if (idx > 0) {
-          newRate = rates[idx - 1];
-        } else if (idx === -1) {
-          newRate = 1; // reset if unknown
-        }
-        artPlayerRef.current.playbackRate = newRate;
-        artPlayerRef.current.notice.show = `倍速: ${newRate}x`;
-        e.preventDefault();
-      }
-    }
-
-    // ] 或 > = 加速一檔
-    if (e.key === ']' || e.key === '>') {
-      if (artPlayerRef.current) {
-        const rates = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
-        const currentRate = artPlayerRef.current.playbackRate;
-        const idx = rates.findIndex((r) => Math.abs(r - currentRate) < 0.01);
-        let newRate = 1.25;
-        if (idx >= 0 && idx < rates.length - 1) {
-          newRate = rates[idx + 1];
-        } else if (idx === -1) {
-          newRate = 1.25;
-        }
-        artPlayerRef.current.playbackRate = newRate;
-        artPlayerRef.current.notice.show = `倍速: ${newRate}x`;
-        e.preventDefault();
-      }
-    }
-
-    // M = 靜音
-    if (e.key === 'm' || e.key === 'M') {
-      if (artPlayerRef.current) {
-        artPlayerRef.current.muted = !artPlayerRef.current.muted;
-        artPlayerRef.current.notice.show = artPlayerRef.current.muted
-          ? '已靜音'
-          : '取消靜音';
-        e.preventDefault();
-      }
-    }
-
-    // ? 或 h 鍵 = 顯示快捷鍵幫助
-    if (e.key === '?' || e.key === 'h' || e.key === 'H') {
-      setShowShortcuts((prev) => !prev);
-      e.preventDefault();
-    }
-  };
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyboardShortcuts);
-    return () => {
-      document.removeEventListener('keydown', handleKeyboardShortcuts);
-    };
-  }, []);
+  usePlayerKeyboardShortcuts({
+    artPlayerRef,
+    detailRef,
+    currentEpisodeIndexRef,
+    onPreviousEpisode: handlePreviousEpisode,
+    onNextEpisode: handleNextEpisode,
+    onToggleShortcutsHelp: () => setShowShortcuts((prev) => !prev),
+  });
 
   // ---------------------------------------------------------------------------
   // 播放記錄相關
@@ -1573,6 +1325,8 @@ function PlayPageClient() {
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
       Artplayer.USE_RAF = false;
       Artplayer.FULLSCREEN_WEB_IN_BODY = true;
+
+      const skipSettings = buildSkipSettingsForPlayer();
 
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
@@ -1698,19 +1452,7 @@ function PlayPageClient() {
               return newVal ? '當前開啟' : '當前關閉';
             },
           },
-          {
-            name: '跳過片頭片尾',
-            html: '跳過片頭片尾',
-            switch: skipConfigRef.current.enable,
-            onSwitch: function (item) {
-              const newConfig = {
-                ...skipConfigRef.current,
-                enable: !item.switch,
-              };
-              handleSkipConfigChange(newConfig);
-              return !item.switch;
-            },
-          },
+          skipSettings.skipToggle,
           {
             html: '刪除跳過配置',
             onClick: function () {
@@ -1722,50 +1464,8 @@ function PlayPageClient() {
               return '';
             },
           },
-          {
-            name: '設定片頭',
-            html: '設定片頭',
-            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="5" cy="12" r="2" fill="#ffffff"/><path d="M9 12L17 12" stroke="#ffffff" stroke-width="2"/><path d="M17 6L17 18" stroke="#ffffff" stroke-width="2"/></svg>',
-            tooltip:
-              skipConfigRef.current.intro_time === 0
-                ? '設定片頭時間'
-                : `${formatPlayerTime(skipConfigRef.current.intro_time)}`,
-            onClick: function () {
-              const currentTime = artPlayerRef.current?.currentTime || 0;
-              if (currentTime > 0) {
-                const newConfig = {
-                  ...skipConfigRef.current,
-                  intro_time: currentTime,
-                };
-                handleSkipConfigChange(newConfig);
-                return `${formatPlayerTime(currentTime)}`;
-              }
-            },
-          },
-          {
-            name: '設定片尾',
-            html: '設定片尾',
-            icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 6L7 18" stroke="#ffffff" stroke-width="2"/><path d="M7 12L15 12" stroke="#ffffff" stroke-width="2"/><circle cx="19" cy="12" r="2" fill="#ffffff"/></svg>',
-            tooltip:
-              skipConfigRef.current.outro_time >= 0
-                ? '設定片尾時間'
-                : `-${formatPlayerTime(-skipConfigRef.current.outro_time)}`,
-            onClick: function () {
-              const outroTime =
-                -(
-                  artPlayerRef.current?.duration -
-                  artPlayerRef.current?.currentTime
-                ) || 0;
-              if (outroTime < 0) {
-                const newConfig = {
-                  ...skipConfigRef.current,
-                  outro_time: outroTime,
-                };
-                handleSkipConfigChange(newConfig);
-                return `-${formatPlayerTime(-outroTime)}`;
-              }
-            },
-          },
+          skipSettings.setIntro,
+          skipSettings.setOutro,
         ],
         // 控製欄配置
         controls: [
@@ -2113,45 +1813,12 @@ function PlayPageClient() {
         {/* 第二行：播放器和選集 */}
         <div className='space-y-2'>
           {/* 摺疊控製 - 僅在 lg 及以上熒幕顯示 */}
-          <div className='hidden lg:flex justify-end'>
-            <button
-              onClick={() =>
-                setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
-              }
-              className='group relative flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white dark:bg-zinc-800/80 dark:hover:bg-zinc-800 backdrop-blur-sm border border-zinc-200/50 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all duration-200'
-              title={
-                isEpisodeSelectorCollapsed ? '顯示選集面板' : '隱藏選集面板'
-              }
-            >
-              <svg
-                className={`w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300 transition-transform duration-200 ${
-                  isEpisodeSelectorCollapsed ? 'rotate-180' : 'rotate-0'
-                }`}
-                fill='none'
-                stroke='currentColor'
-                viewBox='0 0 24 24'
-              >
-                <path
-                  strokeLinecap='round'
-                  strokeLinejoin='round'
-                  strokeWidth='2'
-                  d='M9 5l7 7-7 7'
-                />
-              </svg>
-              <span className='text-xs font-medium text-zinc-600 dark:text-zinc-300'>
-                {isEpisodeSelectorCollapsed ? '顯示' : '隱藏'}
-              </span>
-
-              {/* 精緻的狀態指示點 */}
-              <div
-                className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-all duration-200 ${
-                  isEpisodeSelectorCollapsed
-                    ? 'bg-orange-400 animate-pulse'
-                    : 'bg-accent'
-                }`}
-              ></div>
-            </button>
-          </div>
+          <EpisodeCollapseToggle
+            collapsed={isEpisodeSelectorCollapsed}
+            onToggle={() =>
+              setIsEpisodeSelectorCollapsed(!isEpisodeSelectorCollapsed)
+            }
+          />
 
           <div
             className={`grid gap-4 lg:h-[500px] xl:h-[650px] 2xl:h-[750px] transition-all duration-300 ease-in-out ${
@@ -2182,7 +1849,8 @@ function PlayPageClient() {
 
                 {/* 跳過片頭按鈕 */}
                 {showSkipIntro && (
-                  <button
+                  <SkipButton
+                    label='跳過片頭'
                     onClick={() => {
                       if (artPlayerRef.current) {
                         artPlayerRef.current.currentTime =
@@ -2192,22 +1860,13 @@ function PlayPageClient() {
                         )})`;
                       }
                     }}
-                    className='absolute bottom-16 right-4 z-[100] px-4 py-2 bg-black/70 hover:bg-black/90 text-white border border-white/20 rounded-lg shadow-lg backdrop-blur-sm transition-all text-sm font-medium flex items-center space-x-1'
-                  >
-                    <span>跳過片頭</span>
-                    <svg
-                      className='w-4 h-4'
-                      fill='currentColor'
-                      viewBox='0 0 24 24'
-                    >
-                      <path d='M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z' />
-                    </svg>
-                  </button>
+                  />
                 )}
 
                 {/* 跳過片尾按鈕 */}
                 {showSkipOutro && (
-                  <button
+                  <SkipButton
+                    label='跳過片尾'
                     onClick={() => {
                       if (artPlayerRef.current) {
                         const d = detailRef.current;
@@ -2224,94 +1883,43 @@ function PlayPageClient() {
                         )})`;
                       }
                     }}
-                    className='absolute bottom-16 right-4 z-[100] px-4 py-2 bg-black/70 hover:bg-black/90 text-white border border-white/20 rounded-lg shadow-lg backdrop-blur-sm transition-all text-sm font-medium flex items-center space-x-1'
-                  >
-                    <span>跳過片尾</span>
-                    <svg
-                      className='w-4 h-4'
-                      fill='currentColor'
-                      viewBox='0 0 24 24'
-                    >
-                      <path d='M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z' />
-                    </svg>
-                  </button>
+                  />
                 )}
 
                 {/* 換源加載蒙層 */}
                 {isVideoLoading && (
-                  <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl flex items-center justify-center z-[500] transition-all duration-300'>
-                    <div className='text-center max-w-md mx-auto px-6'>
-                      <div className='relative mb-8'>
-                        <div className='relative mx-auto w-24 h-24 bg-[#17171c] rounded-2xl shadow-2xl flex items-center justify-center border border-accent/30'>
-                          <div className='text-white text-4xl'>🎬</div>
-                          <div className='absolute -inset-1 rounded-2xl border border-accent/20' />
-                        </div>
-                      </div>
-
-                      {/* 換源消息 */}
-                      <div className='space-y-2'>
-                        <p className='text-xl font-semibold text-white animate-pulse'>
-                          {videoLoadingStage === 'sourceChanging'
-                            ? '🔄 切換播放源...'
-                            : '🔄 影片加載中...'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+                  <VideoLoadingOverlay stage={videoLoadingStage} />
                 )}
 
                 {/* 自動連播倒數計時蒙層 */}
                 {showCountdownOverlay && autoNextCountdown > 0 && (
-                  <div className='absolute inset-0 bg-black/80 backdrop-blur-sm rounded-xl flex items-center justify-center z-[501] transition-all duration-300'>
-                    <div className='text-center max-w-sm mx-auto px-6'>
-                      <p className='text-lg text-white/80 mb-3'>
-                        下一集即將播放
-                      </p>
-                      <div className='text-6xl font-bold text-accent mb-6 animate-pulse'>
-                        {autoNextCountdown}
-                      </div>
-                      <div className='flex gap-3 justify-center'>
-                        <button
-                          onClick={() => {
-                            if (countdownTimerRef.current) {
-                              clearInterval(countdownTimerRef.current);
-                              countdownTimerRef.current = null;
-                            }
-                            setShowCountdownOverlay(false);
-                            setAutoNextCountdown(0);
-                            autoNextBusyRef.current = false;
-                            // 立即播放下一集
-                            const d = detailRef.current;
-                            const idx = currentEpisodeIndexRef.current;
-                            if (
-                              d &&
-                              d.episodes &&
-                              idx < d.episodes.length - 1
-                            ) {
-                              setCurrentEpisodeIndex(idx + 1);
-                            }
-                          }}
-                          className='px-5 py-2.5 bg-accent hover:bg-[#cc3256] text-white font-medium rounded-xl transition-colors text-sm'
-                        >
-                          立即播放
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (countdownTimerRef.current) {
-                              clearInterval(countdownTimerRef.current);
-                              countdownTimerRef.current = null;
-                            }
-                            setShowCountdownOverlay(false);
-                            setAutoNextCountdown(0);
-                            autoNextBusyRef.current = false;
-                          }}
-                          className='px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white font-medium rounded-xl transition-colors text-sm border border-white/20'
-                        >
-                          取消
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <AutoNextCountdownOverlay
+                    countdown={autoNextCountdown}
+                    onPlayNow={() => {
+                      if (countdownTimerRef.current) {
+                        clearInterval(countdownTimerRef.current);
+                        countdownTimerRef.current = null;
+                      }
+                      setShowCountdownOverlay(false);
+                      setAutoNextCountdown(0);
+                      autoNextBusyRef.current = false;
+                      // 立即播放下一集
+                      const d = detailRef.current;
+                      const idx = currentEpisodeIndexRef.current;
+                      if (d && d.episodes && idx < d.episodes.length - 1) {
+                        setCurrentEpisodeIndex(idx + 1);
+                      }
+                    }}
+                    onCancel={() => {
+                      if (countdownTimerRef.current) {
+                        clearInterval(countdownTimerRef.current);
+                        countdownTimerRef.current = null;
+                      }
+                      setShowCountdownOverlay(false);
+                      setAutoNextCountdown(0);
+                      autoNextBusyRef.current = false;
+                    }}
+                  />
                 )}
               </div>
             </div>
@@ -2372,168 +1980,19 @@ function PlayPageClient() {
 
         {/* 快捷鍵幫助面板 */}
         {showShortcuts && (
-          <div
-            className='fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4'
-            onClick={() => setShowShortcuts(false)}
-          >
-            <div
-              className='bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-sm w-full shadow-2xl'
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h3 className='text-white font-bold text-lg mb-4'>快捷鍵幫助</h3>
-              <div className='space-y-2.5 text-sm'>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>空白鍵</span>
-                  <span className='text-white'>播放 / 暫停</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>F</span>
-                  <span className='text-white'>切換全螢幕</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>← / →</span>
-                  <span className='text-white'>快退 / 快進 10 秒</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>↑ / ↓</span>
-                  <span className='text-white'>增減音量</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>[ / ]</span>
-                  <span className='text-white'>減速 / 加速播放</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>M</span>
-                  <span className='text-white'>靜音切換</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>Alt + ← / →</span>
-                  <span className='text-white'>上 / 下一集</span>
-                </div>
-                <div className='flex justify-between'>
-                  <span className='text-zinc-400'>? / H</span>
-                  <span className='text-white'>快捷鍵幫助</span>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowShortcuts(false)}
-                className='w-full mt-5 py-2.5 bg-accent hover:bg-[#cc3256] text-white font-medium rounded-xl transition-colors text-sm'
-              >
-                關閉
-              </button>
-            </div>
-          </div>
+          <ShortcutsHelpPanel onClose={() => setShowShortcuts(false)} />
         )}
 
         {/* 詳情展示 */}
-        <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
-          {/* 文字區 */}
-          <div className='md:col-span-3'>
-            <div className='p-6 flex flex-col min-h-0'>
-              {/* 標題 */}
-              <h1 className='text-3xl font-bold mb-2 tracking-wide flex items-center flex-shrink-0 text-center md:text-left w-full'>
-                {videoTitle || '影片標題'}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleToggleFavorite();
-                  }}
-                  className='ml-3 flex-shrink-0 hover:opacity-80 transition-opacity'
-                >
-                  <FavoriteIcon filled={favorited} />
-                </button>
-              </h1>
-
-              {/* 關鍵資訊行 */}
-              <div className='flex flex-wrap items-center gap-3 text-base mb-4 text-zinc-700 dark:text-zinc-300 flex-shrink-0'>
-                {detail?.class && (
-                  <span className='text-accent font-semibold'>
-                    {detail.class}
-                  </span>
-                )}
-                {(detail?.year || videoYear) && (
-                  <span>{detail?.year || videoYear}</span>
-                )}
-                {detail?.source_name && (
-                  <span
-                    title={detail.source_name}
-                    className='max-w-full truncate border border-zinc-500/60 px-2 py-[1px] rounded'
-                  >
-                    {detail.source_name}
-                  </span>
-                )}
-                {detail?.type_name && <span>{detail.type_name}</span>}
-              </div>
-              {/* 劇情簡介 */}
-              {detail?.desc && (
-                <div
-                  className='mt-0 text-base leading-relaxed text-zinc-700 dark:text-zinc-300 overflow-y-auto pr-2 flex-1 min-h-0 scrollbar-hide'
-                  style={{ whiteSpace: 'pre-line' }}
-                >
-                  {detail.desc}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* 封面展示 */}
-          <div className='hidden md:block md:col-span-1 md:order-first'>
-            <div className='pl-0 py-4 pr-6'>
-              <div className='relative bg-zinc-300 dark:bg-zinc-700 aspect-[2/3] flex items-center justify-center rounded-xl overflow-hidden'>
-                {videoCover && !coverImgError ? (
-                  <>
-                    <img
-                      src={processImageUrl(videoCover)}
-                      alt={videoTitle}
-                      className='w-full h-full object-cover'
-                      referrerPolicy='no-referrer'
-                      onError={(e) => {
-                        const img = e.currentTarget;
-                        if (!img.dataset.retried && videoCover) {
-                          // 直連失敗，改走伺服器代理
-                          img.dataset.retried = 'true';
-                          img.src = getProxiedImageUrl(videoCover);
-                          return;
-                        }
-                        setCoverImgError(true);
-                      }}
-                    />
-
-                    {/* 豆瓣鏈接按鈕 */}
-                    {videoDoubanId !== 0 && (
-                      <a
-                        href={`https://movie.douban.com/subject/${videoDoubanId.toString()}`}
-                        target='_blank'
-                        rel='noopener noreferrer'
-                        className='absolute top-3 left-3'
-                      >
-                        <div className='bg-accent text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-[#cc3256] hover:scale-[1.1] transition-all duration-300 ease-out'>
-                          <svg
-                            width='16'
-                            height='16'
-                            viewBox='0 0 24 24'
-                            fill='none'
-                            stroke='currentColor'
-                            strokeWidth='2'
-                            strokeLinecap='round'
-                            strokeLinejoin='round'
-                          >
-                            <path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'></path>
-                            <path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'></path>
-                          </svg>
-                        </div>
-                      </a>
-                    )}
-                  </>
-                ) : (
-                  <span className='text-zinc-700 dark:text-zinc-300'>
-                    {coverImgError ? videoTitle : '封面圖片'}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <VideoDetailsPanel
+          detail={detail}
+          videoTitle={videoTitle}
+          videoYear={videoYear}
+          videoCover={videoCover}
+          videoDoubanId={videoDoubanId}
+          favorited={favorited}
+          onToggleFavorite={handleToggleFavorite}
+        />
       </div>
     </PageLayout>
   );
