@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit --incremental false",
     "test:watch": "jest --watch",
     "test": "jest",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --forceExit",
     "test:e2e": "pnpm build && playwright test",
     "test:e2e:install": "playwright install chromium",
     "format": "prettier -w .",
