@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
 import he from 'he';
 import type { ErrorData, Events, FragLoadedData } from 'hls.js';
-import Hls from 'hls.js';
 
 type DoubanImageProxyType =
   | 'server'
@@ -180,6 +179,13 @@ export async function getVideoResolutionFromM3u8(
   pingTime: number; // 網路延遲（毫秒）
 }> {
   try {
+    // hls.js 體積大（gzip 後 ~150KB），動態載入以免經由 utils.ts 被打進
+    // 全站共用 bundle；只有實際執行測速時才需要它
+    // 型別斷言回靜態解析的 CJS 型別，避免 node16 模組解析下
+    // ESM/CJS 兩套名義型別（如 enum）互不相容
+    const { default: Hls } =
+      (await import('hls.js')) as unknown as typeof import('hls.js');
+
     // 直接使用 m3u8 URL 作為影片源，避免 CORS 問題
     return new Promise((resolve, reject) => {
       const video = document.createElement('video');
