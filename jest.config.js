@@ -22,15 +22,20 @@ const customJestConfig = {
     'src/lib/**/*.{ts,tsx}',
     '!src/lib/**/*.test.ts',
     '!src/lib/version.ts',
+    'src/hooks/**/*.{ts,tsx}',
+    '!src/hooks/**/*.test.{ts,tsx}',
+    'src/app/live/live-epg-utils.ts',
+    'src/app/play/player-skip-settings.ts',
   ],
-  // 防倒退門檻（2026-07 現況：lines 48% / branches 73-75%）
+  // 防倒退門檻（2026-07 現況：lines 46% / branches 76% / funcs 48%，
+  // 統計範圍含 src/lib、src/hooks 與抽出的純邏輯模組）
   // 注意：V8 coverage 數字隨 Node 版本浮動（CI 為 Node 24），門檻需留足容差
   coverageThreshold: {
     global: {
-      lines: 42,
-      branches: 62,
-      functions: 40,
-      statements: 42,
+      lines: 43,
+      branches: 70,
+      functions: 43,
+      statements: 43,
     },
   },
 
