@@ -78,9 +78,7 @@ function AdminPageClient() {
       showError(msg, showAlert);
       setError(msg);
     } finally {
-      if (showLoading) {
-        setLoading(false);
-      }
+      setLoading(false);
     }
   }, []);
 
