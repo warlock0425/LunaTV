@@ -49,6 +49,17 @@ export default function EpgScrollableRow({
     }
   };
 
+  // 判斷節目是否正在播放（需宣告於使用之前）
+  const isCurrentlyPlaying = (program: EpgProgram) => {
+    try {
+      const start = parseCustomTimeFormat(program.start);
+      const end = parseCustomTimeFormat(program.end);
+      return currentTime >= start && currentTime < end;
+    } catch {
+      return false;
+    }
+  };
+
   // 自動滾動到正在播放的節目
   const scrollToCurrentProgram = () => {
     if (containerRef.current) {
@@ -145,15 +156,6 @@ export default function EpgScrollableRow({
   };
 
   // 判斷節目是否正在播放
-  const isCurrentlyPlaying = (program: EpgProgram) => {
-    try {
-      const start = parseCustomTimeFormat(program.start);
-      const end = parseCustomTimeFormat(program.end);
-      return currentTime >= start && currentTime < end;
-    } catch {
-      return false;
-    }
-  };
 
   // 加載中狀態
   if (isLoading) {

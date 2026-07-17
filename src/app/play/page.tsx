@@ -5,7 +5,7 @@
 import Artplayer from 'artplayer';
 import Hls, { ErrorData, Events } from 'hls.js';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   getCachedBangumiAliases,
@@ -240,7 +240,17 @@ function PlayPageClient() {
     }
   }, [bangumiSubjectId]);
 
-  const [videoUrl, setVideoUrl] = useState('');
+  // 影片地址由 detail + 集數索引推導（越界時為空字串）
+  const videoUrl = useMemo(() => {
+    if (
+      !detail ||
+      !detail.episodes ||
+      currentEpisodeIndex >= detail.episodes.length
+    ) {
+      return '';
+    }
+    return detail.episodes[currentEpisodeIndex] || '';
+  }, [detail, currentEpisodeIndex]);
   const totalEpisodes = detail?.episodes?.length || 0;
   const resumeTimeRef = useRef<number | null>(null);
   const lastVolumeRef = useRef<number>(0.7);
@@ -313,25 +323,6 @@ function PlayPageClient() {
   // -----------------------------------------------------------------------------
   // 工具函數（Utils）
   // -----------------------------------------------------------------------------
-
-  // 併發限制工具函數
-  const updateVideoUrl = (
-    detailData: SearchResult | null,
-    episodeIndex: number
-  ) => {
-    if (
-      !detailData ||
-      !detailData.episodes ||
-      episodeIndex >= detailData.episodes.length
-    ) {
-      setVideoUrl('');
-      return;
-    }
-    const newUrl = detailData?.episodes[episodeIndex] || '';
-    if (newUrl !== videoUrl) {
-      setVideoUrl(newUrl);
-    }
-  };
 
   const replacePlaybackUrl = (
     updates: Record<string, string | number | undefined | null>,
@@ -466,11 +457,6 @@ function PlayPageClient() {
       abortActiveSpeedTests();
     };
   }, [abortActiveSpeedTests]);
-
-  // 當集數索引變化時自動更新影片地址
-  useEffect(() => {
-    updateVideoUrl(detail, currentEpisodeIndex);
-  }, [detail, currentEpisodeIndex]);
 
   useEffect(() => {
     if (!detail || !currentSource || !currentId) return;
@@ -1261,6 +1247,9 @@ function PlayPageClient() {
 
   // 收藏邏輯已抽離到 useFavorite hook（見上方 state 宣告區）
 
+  // 播放器建立 effect：頂部參數驗證與初始化失敗的同步 setError 為刻意的
+  // 錯誤信號路徑，其餘 setState 皆在播放器事件回呼（非同步）中
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (
       !Artplayer ||
@@ -1684,10 +1673,8 @@ function PlayPageClient() {
             setVideoDoubanId(freshDetail.douban_id || 0);
             if (episodeIndex >= freshDetail.episodes.length) {
               setCurrentEpisodeIndex(0);
-              updateVideoUrl(freshDetail, 0);
-            } else {
-              updateVideoUrl(freshDetail, episodeIndex);
             }
+            // videoUrl 為推導值，隨 setDetail / setCurrentEpisodeIndex 自動更新
             logger.info('播放錯誤後已清除詳情快取並重新抓取');
           } catch (refreshErr) {
             logger.error('播放錯誤後重新抓取詳情失敗:', refreshErr);
@@ -1753,6 +1740,7 @@ function PlayPageClient() {
       setError('播放器初始化失敗');
     }
   }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // 當組件解除安裝時清理定時器、Wake Lock 和播放器資源
   useEffect(() => {

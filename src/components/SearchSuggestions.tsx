@@ -57,6 +57,8 @@ export default function SearchSuggestions({
 
   useEffect(() => {
     if (isVisible) {
+      // 掛載/顯示時抓取歷史：setState 皆在 await 之後，規則保守誤判
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       fetchHistory();
     }
   }, [isVisible, fetchHistory]);

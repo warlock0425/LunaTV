@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { getProxiedImageUrl, processImageUrl } from '@/lib/utils';
 
@@ -23,10 +23,13 @@ export function PosterImage({
   const proxiedUrl = src ? getProxiedImageUrl(src) : '';
   const imageUrl = retryWithProxy && proxiedUrl ? proxiedUrl : directUrl;
 
-  useEffect(() => {
+  // src 變化時重置錯誤/重試狀態（render 期調整狀態）
+  const [prevSrc, setPrevSrc] = useState(src);
+  if (src !== prevSrc) {
+    setPrevSrc(src);
     setImgError(false);
     setRetryWithProxy(false);
-  }, [src]);
+  }
 
   if (!imageUrl || imgError) {
     return (

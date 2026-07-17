@@ -19,7 +19,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
 import { AdminConfig } from '@/lib/admin.types';
 
@@ -37,7 +37,9 @@ export const CategoryConfig = ({
 }) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
-  const [categories, setCategories] = useState<CustomCategory[]>([]);
+  const [categories, setCategories] = useState<CustomCategory[]>(
+    config?.CustomCategories ?? []
+  );
   const [showAddForm, setShowAddForm] = useState(false);
   const [orderChanged, setOrderChanged] = useState(false);
   const [newCategory, setNewCategory] = useState<CustomCategory>({
@@ -63,14 +65,15 @@ export const CategoryConfig = ({
     })
   );
 
-  // 初始化
-  useEffect(() => {
+  // config 變化時同步草稿並重置 orderChanged（render 期調整狀態）
+  const [prevConfig, setPrevConfig] = useState(config);
+  if (config !== prevConfig) {
+    setPrevConfig(config);
     if (config?.CustomCategories) {
       setCategories(config.CustomCategories);
-      // 進入時重置 orderChanged
       setOrderChanged(false);
     }
-  }, [config]);
+  }
 
   // 通用 API 請求
   const callCategoryApi = async (body: Record<string, any>) => {

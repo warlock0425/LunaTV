@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import {
   type FavoriteTag,
@@ -20,9 +20,12 @@ export function TagManagerModal({
   const [tags, setTags] = useState<FavoriteTag[]>([]);
   const [newName, setNewName] = useState('');
   const [newColor, setNewColor] = useState('red');
-  useEffect(() => {
+  // 開啟時載入最新標籤（render 期調整狀態）
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) setTags(getFavoriteTags());
-  }, [open]);
+  }
 
   const handleAdd = () => {
     const name = newName.trim();

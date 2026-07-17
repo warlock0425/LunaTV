@@ -6,6 +6,7 @@ import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { CURRENT_VERSION } from '@/lib/version';
 import { checkForUpdates, UpdateStatus } from '@/lib/version_check';
+import { useClientValue, useMounted } from '@/hooks/useClientMount';
 
 import { useSite } from '@/components/SiteProvider';
 
@@ -72,22 +73,19 @@ function LoginPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [shouldAskUsername, setShouldAskUsername] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const shouldAskUsername = useClientValue(() => {
+    const storageType = window.RUNTIME_CONFIG?.STORAGE_TYPE;
+    return Boolean(storageType && storageType !== 'localstorage');
+  }, false);
+  const mounted = useMounted();
 
   const passwordRef = useRef<HTMLInputElement>(null);
 
   const { siteName } = useSite();
 
   useEffect(() => {
-    setMounted(true);
-    if (typeof window !== 'undefined') {
-      const storageType = window.RUNTIME_CONFIG?.STORAGE_TYPE;
-      setShouldAskUsername(
-        Boolean(storageType && storageType !== 'localstorage')
-      );
-    }
-    setTimeout(() => passwordRef.current?.focus(), 400);
+    const timer = setTimeout(() => passwordRef.current?.focus(), 400);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {

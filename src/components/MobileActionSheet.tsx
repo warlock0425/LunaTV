@@ -41,21 +41,27 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
 
+  // 關閉時立即停止動畫（render 期調整）
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
+    if (!isOpen) setIsAnimating(false);
+  }
+
   // 控製動畫狀態
   useEffect(() => {
     let animationId: number;
     let timer: NodeJS.Timeout;
 
     if (isOpen) {
-      setIsVisible(true);
-      // 使用雙重 requestAnimationFrame 確保DOM完全渲染
+      // 首個 rAF 先顯示元件，雙重 rAF 確保 DOM 完全渲染後再啟動過場
       animationId = requestAnimationFrame(() => {
+        setIsVisible(true);
         animationId = requestAnimationFrame(() => {
           setIsAnimating(true);
         });
       });
     } else {
-      setIsAnimating(false);
       // 等待動畫完成後隱藏組件
       timer = setTimeout(() => {
         setIsVisible(false);

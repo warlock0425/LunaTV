@@ -53,10 +53,19 @@ export function ContinueWatchingCover({
     }
   }, [cover, id, source]);
 
-  useEffect(() => {
+  // 換片時重置補圖狀態（render 期調整狀態）
+  const resetKey = `${source}_${id}_${cover || 'empty'}`;
+  const [prevResetKey, setPrevResetKey] = useState(resetKey);
+  if (resetKey !== prevResetKey) {
+    setPrevResetKey(resetKey);
     setResolvedCover('');
+  }
+
+  useEffect(() => {
     attemptedKeyRef.current = '';
     if (!cover) {
+      // 快取命中為同步 setState 快速路徑（刻意），其餘 setState 皆在 await 之後
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       void resolveCover();
     }
   }, [cover, source, id, resolveCover]);

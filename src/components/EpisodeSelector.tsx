@@ -171,7 +171,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     }
   }, []);
 
-  useEffect(() => {
+  // precomputedVideoInfo 變化時合併測速結果（render 期調整狀態）
+  const [prevPrecomputed, setPrevPrecomputed] = useState(precomputedVideoInfo);
+  if (precomputedVideoInfo !== prevPrecomputed) {
+    setPrevPrecomputed(precomputedVideoInfo);
     if (precomputedVideoInfo && precomputedVideoInfo.size > 0) {
       setVideoInfoMap((prev) => {
         const newMap = new Map(prev);
@@ -190,7 +193,12 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         });
         return newSet;
       });
+    }
+  }
 
+  // ref 同步不可在 render 期進行，保留於 effect
+  useEffect(() => {
+    if (precomputedVideoInfo && precomputedVideoInfo.size > 0) {
       precomputedVideoInfo.forEach((info, key) => {
         if (!info.hasError) {
           attemptedSourcesRef.current.add(key);

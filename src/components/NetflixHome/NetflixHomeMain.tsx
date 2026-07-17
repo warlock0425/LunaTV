@@ -27,6 +27,7 @@ import {
 import { buildPlayUrl } from '@/lib/play-url';
 import { generateStorageKey, parseStorageKey } from '@/lib/storage-key';
 import { DoubanItem } from '@/lib/types';
+import { useClientValue } from '@/hooks/useClientMount';
 
 import MobileBottomNav from '@/components/MobileBottomNav';
 import SearchSuggestions from '@/components/SearchSuggestions';
@@ -71,9 +72,12 @@ export default function NetflixHome({
     playRecords.map((r) => hydratePlayRecord(r))
   );
 
-  useEffect(() => {
+  // playRecords 變化時重建（render 期調整狀態；刪除等操作仍可本地覆寫）
+  const [prevPlayRecords, setPrevPlayRecords] = useState(playRecords);
+  if (playRecords !== prevPlayRecords) {
+    setPrevPlayRecords(playRecords);
     setContinueWatching(playRecords.map((r) => hydratePlayRecord(r)));
-  }, [playRecords]);
+  }
 
   const handleDelete = async (e: React.MouseEvent, item: any) => {
     e.stopPropagation();
@@ -125,13 +129,12 @@ export default function NetflixHome({
     }
   };
 
-  useEffect(() => {
-    if (tab === 'favorites') {
-      setActiveNav('favorites');
-    } else {
-      setActiveNav('home');
-    }
-  }, [tab]);
+  // tab 參數變化時切換導覽（render 期調整狀態）
+  const [prevTab, setPrevTab] = useState(tab);
+  if (tab !== prevTab) {
+    setPrevTab(tab);
+    setActiveNav(tab === 'favorites' ? 'favorites' : 'home');
+  }
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -139,12 +142,23 @@ export default function NetflixHome({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  useEffect(() => {
-    if (announcement) {
-      const hasSeen = localStorage.getItem('hasSeenAnnouncement');
-      if (hasSeen !== announcement) setShowAnnouncement(true);
-    }
-  }, [announcement]);
+  // 公告是否已讀（瀏覽器端一次性讀取）；關閉時以本地覆寫
+  const seenAnnouncement = useClientValue(
+    () =>
+      typeof localStorage === 'undefined'
+        ? null
+        : localStorage.getItem('hasSeenAnnouncement'),
+    null
+  );
+  const [prevAnnouncement, setPrevAnnouncement] = useState<string | null>(null);
+  if (
+    announcement &&
+    seenAnnouncement !== null &&
+    announcement !== prevAnnouncement
+  ) {
+    setPrevAnnouncement(announcement);
+    if (seenAnnouncement !== announcement) setShowAnnouncement(true);
+  }
 
   const handleCloseAnnouncement = useCallback((text: string) => {
     setShowAnnouncement(false);

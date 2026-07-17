@@ -16,6 +16,7 @@ import {
   getDoubanRecommendsFromServer,
 } from '@/lib/douban.client';
 import { DoubanItem, DoubanResult } from '@/lib/types';
+import { useClientValue } from '@/hooks/useClientMount';
 
 import DoubanCardSkeleton from '@/components/DoubanCardSkeleton';
 import DoubanCustomSelector from '@/components/DoubanCustomSelector';
@@ -24,6 +25,12 @@ import PageLayout from '@/components/PageLayout';
 import PageLoading from '@/components/PageLoading';
 import VideoCard from '@/components/VideoCard';
 import VirtualGrid from '@/components/VirtualGrid';
+
+const EMPTY_CUSTOM_CATEGORIES: Array<{
+  name: string;
+  type: 'movie' | 'tv';
+  query: string;
+}> = [];
 
 function DoubanPageClient() {
   const searchParams = useSearchParams();
@@ -52,9 +59,12 @@ function DoubanPageClient() {
   const type = searchParams.get('type') || 'movie';
 
   // 獲取 runtimeConfig 中的自定義分類資料
-  const [customCategories, setCustomCategories] = useState<
+  const customCategories = useClientValue<
     Array<{ name: string; type: 'movie' | 'tv'; query: string }>
-  >([]);
+  >(
+    () => window.RUNTIME_CONFIG?.CUSTOM_CATEGORIES ?? EMPTY_CUSTOM_CATEGORIES,
+    EMPTY_CUSTOM_CATEGORIES
+  );
 
   // 選擇器狀態 - 完全獨立，不依賴URL參數
   const [primarySelection, setPrimarySelection] = useState<string>(() => {
@@ -85,14 +95,6 @@ function DoubanPageClient() {
   // 星期選擇器狀態
   const [selectedWeekday, setSelectedWeekday] = useState<string>('');
 
-  // 獲取自定義分類資料
-  useEffect(() => {
-    const runtimeConfig = window.RUNTIME_CONFIG;
-    if (runtimeConfig && runtimeConfig.CUSTOM_CATEGORIES?.length > 0) {
-      setCustomCategories(runtimeConfig.CUSTOM_CATEGORIES);
-    }
-  }, []);
-
   // 同步最新參數值到 ref
   useEffect(() => {
     currentParamsRef.current = {
@@ -122,30 +124,28 @@ function DoubanPageClient() {
     return () => clearTimeout(timer);
   }, []); // 只在組件掛載時執行一次
 
-  // type變化時立即重置selectorsReady（最高優先級）
-  useEffect(() => {
+  // type / customCategories 變化時重置選擇器（render 期調整狀態，
+  // 取代原本兩個 setState-in-effect；50ms 後標記就緒的計時器留在 effect）
+  const [prevSelectorKey, setPrevSelectorKey] = useState<{
+    type: string;
+    categories: unknown;
+  }>({ type, categories: customCategories });
+  if (
+    type !== prevSelectorKey.type ||
+    customCategories !== prevSelectorKey.categories
+  ) {
+    setPrevSelectorKey({ type, categories: customCategories });
     setSelectorsReady(false);
-    setLoading(true); // 立即顯示loading狀態
-  }, [type]);
+    setLoading(true);
 
-  // 當type變化時重置選擇器狀態
-  useEffect(() => {
     if (type === 'custom' && customCategories.length > 0) {
       // 自定義分類模式：優先選擇 movie，如果沒有 movie 則選擇 tv
       const types = Array.from(
         new Set(customCategories.map((cat) => cat.type))
       );
       if (types.length > 0) {
-        // 優先選擇 movie，如果沒有 movie 則選擇 tv
-        let selectedType = types[0]; // 預設選擇第一個
-        if (types.includes('movie')) {
-          selectedType = 'movie';
-        } else {
-          selectedType = 'tv';
-        }
+        const selectedType = types.includes('movie') ? 'movie' : 'tv';
         setPrimarySelection(selectedType);
-
-        // 設定選中類型的第一個分類的 query 作為二級選擇
         const firstCategory = customCategories.find(
           (cat) => cat.type === selectedType
         );
@@ -153,24 +153,21 @@ function DoubanPageClient() {
           setSecondarySelection(firstCategory.query);
         }
       }
+    } else if (type === 'movie') {
+      setPrimarySelection('熱門');
+      setSecondarySelection('全部');
+    } else if (type === 'tv') {
+      setPrimarySelection('最近熱門');
+      setSecondarySelection('tv');
+    } else if (type === 'show') {
+      setPrimarySelection('最近熱門');
+      setSecondarySelection('show');
+    } else if (type === 'anime') {
+      setPrimarySelection('每日放送');
+      setSecondarySelection('全部');
     } else {
-      // 原有邏輯
-      if (type === 'movie') {
-        setPrimarySelection('熱門');
-        setSecondarySelection('全部');
-      } else if (type === 'tv') {
-        setPrimarySelection('最近熱門');
-        setSecondarySelection('tv');
-      } else if (type === 'show') {
-        setPrimarySelection('最近熱門');
-        setSecondarySelection('show');
-      } else if (type === 'anime') {
-        setPrimarySelection('每日放送');
-        setSecondarySelection('全部');
-      } else {
-        setPrimarySelection('');
-        setSecondarySelection('全部');
-      }
+      setPrimarySelection('');
+      setSecondarySelection('全部');
     }
 
     // 清空 MultiLevelSelector 狀態
@@ -182,12 +179,13 @@ function DoubanPageClient() {
       label: 'all',
       sort: 'T',
     });
+  }
 
-    // 使用短暫延遲確保狀態更新完成後標記選擇器準備好
+  // 選擇器重置後短暫延遲標記就緒（非同步 setState，允許於 effect）
+  useEffect(() => {
     const timer = setTimeout(() => {
       setSelectorsReady(true);
     }, 50);
-
     return () => clearTimeout(timer);
   }, [type, customCategories]);
 

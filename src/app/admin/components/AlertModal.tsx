@@ -27,21 +27,31 @@ export const AlertModal = ({
 }: AlertModalProps) => {
   const [isVisible, setIsVisible] = useState(false);
 
+  // 關閉時立即重置動畫狀態（render 期調整）
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  if (isOpen !== prevOpen) {
+    setPrevOpen(isOpen);
+    if (!isOpen) setIsVisible(false);
+  }
+
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let rafId: number | undefined;
     if (isOpen) {
-      setIsVisible(true);
+      // rAF 延遲一幀開啟，讓 CSS 過場動畫生效
+      rafId = requestAnimationFrame(() => setIsVisible(true));
       if (timer) {
         timeoutId = setTimeout(() => {
           onClose();
         }, timer);
       }
-    } else {
-      setIsVisible(false);
     }
     return () => {
       if (timeoutId) {
         clearTimeout(timeoutId);
+      }
+      if (rafId) {
+        cancelAnimationFrame(rafId);
       }
     };
   }, [isOpen, timer, onClose]);

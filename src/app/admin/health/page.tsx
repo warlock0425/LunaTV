@@ -68,8 +68,6 @@ export default function AdminHealthPage() {
   const [error, setError] = useState<string | null>(null);
 
   const loadHealth = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
       const response = await fetch('/api/admin/health', { cache: 'no-store' });
       const payload = (await response.json()) as HealthData & {
@@ -87,6 +85,8 @@ export default function AdminHealthPage() {
   }, []);
 
   useEffect(() => {
+    // 掛載時抓取資料：setState 皆發生於 await 之後，規則對具名函式為保守誤判
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadHealth();
   }, [loadHealth]);
 
@@ -110,7 +110,11 @@ export default function AdminHealthPage() {
           </div>
           <button
             type='button'
-            onClick={() => void loadHealth()}
+            onClick={() => {
+              setLoading(true);
+              setError(null);
+              void loadHealth();
+            }}
             disabled={loading}
             className='inline-flex h-10 items-center gap-2 rounded-md bg-zinc-900 px-4 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-60 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200'
           >

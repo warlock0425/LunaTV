@@ -13,6 +13,21 @@ import { buttonStyles } from './buttonStyles';
 import { useLoadingState } from './Loading';
 import { SiteConfig } from './types';
 
+// 將後端 SiteConfig 正規化為表單草稿（補預設值、相容舊代理型別）
+const mapSiteConfig = (sc: AdminConfig['SiteConfig']): SiteConfig => ({
+  ...sc,
+  DoubanProxyType: sc.DoubanProxyType || 'cmliussss-cdn-tencent',
+  DoubanProxy: sc.DoubanProxy || '',
+  DoubanImageProxyType:
+    sc.DoubanImageProxyType === 'direct' || sc.DoubanImageProxyType === 'img3'
+      ? 'server'
+      : sc.DoubanImageProxyType || 'cmliussss-cdn-tencent',
+  DoubanImageProxy: sc.DoubanImageProxy || '',
+  DisableYellowFilter: sc.DisableYellowFilter || false,
+  FluidSearch: sc.FluidSearch || true,
+  EnableWebLive: sc.EnableWebLive ?? false,
+});
+
 export const SiteConfigComponent = ({
   config,
   refreshConfig,
@@ -22,19 +37,23 @@ export const SiteConfigComponent = ({
 }) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
-  const [siteSettings, setSiteSettings] = useState<SiteConfig>({
-    SiteName: '',
-    Announcement: '',
-    SearchDownstreamMaxPage: 1,
-    SiteInterfaceCacheTime: 7200,
-    DoubanProxyType: 'cmliussss-cdn-tencent',
-    DoubanProxy: '',
-    DoubanImageProxyType: 'cmliussss-cdn-tencent',
-    DoubanImageProxy: '',
-    DisableYellowFilter: false,
-    FluidSearch: true,
-    EnableWebLive: false,
-  });
+  const [siteSettings, setSiteSettings] = useState<SiteConfig>(() =>
+    config?.SiteConfig
+      ? mapSiteConfig(config.SiteConfig)
+      : {
+          SiteName: '',
+          Announcement: '',
+          SearchDownstreamMaxPage: 1,
+          SiteInterfaceCacheTime: 7200,
+          DoubanProxyType: 'cmliussss-cdn-tencent',
+          DoubanProxy: '',
+          DoubanImageProxyType: 'cmliussss-cdn-tencent',
+          DoubanImageProxy: '',
+          DisableYellowFilter: false,
+          FluidSearch: true,
+          EnableWebLive: false,
+        }
+  );
 
   // 豆瓣資料源相關狀態
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
@@ -83,25 +102,14 @@ export const SiteConfigComponent = ({
     }
   };
 
-  useEffect(() => {
+  // config 變化時同步草稿（render 期調整狀態）
+  const [prevConfig, setPrevConfig] = useState(config);
+  if (config !== prevConfig) {
+    setPrevConfig(config);
     if (config?.SiteConfig) {
-      setSiteSettings({
-        ...config.SiteConfig,
-        DoubanProxyType:
-          config.SiteConfig.DoubanProxyType || 'cmliussss-cdn-tencent',
-        DoubanProxy: config.SiteConfig.DoubanProxy || '',
-        DoubanImageProxyType:
-          config.SiteConfig.DoubanImageProxyType === 'direct' ||
-          config.SiteConfig.DoubanImageProxyType === 'img3'
-            ? 'server'
-            : config.SiteConfig.DoubanImageProxyType || 'cmliussss-cdn-tencent',
-        DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
-        DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
-        FluidSearch: config.SiteConfig.FluidSearch || true,
-        EnableWebLive: config.SiteConfig.EnableWebLive ?? false,
-      });
+      setSiteSettings(mapSiteConfig(config.SiteConfig));
     }
-  }, [config]);
+  }
 
   // 點擊外部區域關閉下拉框
   useEffect(() => {

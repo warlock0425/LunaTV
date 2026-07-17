@@ -16,6 +16,7 @@ import { cleanQueryForApi } from '@/lib/chinese';
 import { addSearchHistory } from '@/lib/db.client';
 import { isFuzzyMatch } from '@/lib/searchEngine';
 import { SearchResult } from '@/lib/types';
+import { useClientValue } from '@/hooks/useClientMount';
 
 import PageLayout from '@/components/PageLayout';
 import PageLoading from '@/components/PageLoading';
@@ -54,7 +55,14 @@ function SearchPageClient() {
   const [completedSources, setCompletedSources] = useState(0);
   const pendingResultsRef = useRef<SearchResult[]>([]);
   const flushTimerRef = useRef<number | null>(null);
-  const [useFluidSearch, setUseFluidSearch] = useState(true);
+  // 流式搜尋偏好：初始值由瀏覽器端讀取，之後每次搜尋重讀時可覆寫
+  const initialFluidSearch = useClientValue(() => {
+    const savedFluidSearch = localStorage.getItem('fluidSearch');
+    const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
+    return parseStoredBoolean(savedFluidSearch, defaultFluidSearch);
+  }, true);
+  const [fluidOverride, setFluidOverride] = useState<boolean | null>(null);
+  const useFluidSearch = fluidOverride ?? initialFluidSearch;
   const groupRefs = useRef<
     Map<string, React.RefObject<VideoCardHandle | null>>
   >(new Map());
@@ -405,14 +413,6 @@ function SearchPageClient() {
       document.getElementById('searchInput')?.focus();
     }
 
-    if (typeof window !== 'undefined') {
-      const savedFluidSearch = localStorage.getItem('fluidSearch');
-      const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
-      setUseFluidSearch(
-        parseStoredBoolean(savedFluidSearch, defaultFluidSearch)
-      );
-    }
-
     const handleScroll = () => {
       const shouldShow = (document.body.scrollTop || 0) > 300;
       if (showBackToTopRef.current !== shouldShow) {
@@ -429,6 +429,9 @@ function SearchPageClient() {
     };
   }, []);
 
+  // URL 查詢參數變化驅動的搜尋協調：同步重置載入狀態並啟動
+  // EventSource/fetch，屬 URL→狀態同步的協調器，同步 setState 為刻意設計
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const query = searchParams.get('q') || '';
     currentQueryRef.current = query.trim();
@@ -469,7 +472,7 @@ function SearchPageClient() {
       }
 
       if (currentFluidSearch !== useFluidSearch) {
-        setUseFluidSearch(currentFluidSearch);
+        setFluidOverride(currentFluidSearch);
       }
 
       if (currentFluidSearch) {
@@ -617,6 +620,7 @@ function SearchPageClient() {
       setShowSuggestions(false);
     }
   }, [searchParams]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     return () => {

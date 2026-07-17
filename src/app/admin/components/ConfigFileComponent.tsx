@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
 import { AdminConfig } from '@/lib/admin.types';
 
@@ -20,12 +20,21 @@ export const ConfigFileComponent = ({
 }) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
-  const [configContent, setConfigContent] = useState('');
-  const [subscriptionUrl, setSubscriptionUrl] = useState('');
-  const [autoUpdate, setAutoUpdate] = useState(false);
-  const [lastCheckTime, setLastCheckTime] = useState<string>('');
+  const [configContent, setConfigContent] = useState(config?.ConfigFile ?? '');
+  const [subscriptionUrl, setSubscriptionUrl] = useState(
+    config?.ConfigSubscription?.URL ?? ''
+  );
+  const [autoUpdate, setAutoUpdate] = useState(
+    config?.ConfigSubscription?.AutoUpdate ?? false
+  );
+  const [lastCheckTime, setLastCheckTime] = useState<string>(
+    config?.ConfigSubscription?.LastCheck ?? ''
+  );
 
-  useEffect(() => {
+  // config 變化時同步草稿（render 期調整狀態）
+  const [prevConfig, setPrevConfig] = useState(config);
+  if (config !== prevConfig) {
+    setPrevConfig(config);
     if (config?.ConfigFile) {
       setConfigContent(config.ConfigFile);
     }
@@ -34,7 +43,7 @@ export const ConfigFileComponent = ({
       setAutoUpdate(config.ConfigSubscription.AutoUpdate);
       setLastCheckTime(config.ConfigSubscription.LastCheck || '');
     }
-  }, [config]);
+  }
 
   // 拉取訂閱配置
   const handleFetchConfig = async () => {

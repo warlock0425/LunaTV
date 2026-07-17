@@ -52,6 +52,9 @@ export default function VirtualGrid<T>({
 
   const rowCount = Math.ceil(items.length / columns);
 
+  // TanStack Virtual 回傳不可安全記憶化的函式，React Compiler 規則對其
+  // 標記為不相容庫；本專案未啟用 Compiler，維持現狀
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => document.body,

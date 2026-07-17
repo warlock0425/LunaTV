@@ -17,9 +17,10 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import { useAccessibleDialog } from '@/hooks/useAccessibleDialog';
+import { useClientValue } from '@/hooks/useClientMount';
 
 interface MobileBottomNavProps {
   activePath?: string;
@@ -44,18 +45,25 @@ export default function MobileBottomNav({ activePath }: MobileBottomNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
-  const [liveEnabled, setLiveEnabled] = useState(false);
-  const [customEnabled, setCustomEnabled] = useState(false);
+  const liveEnabled = useClientValue(
+    () => Boolean(window.RUNTIME_CONFIG?.ENABLE_WEB_LIVE),
+    false
+  );
+  const customEnabled = useClientValue(
+    () => Boolean(window.RUNTIME_CONFIG?.CUSTOM_CATEGORIES?.length),
+    false
+  );
   const moreDialogRef = useRef<HTMLElement>(null);
 
   useAccessibleDialog(moreOpen, moreDialogRef, () => setMoreOpen(false));
 
-  useEffect(() => {
-    setLiveEnabled(Boolean(window.RUNTIME_CONFIG?.ENABLE_WEB_LIVE));
-    setCustomEnabled(Boolean(window.RUNTIME_CONFIG?.CUSTOM_CATEGORIES?.length));
-  }, []);
-
-  useEffect(() => setMoreOpen(false), [pathname, searchParams]);
+  // 路由變化時關閉更多選單（render 期調整狀態）
+  const routeKey = `${pathname}?${searchParams.toString()}`;
+  const [prevRouteKey, setPrevRouteKey] = useState(routeKey);
+  if (routeKey !== prevRouteKey) {
+    setPrevRouteKey(routeKey);
+    if (moreOpen) setMoreOpen(false);
+  }
 
   const moreItems = useMemo(() => {
     const items = [...BASE_MORE_ITEMS];

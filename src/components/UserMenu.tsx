@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { clearUserCache } from '@/lib/db.client';
 import { CURRENT_VERSION } from '@/lib/version';
+import { useMounted } from '@/hooks/useClientMount';
 
 import { VersionPanel } from './VersionPanel';
 
@@ -32,17 +33,13 @@ function getRoleLabel(role?: string): string {
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [showVersion, setShowVersion] = useState(false);
-  const [mounted, setMounted] = useState(false);
-  const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
+  const mounted = useMounted();
+  // 首輪 SSR/hydration 期間 UI 由 mounted 旗標擋住，lazy 讀 cookie 不會造成
+  // 標記不一致
+  const [authInfo] = useState<AuthInfo | null>(() =>
+    typeof window === 'undefined' ? null : getAuthInfoFromBrowserCookie()
+  );
   const router = useRouter();
-
-  useEffect(() => {
-    setMounted(true);
-    if (typeof window !== 'undefined') {
-      const auth = getAuthInfoFromBrowserCookie();
-      setAuthInfo(auth);
-    }
-  }, []);
 
   // Click-outside detection for dropdown
   useEffect(() => {

@@ -5,10 +5,12 @@
 import { Moon, Sun } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+
+import { useMounted } from '@/hooks/useClientMount';
 
 export function ThemeToggle() {
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const { setTheme, resolvedTheme } = useTheme();
   const pathname = usePathname();
 
@@ -23,10 +25,6 @@ export function ThemeToggle() {
       meta.setAttribute('content', theme === 'dark' ? '#0c111c' : '#f9fbfe');
     }
   };
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // 監聽主題變化和路由變化，確保主題色始終同步
   useEffect(() => {

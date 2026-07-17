@@ -44,7 +44,9 @@ export const VideoSourceConfig = ({
 }) => {
   const { alertModal, showAlert, hideAlert } = useAlertModal();
   const { isLoading, withLoading } = useLoadingState();
-  const [sources, setSources] = useState<DataSource[]>([]);
+  const [sources, setSources] = useState<DataSource[]>(
+    config?.SourceConfig ?? []
+  );
   const [showAddForm, setShowAddForm] = useState(false);
   const [orderChanged, setOrderChanged] = useState(false);
   const [newSource, setNewSource] = useState<DataSource>({
@@ -134,16 +136,16 @@ export const VideoSourceConfig = ({
     })
   );
 
-  // 初始化
-  useEffect(() => {
+  // config 變化時同步草稿並重置排序/選擇狀態（render 期調整狀態）
+  const [prevConfig, setPrevConfig] = useState(config);
+  if (config !== prevConfig) {
+    setPrevConfig(config);
     if (config?.SourceConfig) {
       setSources(config.SourceConfig);
-      // 進入時重置 orderChanged
       setOrderChanged(false);
-      // 重置選擇狀態
       setSelectedSources(new Set());
     }
-  }, [config]);
+  }
 
   // 通用 API 請求
   const callSourceApi = async (body: Record<string, any>) => {

@@ -91,6 +91,8 @@ export default function HistoryPage() {
   }, []);
 
   useEffect(() => {
+    // 掛載時抓取資料：setState 皆發生於 await 之後，規則對具名函式為保守誤判
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadRecords();
     const unsub = subscribeToDataUpdates<Record<string, PlayRecord>>(
       'playRecordsUpdated',

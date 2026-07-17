@@ -15,6 +15,7 @@ import {
   saveFavorite,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { useClientValue } from '@/hooks/useClientMount';
 
 import EpgScrollableRow from '@/components/EpgScrollableRow';
 import PageLayout from '@/components/PageLayout';
@@ -46,8 +47,8 @@ function LivePageClient() {
   const [loading, setLoading] = useState(true);
   const [loadingStage, setLoadingStage] = useState<
     'loading' | 'fetching' | 'ready'
-  >('loading');
-  const [loadingMessage, setLoadingMessage] = useState('正在加載直播源...');
+  >('fetching');
+  const [loadingMessage, setLoadingMessage] = useState('正在獲取直播源...');
   const [error, setError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
@@ -135,10 +136,8 @@ function LivePageClient() {
   // 獲取直播源列表
   const fetchLiveSources = async () => {
     try {
-      setLoadingStage('fetching');
-      setLoadingMessage('正在獲取直播源...');
-
-      // 獲取 AdminConfig 中的直播源資訊
+      // 獲取 AdminConfig 中的直播源資訊（loading 階段/訊息由初始 state 提供，
+      // 避免在 effect 內同步 setState）
       const response = await fetch('/api/live/sources');
       if (!response.ok) {
         throw new Error('獲取直播源失敗');
@@ -624,6 +623,8 @@ function LivePageClient() {
 
   // 初始化
   useEffect(() => {
+    // 掛載時抓取資料：setState 皆發生於 await 之後，規則對具名函式為保守誤判
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchLiveSources();
   }, []);
 
@@ -1340,12 +1341,10 @@ export default function LivePage() {
 }
 
 function LivePageGuard() {
-  const [enabled, setEnabled] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const runtimeConfig = window.RUNTIME_CONFIG;
-    setEnabled(!!runtimeConfig?.ENABLE_WEB_LIVE);
-  }, []);
+  const enabled = useClientValue<boolean | null>(
+    () => !!window.RUNTIME_CONFIG?.ENABLE_WEB_LIVE,
+    null
+  );
 
   if (enabled === null) {
     return <div>Loading...</div>;

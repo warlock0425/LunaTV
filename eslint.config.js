@@ -43,14 +43,16 @@ module.exports = [
       'no-unused-vars': 'off',
       'no-console': 'warn',
 
-      // eslint-plugin-react-hooks v7（隨 eslint-config-next 16）新增的
-      // React Compiler 前置規則；本專案未使用 React Compiler，
-      // 且既有程式碼有 28 處 setState-in-effect 模式，維持舊行為
-      'react-hooks/set-state-in-effect': 'off',
-      'react-hooks/purity': 'off',
-      'react-hooks/immutability': 'off',
-      'react-hooks/static-components': 'off',
-      'react-hooks/incompatible-library': 'off',
+      // eslint-plugin-react-hooks v7 的 React Compiler 前置規則。
+      // 2026-07 已全面重構啟用：prop 同步改為 render 期調整狀態、
+      // 瀏覽器端一次性讀取改用 useClientValue/useMounted
+      // （src/hooks/useClientMount.ts）。少數合理例外（掛載抓取、
+      // URL 驅動協調、播放器錯誤信號）以行內註解豁免並附說明。
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/purity': 'error',
+      'react-hooks/immutability': 'error',
+      'react-hooks/static-components': 'error',
+      'react-hooks/incompatible-library': 'error',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       'react/no-unescaped-entities': 'off',
 

@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 import { CHANGELOGS, CURRENT_VERSION } from '@/lib/version';
+import { useMounted } from '@/hooks/useClientMount';
 
 interface VersionPanelProps {
   isOpen?: boolean;
@@ -10,11 +11,7 @@ interface VersionPanelProps {
 }
 
 export function VersionPanel({ isOpen = true, onClose }: VersionPanelProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
 
   if (!mounted) return null;
 

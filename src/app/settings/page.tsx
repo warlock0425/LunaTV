@@ -4,6 +4,8 @@ import { ArrowLeft, Globe, Image as ImageIcon, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { useMounted } from '@/hooks/useClientMount';
+
 const DATA_PROXY_OPTIONS = [
   { value: 'direct', label: '直連（伺服器直接請求豆瓣）' },
   { value: 'cmliussss-cdn-tencent', label: '騰訊 CDN' },
@@ -63,16 +65,42 @@ function SettingToggle({
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
 
-  const [doubanSource, setDoubanSource] = useState('cmliussss-cdn-tencent');
-  const [proxyUrl, setProxyUrl] = useState('');
-  const [imageProxyType, setImageProxyType] = useState('cmliussss-cdn-tencent');
-  const [imageProxyUrl, setImageProxyUrl] = useState('');
-  const [enableOptimization, setEnableOptimization] = useState(true);
-  const [aggregateResults, setAggregateResults] = useState(true);
-  const [streamSearch, setStreamSearch] = useState(true);
-  const [iptvDirect, setIptvDirect] = useState(false);
+  // UI 由 mounted 旗標擋住首輪 hydration，lazy 讀 localStorage 不會造成
+  // 標記不一致
+  const isClient = typeof window !== 'undefined';
+  const [doubanSource, setDoubanSource] = useState(() =>
+    isClient
+      ? localStorage.getItem('doubanDataSource') || 'cmliussss-cdn-tencent'
+      : 'cmliussss-cdn-tencent'
+  );
+  const [proxyUrl, setProxyUrl] = useState(() =>
+    isClient ? localStorage.getItem('doubanProxyUrl') || '' : ''
+  );
+  const [imageProxyType, setImageProxyType] = useState(() =>
+    isClient
+      ? localStorage.getItem('doubanImageProxyType') || 'cmliussss-cdn-tencent'
+      : 'cmliussss-cdn-tencent'
+  );
+  const [imageProxyUrl, setImageProxyUrl] = useState(() =>
+    isClient ? localStorage.getItem('doubanImageProxyUrl') || '' : ''
+  );
+  const [enableOptimization, setEnableOptimization] = useState(() =>
+    isClient ? localStorage.getItem('enableOptimization') !== 'false' : true
+  );
+  const [aggregateResults, setAggregateResults] = useState(() =>
+    isClient
+      ? (localStorage.getItem('defaultAggregateSearch') ??
+          localStorage.getItem('defaultAggregateResults')) !== 'false'
+      : true
+  );
+  const [streamSearch, setStreamSearch] = useState(() =>
+    isClient ? localStorage.getItem('streamingSearchOutput') !== 'false' : true
+  );
+  const [iptvDirect, setIptvDirect] = useState(() =>
+    isClient ? localStorage.getItem('iptvDirectConnect') === 'true' : false
+  );
   const [saveMessage, setSaveMessage] = useState('');
   const saveMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
@@ -92,25 +120,6 @@ export default function SettingsPage() {
   };
 
   useEffect(() => {
-    setMounted(true);
-    setDoubanSource(
-      localStorage.getItem('doubanDataSource') || 'cmliussss-cdn-tencent'
-    );
-    setProxyUrl(localStorage.getItem('doubanProxyUrl') || '');
-    setImageProxyType(
-      localStorage.getItem('doubanImageProxyType') || 'cmliussss-cdn-tencent'
-    );
-    setImageProxyUrl(localStorage.getItem('doubanImageProxyUrl') || '');
-    setEnableOptimization(
-      localStorage.getItem('enableOptimization') !== 'false'
-    );
-    const aggregateSearchSetting =
-      localStorage.getItem('defaultAggregateSearch') ??
-      localStorage.getItem('defaultAggregateResults');
-    setAggregateResults(aggregateSearchSetting !== 'false');
-    setStreamSearch(localStorage.getItem('streamingSearchOutput') !== 'false');
-    setIptvDirect(localStorage.getItem('iptvDirectConnect') === 'true');
-
     return () => {
       if (saveMessageTimerRef.current) {
         clearTimeout(saveMessageTimerRef.current);

@@ -85,8 +85,10 @@ function AdminPageClient() {
   }, []);
 
   useEffect(() => {
-    // 首次加載時顯示骨架
-    fetchConfig(true);
+    // 首次加載骨架由 loading 初始值 true 提供，不需 showLoading
+    // 掛載時抓取資料：setState 皆發生於 await 之後，規則對具名函式為保守誤判
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchConfig();
   }, [fetchConfig]);
 
   // 切換標籤展開狀態
