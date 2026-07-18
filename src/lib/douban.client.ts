@@ -91,6 +91,67 @@ async function fetchWithTimeout(
   }
 }
 
+// ---------------------------------------------------------------------------
+// 豆瓣直連回應的瀏覽器端快取。
+// 豆瓣/CDN 回應帶有 `expires: 2006` 且無 Cache-Control，瀏覽器完全不會快取，
+// 導致每次進首頁、切分類、返回導航都整批重新下載。此處以 sessionStorage
+// 做短 TTL 快取（分頁關閉即清空），讓返回導航即時顯示並減少 CDN 請求。
+// 走伺服器的 /api/douban/* 路徑已有 HTTP Cache-Control，不經過這層。
+// ---------------------------------------------------------------------------
+const DOUBAN_CACHE_PREFIX = 'douban-cache:';
+const DOUBAN_CACHE_TTL_MS = 30 * 60 * 1000; // 30 分鐘
+
+function readDoubanCache<T>(url: string): T | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(DOUBAN_CACHE_PREFIX + url);
+    if (!raw) return null;
+    const entry = JSON.parse(raw) as { t: number; d: T };
+    if (Date.now() - entry.t > DOUBAN_CACHE_TTL_MS) {
+      sessionStorage.removeItem(DOUBAN_CACHE_PREFIX + url);
+      return null;
+    }
+    return entry.d;
+  } catch {
+    return null;
+  }
+}
+
+function writeDoubanCache(url: string, data: unknown): void {
+  if (typeof sessionStorage === 'undefined') return;
+  const entry = JSON.stringify({ t: Date.now(), d: data });
+  try {
+    sessionStorage.setItem(DOUBAN_CACHE_PREFIX + url, entry);
+  } catch {
+    // 容量不足：清掉本站的豆瓣快取後重試一次，仍失敗則放棄快取
+    try {
+      const staleKeys: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key?.startsWith(DOUBAN_CACHE_PREFIX)) staleKeys.push(key);
+      }
+      staleKeys.forEach((key) => sessionStorage.removeItem(key));
+      sessionStorage.setItem(DOUBAN_CACHE_PREFIX + url, entry);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/** 帶快取的豆瓣 JSON 請求（快取鍵為目標網址，與代理方式無關） */
+async function fetchDoubanJson<T>(url: string, proxyUrl: string): Promise<T> {
+  const cached = readDoubanCache<T>(url);
+  if (cached !== null) return cached;
+
+  const response = await fetchWithTimeout(url, proxyUrl);
+  if (!response.ok) {
+    throw new Error(`HTTP error! Status: ${response.status}`);
+  }
+  const data = (await response.json()) as T;
+  writeDoubanCache(url, data);
+  return data;
+}
+
 type DoubanProxyType =
   | 'cmliussss-cdn-tencent'
   | 'cmliussss-cdn-ali'
@@ -184,16 +245,10 @@ export async function fetchDoubanCategories(
         )}&type=${encodeURIComponent(simType)}`;
 
   try {
-    const response = await fetchWithTimeout(
+    const doubanData = await fetchDoubanJson<DoubanCategoryApiResponse>(
       target,
       useTencentCDN || useAliCDN ? '' : proxyUrl
     );
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    const doubanData: DoubanCategoryApiResponse = await response.json();
 
     // 轉換數據格式
     const list: DoubanItem[] = doubanData.items.map((item) => ({
@@ -353,16 +408,10 @@ export async function fetchDoubanList(
         )}&sort=recommend&page_limit=${pageLimit}&page_start=${pageStart}`;
 
   try {
-    const response = await fetchWithTimeout(
+    const doubanData = await fetchDoubanJson<DoubanListApiResponse>(
       target,
       useTencentCDN || useAliCDN ? '' : proxyUrl
     );
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    const doubanData: DoubanListApiResponse = await response.json();
 
     // 轉換數據格式
     const list: DoubanItem[] = doubanData.subjects.map((item) => ({
@@ -557,16 +606,10 @@ async function fetchDoubanRecommends(
   }
   const target = `${baseUrl}?${reqParams.toString()}`;
   try {
-    const response = await fetchWithTimeout(
+    const doubanData = await fetchDoubanJson<DoubanRecommendApiResponse>(
       target,
       useTencentCDN || useAliCDN ? '' : proxyUrl
     );
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! Status: ${response.status}`);
-    }
-
-    const doubanData: DoubanRecommendApiResponse = await response.json();
     const list: DoubanItem[] = doubanData.items
       .filter((item) => {
         // 兼容不同類型的type值：movie, tv, 可能是其他如 anime

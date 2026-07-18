@@ -245,3 +245,24 @@ div[data-media-provider] video {
     display: none !important;
   }
 }
+
+/* 骨架屏閃爍動畫（ImagePlaceholder 使用；React 19 下不可用行內 <style>） */
+@keyframes skeleton-shine {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shine {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shine 1.5s infinite;
+}
+
+.dark .skeleton-shine {
+  background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
+  background-size: 200% 100%;
+}

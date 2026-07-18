@@ -61,10 +61,11 @@ function DoubanPageClient() {
   // 獲取 runtimeConfig 中的自定義分類資料
   const customCategories = useClientValue<
     Array<{ name: string; type: 'movie' | 'tv'; query: string }>
-  >(
-    () => window.RUNTIME_CONFIG?.CUSTOM_CATEGORIES ?? EMPTY_CUSTOM_CATEGORIES,
-    EMPTY_CUSTOM_CATEGORIES
-  );
+  >(() => {
+    const rc = window.RUNTIME_CONFIG?.CUSTOM_CATEGORIES;
+    // 空清單回傳與伺服器快照相同的穩定參考，避免 hydration 快照不一致
+    return rc && rc.length > 0 ? rc : EMPTY_CUSTOM_CATEGORIES;
+  }, EMPTY_CUSTOM_CATEGORIES);
 
   // 選擇器狀態 - 完全獨立，不依賴URL參數
   const [primarySelection, setPrimarySelection] = useState<string>(() => {
@@ -125,16 +126,22 @@ function DoubanPageClient() {
   }, []); // 只在組件掛載時執行一次
 
   // type / customCategories 變化時重置選擇器（render 期調整狀態，
-  // 取代原本兩個 setState-in-effect；50ms 後標記就緒的計時器留在 effect）
+  // 取代原本兩個 setState-in-effect；50ms 後標記就緒的計時器留在 effect）。
+  // 注意：customCategories 來自 useSyncExternalStore，hydration 完成時
+  // 伺服器快照與客戶端快照的「參考」可能不同但內容相同（如空陣列）；
+  // 以「內容鍵」比較可避免每次整頁載入都多做一輪無意義的重置與重新抓取。
+  const categoriesKey = customCategories
+    .map((cat) => `${cat.type}:${cat.query}`)
+    .join('|');
   const [prevSelectorKey, setPrevSelectorKey] = useState<{
     type: string;
-    categories: unknown;
-  }>({ type, categories: customCategories });
+    categoriesKey: string;
+  }>({ type, categoriesKey });
   if (
     type !== prevSelectorKey.type ||
-    customCategories !== prevSelectorKey.categories
+    categoriesKey !== prevSelectorKey.categoriesKey
   ) {
-    setPrevSelectorKey({ type, categories: customCategories });
+    setPrevSelectorKey({ type, categoriesKey });
     setSelectorsReady(false);
     setLoading(true);
 
@@ -187,7 +194,7 @@ function DoubanPageClient() {
       setSelectorsReady(true);
     }, 50);
     return () => clearTimeout(timer);
-  }, [type, customCategories]);
+  }, [type, categoriesKey]);
 
   // 生成骨架屏資料
   const skeletonData = Array.from({ length: 25 }, (_, index) => index);
