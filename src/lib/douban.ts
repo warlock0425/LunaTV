@@ -1,4 +1,5 @@
 import { setBoundedMapValue } from './bounded-map';
+import { readResponseTextWithLimit } from './response-limit';
 
 interface CachedDoubanEntry {
   expiresAt: number;
@@ -8,6 +9,7 @@ interface CachedDoubanEntry {
 const DOUBAN_CACHE = new Map<string, CachedDoubanEntry>();
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 分鐘快取生命週期
 const MAX_DOUBAN_CACHE_ENTRIES = 200;
+const MAX_DOUBAN_RESPONSE_BYTES = 5 * 1024 * 1024;
 
 /**
  * 通用的豆瓣数据获取函数
@@ -39,13 +41,16 @@ export async function fetchDoubanData<T>(url: string): Promise<T> {
 
   try {
     const response = await fetch(url, fetchOptions);
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP error! Status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const responseText = await readResponseTextWithLimit(
+      response,
+      MAX_DOUBAN_RESPONSE_BYTES
+    );
+    const data = JSON.parse(responseText) as T;
 
     // 成功後寫入快取
     setBoundedMapValue(
@@ -59,9 +64,8 @@ export async function fetchDoubanData<T>(url: string): Promise<T> {
     );
 
     return data;
-  } catch (error) {
+  } finally {
     clearTimeout(timeoutId);
-    throw error;
   }
 }
 

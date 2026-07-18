@@ -10,13 +10,17 @@ import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { filterAdsFromM3U8Detailed } from '@/lib/hls-ad-filter';
 import { getBaseUrl, resolveUrl } from '@/lib/live';
+import { getServerStorageType } from '@/lib/storage-runtime';
 import {
   fetchSafeRemoteUrl,
   isSafeRemoteUrl,
+  readResponseTextWithLimit,
   UnsafeRemoteUrlError,
 } from '@/lib/url-safety';
 
 export const runtime = 'nodejs';
+const M3U8_FETCH_TIMEOUT_MS = 10000;
+const MAX_M3U8_BYTES = 5 * 1024 * 1024;
 
 export async function GET(request: Request) {
   // 1. 身份與權限驗證
@@ -25,10 +29,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   let isAuthorized = false;
 
   if (storageType === 'localstorage') {
@@ -83,11 +84,15 @@ export async function GET(request: Request) {
   }
 
   const config = await getConfig();
-  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
+  const liveSource = config.LiveConfig?.find(
+    (s: any) => s.key === source && !s.disabled
+  );
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }
   const ua = liveSource.ua || 'AptvPlayer/1.4.10';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), M3U8_FETCH_TIMEOUT_MS);
 
   let response: Response | null = null;
   let responseUsed = false;
@@ -99,6 +104,7 @@ export async function GET(request: Request) {
       headers: {
         'User-Agent': ua,
       },
+      signal: controller.signal,
     });
 
     if (!response.ok) {
@@ -108,55 +114,37 @@ export async function GET(request: Request) {
       );
     }
 
-    const contentType = response.headers.get('Content-Type') || '';
-    // rewrite m3u8
-    if (
-      contentType.toLowerCase().includes('mpegurl') ||
-      contentType.toLowerCase().includes('octet-stream')
-    ) {
-      // 獲取最終的響應URL（處理重定向後的URL）
-      const finalUrl = response.url;
-      const m3u8Content = await response.text();
-      const filteredContent = m3u8Content.includes('#EXTINF')
-        ? filterAdsFromM3U8Detailed(m3u8Content).content
-        : m3u8Content;
-      responseUsed = true; // 標記 response 已被使用
-
-      // 使用最終的響應URL作為baseUrl，而不是原始的請求URL
-      const baseUrl = getBaseUrl(finalUrl);
-
-      // 重寫 M3U8 內容
-      const modifiedContent = rewriteM3U8Content(
-        filteredContent,
-        baseUrl,
-        request,
-        allowCORS,
-        source
-      );
-
-      const headers = new Headers();
-      headers.set('Content-Type', contentType);
-      headers.set('Access-Control-Allow-Origin', '*');
-      headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      headers.set(
-        'Access-Control-Allow-Headers',
-        'Content-Type, Range, Origin, Accept'
-      );
-      headers.set('Cache-Control', 'no-cache');
-      headers.set(
-        'Access-Control-Expose-Headers',
-        'Content-Length, Content-Range'
-      );
-      return new Response(modifiedContent, { headers });
-    }
-    // just proxy
-    const headers = new Headers();
-    headers.set(
-      'Content-Type',
-      response.headers.get('Content-Type') || 'application/vnd.apple.mpegurl'
+    // 不信任上游 Content-Type；不少 IPTV 來源會漏掉或錯標類型。
+    // 端點只接受真正的 HLS manifest，並以大小與逾時限制完整讀取後重寫。
+    const finalUrl = response.url;
+    const m3u8Content = await readResponseTextWithLimit(
+      response,
+      MAX_M3U8_BYTES
     );
+    responseUsed = true;
+    if (!m3u8Content.trimStart().startsWith('#EXTM3U')) {
+      return NextResponse.json(
+        { error: 'Upstream response is not an HLS manifest' },
+        { status: 415 }
+      );
+    }
+
+    const filteredContent = m3u8Content.includes('#EXTINF')
+      ? filterAdsFromM3U8Detailed(m3u8Content).content
+      : m3u8Content;
+    const baseUrl = getBaseUrl(finalUrl);
+    const modifiedContent = rewriteM3U8Content(
+      filteredContent,
+      baseUrl,
+      request,
+      allowCORS,
+      source
+    );
+
+    const headers = new Headers();
+    headers.set('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
     headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
     headers.set(
       'Access-Control-Allow-Headers',
       'Content-Type, Range, Origin, Accept'
@@ -167,12 +155,7 @@ export async function GET(request: Request) {
       'Content-Length, Content-Range'
     );
 
-    // The body is transferred to the caller and must not be cancelled below.
-    responseUsed = true;
-    return new Response(response.body, {
-      status: 200,
-      headers,
-    });
+    return new Response(modifiedContent, { headers });
   } catch (error) {
     if (error instanceof UnsafeRemoteUrlError) {
       return NextResponse.json({ error: 'Invalid url' }, { status: 400 });
@@ -180,9 +163,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       { error: 'Failed to fetch m3u8' },
-      { status: 500 }
+      { status: controller.signal.aborted ? 504 : 500 }
     );
   } finally {
+    clearTimeout(timeoutId);
     // 確保 response 被正確關閉以釋放資源
     if (response && !responseUsed) {
       try {
@@ -202,19 +186,30 @@ function rewriteM3U8Content(
   allowCORS: boolean,
   source: string | null
 ) {
-  // 從 referer 頭提取協議信息
+  const requestUrl = new URL(req.url);
+  const forwardedProtocol = req.headers
+    .get('x-forwarded-proto')
+    ?.split(',')[0]
+    .trim();
   const referer = req.headers.get('referer');
-  let protocol = 'http';
+  let refererProtocol = '';
   if (referer) {
     try {
       const refererUrl = new URL(referer);
-      protocol = refererUrl.protocol.replace(':', '');
+      refererProtocol = refererUrl.protocol.replace(':', '');
     } catch (error) {
       // ignore
     }
   }
 
-  const host = req.headers.get('host');
+  const protocol =
+    forwardedProtocol === 'http' || forwardedProtocol === 'https'
+      ? forwardedProtocol
+      : refererProtocol || requestUrl.protocol.replace(':', '');
+  const host =
+    req.headers.get('x-forwarded-host')?.split(',')[0].trim() ||
+    req.headers.get('host') ||
+    requestUrl.host;
   const sourceParam = source
     ? `&moontv-source=${encodeURIComponent(source)}`
     : '';
@@ -238,14 +233,31 @@ function rewriteM3U8Content(
       continue;
     }
 
-    // 處理 EXT-X-MAP 標籤中的 URI
-    if (line.startsWith('#EXT-X-MAP:')) {
-      line = rewriteMapUri(line, baseUrl, proxyBase, sourceParam);
+    // 處理初始化片段與 Low-Latency HLS 片段標籤中的 URI
+    if (
+      line.startsWith('#EXT-X-MAP:') ||
+      line.startsWith('#EXT-X-PART:') ||
+      line.startsWith('#EXT-X-PRELOAD-HINT:')
+    ) {
+      line = rewriteTagUri(line, baseUrl, proxyBase, sourceParam, 'segment');
     }
 
-    // 處理 EXT-X-KEY 標籤中的 URI
-    if (line.startsWith('#EXT-X-KEY:')) {
-      line = rewriteKeyUri(line, baseUrl, proxyBase, sourceParam);
+    // 處理媒體清單與主清單的加密金鑰 URI
+    if (
+      line.startsWith('#EXT-X-KEY:') ||
+      line.startsWith('#EXT-X-SESSION-KEY:')
+    ) {
+      line = rewriteTagUri(line, baseUrl, proxyBase, sourceParam, 'key');
+    }
+
+    // 主清單中的替代音軌、字幕、I-frame 與 LL-HLS 回報都指向另一份清單。
+    if (
+      line.startsWith('#EXT-X-MEDIA:') ||
+      line.startsWith('#EXT-X-I-FRAME-STREAM-INF:') ||
+      line.startsWith('#EXT-X-IMAGE-STREAM-INF:') ||
+      line.startsWith('#EXT-X-RENDITION-REPORT:')
+    ) {
+      line = rewriteTagUri(line, baseUrl, proxyBase, sourceParam, 'm3u8');
     }
 
     // 處理嵌套的 M3U8 文件 (EXT-X-STREAM-INF)
@@ -274,38 +286,22 @@ function rewriteM3U8Content(
   return rewrittenLines.join('\n');
 }
 
-function rewriteMapUri(
+function rewriteTagUri(
   line: string,
   baseUrl: string,
   proxyBase: string,
-  sourceParam: string
+  sourceParam: string,
+  endpoint: 'segment' | 'key' | 'm3u8'
 ) {
-  const uriMatch = line.match(/URI="([^"]+)"/);
+  const uriMatch = line.match(/\bURI=(["'])(.*?)\1/i);
   if (uriMatch) {
-    const originalUri = uriMatch[1];
+    const quote = uriMatch[1];
+    const originalUri = uriMatch[2];
     const resolvedUrl = resolveUrl(baseUrl, originalUri);
-    const proxyUrl = `${proxyBase}/segment?url=${encodeURIComponent(
+    const proxyUrl = `${proxyBase}/${endpoint}?url=${encodeURIComponent(
       resolvedUrl
     )}${sourceParam}`;
-    return line.replace(uriMatch[0], `URI="${proxyUrl}"`);
-  }
-  return line;
-}
-
-function rewriteKeyUri(
-  line: string,
-  baseUrl: string,
-  proxyBase: string,
-  sourceParam: string
-) {
-  const uriMatch = line.match(/URI="([^"]+)"/);
-  if (uriMatch) {
-    const originalUri = uriMatch[1];
-    const resolvedUrl = resolveUrl(baseUrl, originalUri);
-    const proxyUrl = `${proxyBase}/key?url=${encodeURIComponent(
-      resolvedUrl
-    )}${sourceParam}`;
-    return line.replace(uriMatch[0], `URI="${proxyUrl}"`);
+    return line.replace(uriMatch[0], `URI=${quote}${proxyUrl}${quote}`);
   }
   return line;
 }

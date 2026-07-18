@@ -109,13 +109,16 @@ export async function fetchBangumiSubjectAliases(
         },
       }
     );
-    if (!response.ok) return [];
+    if (response.status === 404) return [];
+    if (!response.ok) {
+      throw new Error(`Bangumi API returned ${response.status}`);
+    }
 
     const data = (await response.json()) as BangumiSubjectInfo;
     return extractBangumiAliases(data);
   } catch (error) {
     logger.warn('獲取 Bangumi 別名失敗:', error);
-    return [];
+    throw error;
   } finally {
     clearTimeout(timeoutId);
   }

@@ -15,12 +15,14 @@ const CACHE_TTL = 6 * 60 * 60 * 1000;
 const MAX_ALIAS_CACHE_ENTRIES = 500;
 const ALIAS_CACHE = new Map<string, { expiresAt: number; aliases: string[] }>();
 
-function jsonAliases(aliases: string[]) {
+function jsonAliases(aliases: string[], cache = true) {
   return NextResponse.json(
     { aliases },
     {
       headers: {
-        'Cache-Control': 'public, max-age=21600, s-maxage=21600',
+        'Cache-Control': cache
+          ? 'public, max-age=21600, s-maxage=21600'
+          : 'no-store',
       },
     }
   );
@@ -40,8 +42,12 @@ export async function GET(request: Request) {
     return jsonAliases(cached.aliases);
   }
 
+  let staleAliases: string[] | null = null;
   try {
     const persistentCached = await db.getBangumiAliasCache(id);
+    if (persistentCached && Array.isArray(persistentCached.aliases)) {
+      staleAliases = persistentCached.aliases;
+    }
     if (isFreshBangumiAliasCacheEntry(persistentCached, now)) {
       setBoundedMapValue(
         ALIAS_CACHE,
@@ -58,7 +64,13 @@ export async function GET(request: Request) {
     // Persistent cache is a best-effort optimization.
   }
 
-  const aliases = await fetchBangumiSubjectAliases(id);
+  let aliases: string[];
+  try {
+    aliases = await fetchBangumiSubjectAliases(id);
+  } catch {
+    // 暫時性上游錯誤不可把空結果長時間快取；若有過期資料則降級使用。
+    return jsonAliases(staleAliases || [], false);
+  }
   setBoundedMapValue(
     ALIAS_CACHE,
     id,

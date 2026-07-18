@@ -8,6 +8,7 @@ import {
 } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
+import { getServerStorageType } from '@/lib/storage-runtime';
 import {
   fetchSafeRemoteUrl,
   isSafeRemoteUrl,
@@ -23,10 +24,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   let isAuthorized = false;
 
   if (storageType === 'localstorage') {
@@ -80,22 +78,28 @@ export async function GET(request: Request) {
   }
 
   const config = await getConfig();
-  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
+  const liveSource = config.LiveConfig?.find(
+    (s: any) => s.key === source && !s.disabled
+  );
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }
   const ua = liveSource.ua || 'AptvPlayer/1.4.10';
 
   let response: Response | null = null;
-  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+  let responseUsed = false;
 
   try {
+    const upstreamHeaders = new Headers({ 'User-Agent': ua });
+    const range = request.headers.get('range');
+    const ifRange = request.headers.get('if-range');
+    if (range) upstreamHeaders.set('Range', range);
+    if (ifRange) upstreamHeaders.set('If-Range', ifRange);
+
     response = await fetchSafeRemoteUrl(url, {
-      headers: {
-        'User-Agent': ua,
-      },
+      headers: upstreamHeaders,
     });
-    if (!response.ok) {
+    if (!response.ok && (response.status < 400 || response.status >= 500)) {
       return NextResponse.json(
         { error: 'Failed to fetch segment' },
         { status: 500 }
@@ -103,117 +107,39 @@ export async function GET(request: Request) {
     }
 
     const headers = new Headers();
-    headers.set('Content-Type', 'video/mp2t');
+    const passthroughHeaders = [
+      'content-type',
+      'content-length',
+      'content-range',
+      'accept-ranges',
+      'cache-control',
+      'etag',
+      'last-modified',
+    ];
+    passthroughHeaders.forEach((name) => {
+      const value = response?.headers.get(name);
+      if (value) headers.set(name, value);
+    });
+    if (!headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/octet-stream');
+    }
     headers.set('Access-Control-Allow-Origin', '*');
-    headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
     headers.set(
       'Access-Control-Allow-Headers',
       'Content-Type, Range, Origin, Accept'
     );
-    headers.set('Accept-Ranges', 'bytes');
     headers.set(
       'Access-Control-Expose-Headers',
-      'Content-Length, Content-Range'
+      'Accept-Ranges, Content-Length, Content-Range, ETag, Last-Modified'
     );
-    const contentLength = response.headers.get('content-length');
-    if (contentLength) {
-      headers.set('Content-Length', contentLength);
-    }
-
-    // 使用流式傳輸，避免佔用內存
-    let isCancelled = false;
-    const stream = new ReadableStream({
-      start(controller) {
-        if (!response?.body) {
-          controller.close();
-          return;
-        }
-
-        reader = response.body.getReader();
-
-        function pump() {
-          if (isCancelled || !reader) {
-            return;
-          }
-
-          reader
-            .read()
-            .then(({ done, value }) => {
-              if (isCancelled) {
-                return;
-              }
-
-              if (done) {
-                controller.close();
-                cleanup();
-                return;
-              }
-
-              controller.enqueue(value);
-              pump();
-            })
-            .catch((error) => {
-              if (!isCancelled) {
-                controller.error(error);
-                cleanup();
-              }
-            });
-        }
-
-        function cleanup() {
-          if (reader) {
-            try {
-              reader.releaseLock();
-            } catch (e) {
-              // reader 可能已經被釋放，忽略錯誤
-            }
-            reader = null;
-          }
-        }
-
-        pump();
-      },
-      cancel() {
-        // 當流被取消時，確保釋放所有資源
-        isCancelled = true;
-        if (reader) {
-          try {
-            reader.releaseLock();
-          } catch (e) {
-            // reader 可能已經被釋放，忽略錯誤
-          }
-          reader = null;
-        }
-
-        if (response?.body) {
-          try {
-            response.body.cancel();
-          } catch (e) {
-            // 忽略取消時的錯誤
-          }
-        }
-      },
+    responseUsed = true;
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
     });
-
-    return new Response(stream, { headers });
   } catch (error) {
-    // 確保在錯誤情況下也釋放資源
-    if (reader) {
-      try {
-        (reader as ReadableStreamDefaultReader<Uint8Array>).releaseLock();
-      } catch (e) {
-        // 忽略錯誤
-      }
-    }
-
-    if (response?.body) {
-      try {
-        response.body.cancel();
-      } catch (e) {
-        // 忽略錯誤
-      }
-    }
-
     if (error instanceof UnsafeRemoteUrlError) {
       return NextResponse.json({ error: 'Invalid url' }, { status: 400 });
     }
@@ -222,5 +148,9 @@ export async function GET(request: Request) {
       { error: 'Failed to fetch segment' },
       { status: 500 }
     );
+  } finally {
+    if (response && !responseUsed) {
+      void response.body?.cancel().catch(() => undefined);
+    }
   }
 }

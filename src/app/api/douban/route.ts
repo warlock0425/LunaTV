@@ -4,6 +4,7 @@ import { setBoundedMapValue } from '@/lib/bounded-map';
 import { getCacheTime } from '@/lib/config';
 import { fetchDoubanData, toSimplified } from '@/lib/douban';
 import { DoubanItem, DoubanResult } from '@/lib/types';
+import { readResponseTextWithLimit } from '@/lib/url-safety';
 
 interface DoubanApiResponse {
   subjects: Array<{
@@ -16,10 +17,11 @@ interface DoubanApiResponse {
 
 export const runtime = 'nodejs';
 
-// 豆瓣 API 主路由缓存，减少重复请求
+// 豆瓣 API 主路由快取，減少重複請求
 const DOUBAN_CACHE = new Map<string, { expiresAt: number; data: unknown }>();
-const DOUBAN_CACHE_TTL = 60 * 1000; // 1 分钟缓存，豆瓣热门列表变化不频繁
+const DOUBAN_CACHE_TTL = 60 * 1000; // 1 分鐘快取，豆瓣熱門列表變化不頻繁
 const MAX_DOUBAN_CACHE_ENTRIES = 200;
+const MAX_TOP250_RESPONSE_BYTES = 5 * 1024 * 1024;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -27,8 +29,8 @@ export async function GET(request: Request) {
   // 獲取參數
   const type = searchParams.get('type');
   const tag = searchParams.get('tag');
-  const pageSize = parseInt(searchParams.get('pageSize') || '16');
-  const pageStart = parseInt(searchParams.get('pageStart') || '0');
+  const pageSize = Number(searchParams.get('pageSize') ?? '16');
+  const pageStart = Number(searchParams.get('pageStart') ?? '0');
 
   // 驗證參數
   if (!type || !tag) {
@@ -45,14 +47,14 @@ export async function GET(request: Request) {
     );
   }
 
-  if (pageSize < 1 || pageSize > 100) {
+  if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
     return NextResponse.json(
       { error: 'pageSize 必須在 1-100 之間' },
       { status: 400 }
     );
   }
 
-  if (pageStart < 0) {
+  if (!Number.isInteger(pageStart) || pageStart < 0 || pageStart > 10000) {
     return NextResponse.json(
       { error: 'pageStart 不能小於 0' },
       { status: 400 }
@@ -63,7 +65,7 @@ export async function GET(request: Request) {
     return handleTop250(pageStart, pageSize);
   }
 
-  // 检查内存缓存
+  // 檢查記憶體快取
   const cacheKey = `douban:${type}:${tag}:${pageSize}:${pageStart}`;
   const now = Date.now();
   const cached = DOUBAN_CACHE.get(cacheKey);
@@ -103,7 +105,7 @@ export async function GET(request: Request) {
       list: list,
     };
 
-    // 存入内存缓存
+    // 存入記憶體快取
     setBoundedMapValue(
       DOUBAN_CACHE,
       cacheKey,
@@ -169,14 +171,15 @@ async function handleTop250(pageStart: number, pageSize: number) {
 
   try {
     const fetchResponse = await fetch(target, fetchOptions);
-    clearTimeout(timeoutId);
-
     if (!fetchResponse.ok) {
       throw new Error(`HTTP error! Status: ${fetchResponse.status}`);
     }
 
     // 獲取 HTML 內容
-    const html = await fetchResponse.text();
+    const html = await readResponseTextWithLimit(
+      fetchResponse,
+      MAX_TOP250_RESPONSE_BYTES
+    );
 
     // 通過正則同時捕獲影片 id、標題、封面以及評分
     const moviePattern =
@@ -228,7 +231,6 @@ async function handleTop250(pageStart: number, pageSize: number) {
       },
     });
   } catch (error) {
-    clearTimeout(timeoutId);
     return NextResponse.json(
       {
         error: '獲取豆瓣 Top250 數據失敗',
@@ -236,5 +238,7 @@ async function handleTop250(pageStart: number, pageSize: number) {
       },
       { status: 500 }
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

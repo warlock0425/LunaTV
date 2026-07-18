@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 
 import { AdminConfig } from './admin.types';
 import { toDisplayLanguage } from './chinese';
+import { getServerStorageType } from './storage-runtime';
 import { fetchSafeRemoteUrl, readResponseTextWithLimit } from './url-safety';
 
 export interface ApiSite {
@@ -22,7 +23,7 @@ export interface LiveCfg {
 
 type ConfigUser = AdminConfig['UserConfig']['Users'][number];
 
-interface ConfigFileStruct {
+export interface ConfigFileStruct {
   cache_time?: number;
   api_site?: {
     [key: string]: ApiSite;
@@ -35,6 +36,96 @@ interface ConfigFileStruct {
   lives?: {
     [key: string]: LiveCfg;
   };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cleanStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return Array.from(
+    new Set(
+      value
+        .filter((item): item is string => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+export function parseConfigFile(configFile: string): ConfigFileStruct {
+  const parsed: unknown = JSON.parse(configFile);
+  if (!isPlainRecord(parsed)) {
+    throw new Error('設定檔根節點必須是物件');
+  }
+
+  if (
+    parsed.cache_time !== undefined &&
+    (typeof parsed.cache_time !== 'number' ||
+      !Number.isFinite(parsed.cache_time) ||
+      parsed.cache_time < 0)
+  ) {
+    throw new Error('cache_time 必須是非負數字');
+  }
+
+  if (parsed.api_site !== undefined) {
+    if (!isPlainRecord(parsed.api_site)) {
+      throw new Error('api_site 必須是物件');
+    }
+    for (const [key, site] of Object.entries(parsed.api_site)) {
+      if (
+        !/^[A-Za-z0-9._:-]{1,128}$/.test(key) ||
+        !isPlainRecord(site) ||
+        typeof site.name !== 'string' ||
+        !site.name.trim() ||
+        typeof site.api !== 'string' ||
+        !site.api.trim() ||
+        (site.detail !== undefined && typeof site.detail !== 'string')
+      ) {
+        throw new Error(`api_site.${key || '<empty>'} 格式錯誤`);
+      }
+    }
+  }
+
+  if (parsed.custom_category !== undefined) {
+    if (!Array.isArray(parsed.custom_category)) {
+      throw new Error('custom_category 必須是陣列');
+    }
+    parsed.custom_category.forEach((category, index) => {
+      if (
+        !isPlainRecord(category) ||
+        (category.name !== undefined && typeof category.name !== 'string') ||
+        (category.type !== 'movie' && category.type !== 'tv') ||
+        typeof category.query !== 'string' ||
+        !category.query.trim()
+      ) {
+        throw new Error(`custom_category[${index}] 格式錯誤`);
+      }
+    });
+  }
+
+  if (parsed.lives !== undefined) {
+    if (!isPlainRecord(parsed.lives)) {
+      throw new Error('lives 必須是物件');
+    }
+    for (const [key, live] of Object.entries(parsed.lives)) {
+      if (
+        !/^[A-Za-z0-9._:-]{1,128}$/.test(key) ||
+        !isPlainRecord(live) ||
+        typeof live.name !== 'string' ||
+        !live.name.trim() ||
+        typeof live.url !== 'string' ||
+        !live.url.trim() ||
+        (live.ua !== undefined && typeof live.ua !== 'string') ||
+        (live.epg !== undefined && typeof live.epg !== 'string')
+      ) {
+        throw new Error(`lives.${key || '<empty>'} 格式錯誤`);
+      }
+    }
+  }
+
+  return parsed as ConfigFileStruct;
 }
 
 export const API_CONFIG = {
@@ -98,7 +189,7 @@ export async function fetchSubscriptionConfigFile(
     }
 
     try {
-      JSON.parse(decodedContent);
+      parseConfigFile(decodedContent);
     } catch (e) {
       throw new Error('訂閱設定格式錯誤，請檢查 JSON 語法');
     }
@@ -113,7 +204,7 @@ export async function fetchSubscriptionConfigFile(
 export function refineConfig(adminConfig: AdminConfig): AdminConfig {
   let fileConfig: ConfigFileStruct;
   try {
-    fileConfig = JSON.parse(adminConfig.ConfigFile) as ConfigFileStruct;
+    fileConfig = parseConfigFile(adminConfig.ConfigFile);
   } catch (e) {
     fileConfig = {} as ConfigFileStruct;
   }
@@ -248,7 +339,7 @@ async function getInitConfig(
 ): Promise<AdminConfig> {
   let cfgFile: ConfigFileStruct;
   try {
-    cfgFile = JSON.parse(configFile) as ConfigFileStruct;
+    cfgFile = parseConfigFile(configFile);
   } catch (e) {
     cfgFile = {} as ConfigFileStruct;
   }
@@ -418,7 +509,7 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   }
 
   // 確保必要的屬性存在和初始化
-  if (!adminConfig.SiteConfig) {
+  if (!isPlainRecord(adminConfig.SiteConfig as unknown)) {
     adminConfig.SiteConfig = {
       SiteName: 'BerserkerTV',
       Announcement:
@@ -440,8 +531,46 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   ) {
     adminConfig.SiteConfig.SiteName = 'BerserkerTV';
   }
+  if (typeof adminConfig.SiteConfig.Announcement !== 'string') {
+    adminConfig.SiteConfig.Announcement = '';
+  }
+  const downstreamPages = Number(
+    adminConfig.SiteConfig.SearchDownstreamMaxPage
+  );
+  adminConfig.SiteConfig.SearchDownstreamMaxPage =
+    Number.isInteger(downstreamPages) && downstreamPages >= 1
+      ? Math.min(downstreamPages, 20)
+      : 5;
+  const interfaceCacheTime = Number(
+    adminConfig.SiteConfig.SiteInterfaceCacheTime
+  );
+  adminConfig.SiteConfig.SiteInterfaceCacheTime =
+    Number.isFinite(interfaceCacheTime) && interfaceCacheTime >= 0
+      ? interfaceCacheTime
+      : 7200;
+  if (typeof adminConfig.SiteConfig.FluidSearch !== 'boolean') {
+    adminConfig.SiteConfig.FluidSearch = true;
+  }
+  if (typeof adminConfig.SiteConfig.DisableYellowFilter !== 'boolean') {
+    adminConfig.SiteConfig.DisableYellowFilter = false;
+  }
+  if (typeof adminConfig.SiteConfig.EnableWebLive !== 'boolean') {
+    adminConfig.SiteConfig.EnableWebLive = false;
+  }
+  if (typeof adminConfig.SiteConfig.DoubanProxyType !== 'string') {
+    adminConfig.SiteConfig.DoubanProxyType = 'cmliussss-cdn-tencent';
+  }
+  if (typeof adminConfig.SiteConfig.DoubanProxy !== 'string') {
+    adminConfig.SiteConfig.DoubanProxy = '';
+  }
+  if (typeof adminConfig.SiteConfig.DoubanImageProxyType !== 'string') {
+    adminConfig.SiteConfig.DoubanImageProxyType = 'cmliussss-cdn-tencent';
+  }
+  if (typeof adminConfig.SiteConfig.DoubanImageProxy !== 'string') {
+    adminConfig.SiteConfig.DoubanImageProxy = '';
+  }
 
-  if (!adminConfig.UserConfig) {
+  if (!isPlainRecord(adminConfig.UserConfig as unknown)) {
     adminConfig.UserConfig = { Users: [] };
   }
   if (
@@ -462,6 +591,132 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   if (!adminConfig.LiveConfig || !Array.isArray(adminConfig.LiveConfig)) {
     adminConfig.LiveConfig = [];
   }
+
+  adminConfig.UserConfig.Users = (
+    adminConfig.UserConfig.Users as unknown[]
+  ).flatMap((rawUser) => {
+    if (
+      !isPlainRecord(rawUser) ||
+      typeof rawUser.username !== 'string' ||
+      !rawUser.username.trim()
+    ) {
+      return [];
+    }
+    const role =
+      rawUser.role === 'admin' || rawUser.role === 'owner'
+        ? rawUser.role
+        : 'user';
+    return [
+      {
+        username: rawUser.username,
+        role,
+        banned: rawUser.banned === true,
+        enabledApis: cleanStringArray(rawUser.enabledApis),
+        tags: cleanStringArray(rawUser.tags),
+      },
+    ];
+  });
+
+  const rawTags = (adminConfig.UserConfig as { Tags?: unknown }).Tags;
+  adminConfig.UserConfig.Tags = Array.isArray(rawTags)
+    ? rawTags.flatMap((rawTag) => {
+        if (
+          !isPlainRecord(rawTag) ||
+          typeof rawTag.name !== 'string' ||
+          !rawTag.name.trim()
+        ) {
+          return [];
+        }
+        return [
+          {
+            name: rawTag.name,
+            enabledApis: cleanStringArray(rawTag.enabledApis) || [],
+          },
+        ];
+      })
+    : undefined;
+
+  adminConfig.SourceConfig = (adminConfig.SourceConfig as unknown[]).flatMap(
+    (rawSource) => {
+      if (
+        !isPlainRecord(rawSource) ||
+        typeof rawSource.key !== 'string' ||
+        !/^[A-Za-z0-9._:-]{1,128}$/.test(rawSource.key) ||
+        typeof rawSource.name !== 'string' ||
+        !rawSource.name.trim() ||
+        typeof rawSource.api !== 'string' ||
+        !rawSource.api.trim()
+      ) {
+        return [];
+      }
+      return [
+        {
+          key: rawSource.key,
+          name: rawSource.name,
+          api: rawSource.api,
+          detail:
+            typeof rawSource.detail === 'string' ? rawSource.detail : undefined,
+          from: rawSource.from === 'config' ? 'config' : 'custom',
+          disabled: rawSource.disabled === true,
+        },
+      ];
+    }
+  );
+
+  adminConfig.CustomCategories = (
+    adminConfig.CustomCategories as unknown[]
+  ).flatMap((rawCategory) => {
+    if (
+      !isPlainRecord(rawCategory) ||
+      (rawCategory.type !== 'movie' && rawCategory.type !== 'tv') ||
+      typeof rawCategory.query !== 'string' ||
+      !rawCategory.query.trim()
+    ) {
+      return [];
+    }
+    return [
+      {
+        name:
+          typeof rawCategory.name === 'string' ? rawCategory.name : undefined,
+        type: rawCategory.type,
+        query: rawCategory.query,
+        from: rawCategory.from === 'config' ? 'config' : 'custom',
+        disabled: rawCategory.disabled === true,
+      },
+    ];
+  });
+
+  adminConfig.LiveConfig = (adminConfig.LiveConfig as unknown[]).flatMap(
+    (rawLive) => {
+      if (
+        !isPlainRecord(rawLive) ||
+        typeof rawLive.key !== 'string' ||
+        !/^[A-Za-z0-9._:-]{1,128}$/.test(rawLive.key) ||
+        typeof rawLive.name !== 'string' ||
+        !rawLive.name.trim() ||
+        typeof rawLive.url !== 'string' ||
+        !rawLive.url.trim()
+      ) {
+        return [];
+      }
+      return [
+        {
+          key: rawLive.key,
+          name: rawLive.name,
+          url: rawLive.url,
+          ua: typeof rawLive.ua === 'string' ? rawLive.ua : undefined,
+          epg: typeof rawLive.epg === 'string' ? rawLive.epg : undefined,
+          from: rawLive.from === 'config' ? 'config' : 'custom',
+          channelNumber:
+            typeof rawLive.channelNumber === 'number' &&
+            Number.isFinite(rawLive.channelNumber)
+              ? rawLive.channelNumber
+              : 0,
+          disabled: rawLive.disabled === true,
+        },
+      ];
+    }
+  );
 
   // 站長變更自檢
   const ownerUser = process.env.USERNAME;
@@ -562,15 +817,6 @@ export async function resetConfig() {
 export async function getCacheTime(): Promise<number> {
   const config = await getConfig();
   return config.SiteConfig.SiteInterfaceCacheTime || 7200;
-}
-
-function getServerStorageType():
-  'localstorage' | 'redis' | 'upstash' | 'kvrocks' {
-  return (
-    ((process.env.STORAGE_TYPE || process.env.NEXT_PUBLIC_STORAGE_TYPE) as
-      'localstorage' | 'redis' | 'upstash' | 'kvrocks' | undefined) ||
-    'localstorage'
-  );
 }
 
 export async function getValidUser(

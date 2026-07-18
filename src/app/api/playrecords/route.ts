@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   isValidApiTextParam,
   parseAndValidateApiStorageKey,
+  readJsonObject,
 } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
@@ -68,8 +69,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json();
-    const { key, record }: { key: string; record: PlayRecord } = body;
+    const body = await readJsonObject<{
+      key?: string;
+      record?: PlayRecord;
+    }>(request);
+    if (!body) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    const { key, record } = body;
 
     if (!key || !record) {
       return NextResponse.json(

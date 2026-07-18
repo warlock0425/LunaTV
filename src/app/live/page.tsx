@@ -26,7 +26,6 @@ import { LiveChannel, LiveSource } from './live-types';
 import { buildLiveLogoProxyUrl } from './live-url';
 import {
   LiveChannelList,
-  LiveErrorView,
   LiveLoadingView,
   LiveSourceList,
   LiveVideoLoadingOverlay,
@@ -49,7 +48,7 @@ function LivePageClient() {
     'loading' | 'fetching' | 'ready'
   >('fetching');
   const [loadingMessage, setLoadingMessage] = useState('正在獲取直播源...');
-  const [error, setError] = useState<string | null>(null);
+  const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -113,6 +112,11 @@ function LivePageClient() {
 
   // EPG 資料加載狀態
   const [isEpgLoading, setIsEpgLoading] = useState(false);
+  const channelsAbortRef = useRef<AbortController | null>(null);
+  const channelsRequestIdRef = useRef(0);
+  const epgAbortRef = useRef<AbortController | null>(null);
+  const epgRequestIdRef = useRef(0);
+  const sourceSwitchRequestIdRef = useRef(0);
 
   // 收藏狀態
   const [favorited, setFavorited] = useState(false);
@@ -132,6 +136,57 @@ function LivePageClient() {
   // -----------------------------------------------------------------------------
   // 工具函數（Utils）
   // -----------------------------------------------------------------------------
+
+  const fetchEpg = async (channel: LiveChannel, source: LiveSource) => {
+    const requestId = ++epgRequestIdRef.current;
+    epgAbortRef.current?.abort();
+    epgAbortRef.current = null;
+    setEpgData(null);
+
+    if (!channel.tvgId) {
+      setIsEpgLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    epgAbortRef.current = controller;
+    setIsEpgLoading(true);
+
+    try {
+      const epgParams = new URLSearchParams({
+        source: source.key,
+        tvgId: channel.tvgId,
+      });
+      const response = await fetch(`/api/live/epg?${epgParams.toString()}`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`獲取節目單資訊失敗: ${response.status}`);
+      }
+
+      const result = await response.json();
+      if (requestId !== epgRequestIdRef.current) return;
+
+      if (result.success) {
+        setEpgData({
+          ...result.data,
+          programs: cleanEpgData(result.data.programs),
+        });
+      }
+    } catch (err) {
+      if (controller.signal.aborted || requestId !== epgRequestIdRef.current) {
+        return;
+      }
+      console.error('獲取節目單資訊失敗:', err);
+    } finally {
+      if (requestId === epgRequestIdRef.current) {
+        if (epgAbortRef.current === controller) {
+          epgAbortRef.current = null;
+        }
+        setIsEpgLoading(false);
+      }
+    }
+  };
 
   // 獲取直播源列表
   const fetchLiveSources = async () => {
@@ -195,19 +250,34 @@ function LivePageClient() {
 
   // 獲取頻道列表
   const fetchChannels = async (source: LiveSource) => {
-    try {
-      setIsVideoLoading(true);
+    const requestId = ++channelsRequestIdRef.current;
+    channelsAbortRef.current?.abort();
+    const controller = new AbortController();
+    channelsAbortRef.current = controller;
 
+    ++epgRequestIdRef.current;
+    epgAbortRef.current?.abort();
+    epgAbortRef.current = null;
+    setEpgData(null);
+    setIsEpgLoading(false);
+    setPlaybackError(null);
+    setCurrentChannel(null);
+    setVideoUrl('');
+    setIsVideoLoading(true);
+
+    try {
       // 從 cachedLiveChannels 獲取頻道資訊
       const channelParams = new URLSearchParams({ source: source.key });
       const response = await fetch(
-        `/api/live/channels?${channelParams.toString()}`
+        `/api/live/channels?${channelParams.toString()}`,
+        { signal: controller.signal }
       );
       if (!response.ok) {
         throw new Error('獲取頻道列表失敗');
       }
 
       const result = await response.json();
+      if (requestId !== channelsRequestIdRef.current) return;
       if (!result.success) {
         throw new Error(result.error || '獲取頻道列表失敗');
       }
@@ -226,7 +296,6 @@ function LivePageClient() {
           )
         );
 
-        setIsVideoLoading(false);
         return;
       }
 
@@ -249,31 +318,21 @@ function LivePageClient() {
         )
       );
 
-      // 預設選中第一個頻道
-      let selectedChannel: LiveChannel | null = null;
-      if (channels.length > 0) {
-        if (needLoadChannel) {
-          const foundChannel = channels.find(
-            (c: LiveChannel) => c.id === needLoadChannel
-          );
-          if (foundChannel) {
-            selectedChannel = foundChannel;
-            setCurrentChannel(foundChannel);
-            setVideoUrl(foundChannel.url);
-            // 延遲滾動到選中的頻道
-            setTimeout(() => {
-              scrollToChannel(foundChannel);
-            }, 200);
-          } else {
-            selectedChannel = channels[0];
-            setCurrentChannel(selectedChannel);
-            setVideoUrl(selectedChannel.url);
+      // 預設選中深連結指定頻道，找不到時使用第一個頻道。
+      const selectedChannel =
+        (needLoadChannel
+          ? channels.find((channel) => channel.id === needLoadChannel)
+          : undefined) ?? channels[0];
+      setCurrentChannel(selectedChannel);
+      setVideoUrl(selectedChannel.url);
+      void fetchEpg(selectedChannel, source);
+
+      if (needLoadChannel && selectedChannel.id === needLoadChannel) {
+        setTimeout(() => {
+          if (requestId === channelsRequestIdRef.current) {
+            scrollToChannel(selectedChannel);
           }
-        } else {
-          selectedChannel = channels[0];
-          setCurrentChannel(selectedChannel);
-          setVideoUrl(selectedChannel.url);
-        }
+        }, 200);
       }
 
       // 按分組組織頻道
@@ -318,6 +377,7 @@ function LivePageClient() {
         // 使用更長的延遲，確保狀態更新完成
         const channelToScroll = selectedChannel;
         setTimeout(() => {
+          if (requestId !== channelsRequestIdRef.current) return;
           if (
             channelToScroll &&
             targetChannels.some((channel) => channel.id === channelToScroll.id)
@@ -331,9 +391,13 @@ function LivePageClient() {
           }
         }, 500); // 增加延遲時間，確保狀態更新完成
       }
-
-      setIsVideoLoading(false);
     } catch (err) {
+      if (
+        controller.signal.aborted ||
+        requestId !== channelsRequestIdRef.current
+      ) {
+        return;
+      }
       console.error('獲取頻道列表失敗:', err);
       // 不設定錯誤，而是設定空頻道列表
       setCurrentChannels([]);
@@ -346,13 +410,19 @@ function LivePageClient() {
           s.key === source.key ? { ...s, channelNumber: 0 } : s
         )
       );
-
-      setIsVideoLoading(false);
+    } finally {
+      if (requestId === channelsRequestIdRef.current) {
+        if (channelsAbortRef.current === controller) {
+          channelsAbortRef.current = null;
+        }
+        setIsVideoLoading(false);
+      }
     }
   };
 
   // 切換直播源
   const handleSourceChange = async (source: LiveSource) => {
+    const switchRequestId = ++sourceSwitchRequestIdRef.current;
     try {
       // 設定切換狀態，鎖住頻道切換器
       setIsSwitchingSource(true);
@@ -372,10 +442,12 @@ function LivePageClient() {
       console.error('切換直播源失敗:', err);
       // 不設定錯誤，保持當前狀態
     } finally {
-      // 切換完成，解鎖頻道切換器
-      setIsSwitchingSource(false);
-      // 自動切換到頻道 tab
-      setActiveTab('channels');
+      if (switchRequestId === sourceSwitchRequestIdRef.current) {
+        // 切換完成，解鎖頻道切換器
+        setIsSwitchingSource(false);
+        // 自動切換到頻道 tab
+        setActiveTab('channels');
+      }
     }
   };
 
@@ -398,32 +470,12 @@ function LivePageClient() {
       scrollToChannel(channel);
     }, 100);
 
+    setPlaybackError(null);
+
     // 獲取節目單資訊
     const sourceForEpg = currentSourceRef.current;
-    if (channel.tvgId && sourceForEpg) {
-      try {
-        setIsEpgLoading(true); // 開始加載 EPG 資料
-        const epgParams = new URLSearchParams({
-          source: sourceForEpg.key,
-          tvgId: channel.tvgId,
-        });
-        const response = await fetch(`/api/live/epg?${epgParams.toString()}`);
-        if (response.ok) {
-          const result = await response.json();
-          if (result.success) {
-            // 清洗EPG資料，去除重疊的節目
-            const cleanedData = {
-              ...result.data,
-              programs: cleanEpgData(result.data.programs),
-            };
-            setEpgData(cleanedData);
-          }
-        }
-      } catch (error) {
-        console.error('獲取節目單資訊失敗:', error);
-      } finally {
-        setIsEpgLoading(false); // 無論成功失敗都結束加載狀態
-      }
+    if (sourceForEpg) {
+      await fetchEpg(channel, sourceForEpg);
     } else {
       // 如果沒有 tvgId 或 currentSource，清空 EPG 資料
       setEpgData(null);
@@ -628,6 +680,16 @@ function LivePageClient() {
     fetchLiveSources();
   }, []);
 
+  useEffect(() => {
+    return () => {
+      ++channelsRequestIdRef.current;
+      ++epgRequestIdRef.current;
+      ++sourceSwitchRequestIdRef.current;
+      channelsAbortRef.current?.abort();
+      epgAbortRef.current?.abort();
+    };
+  }, []);
+
   // 檢查收藏狀態
   useEffect(() => {
     if (!currentSource || !currentChannel) return;
@@ -795,18 +857,33 @@ function LivePageClient() {
     video.hls = hls;
 
     hls.on(Hls.Events.ERROR, function (event: Events.ERROR, data: ErrorData) {
+      if (video.hls !== hls) return;
       console.error('HLS Error:', event, data);
 
       if (data.fatal) {
         switch (data.type) {
           case Hls.ErrorTypes.NETWORK_ERROR:
-            hls.startLoad();
+            try {
+              hls.startLoad();
+            } catch (err) {
+              console.error('HLS 網路錯誤恢復失敗:', err);
+              setIsVideoLoading(false);
+              setPlaybackError('直播串流網路錯誤，請嘗試其他頻道');
+            }
             break;
           case Hls.ErrorTypes.MEDIA_ERROR:
-            // hls.recoverMediaError();
+            try {
+              hls.recoverMediaError();
+            } catch (err) {
+              console.error('HLS 媒體錯誤恢復失敗:', err);
+              setIsVideoLoading(false);
+              setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
+            }
             break;
           default:
             hls.destroy();
+            setIsVideoLoading(false);
+            setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
             break;
         }
       }
@@ -815,6 +892,9 @@ function LivePageClient() {
 
   // 播放器初始化
   useEffect(() => {
+    const controller = new AbortController();
+    let cancelled = false;
+
     const preload = async () => {
       if (
         !Artplayer ||
@@ -826,41 +906,47 @@ function LivePageClient() {
         return;
       }
 
-      // 銷燬之前的播放器實例並創建新的
-      if (artPlayerRef.current) {
-        cleanupPlayer();
-      }
-
-      // precheck type
-      let type = 'm3u8';
-      const liveProxyParams = new URLSearchParams({
-        url: videoUrl,
-        'moontv-source': currentSourceRef.current?.key || '',
-      });
-      const precheckUrl = `/api/live/precheck?${liveProxyParams.toString()}`;
-      const precheckResponse = await fetch(precheckUrl);
-      if (!precheckResponse.ok) {
-        console.error('預檢查失敗:', precheckResponse.statusText);
-        return;
-      }
-      const precheckResult = await precheckResponse.json();
-      if (precheckResult.success) {
-        type = precheckResult.type;
-      }
-
-      // 如果不是 m3u8 類型，設定不支持的類型並返回
-      if (type !== 'm3u8') {
-        setUnsupportedType(type);
-        setIsVideoLoading(false);
-        return;
-      }
-
-      // 重置不支持的類型
-      setUnsupportedType(null);
-
-      const customType = { m3u8: m3u8Loader };
-      const targetUrl = `/api/proxy/m3u8?${liveProxyParams.toString()}`;
       try {
+        setPlaybackError(null);
+        // precheck type
+        let type = 'm3u8';
+        const liveProxyParams = new URLSearchParams({
+          url: videoUrl,
+          'moontv-source': currentSourceRef.current?.key || '',
+        });
+        const precheckUrl = `/api/live/precheck?${liveProxyParams.toString()}`;
+        const precheckResponse = await fetch(precheckUrl, {
+          signal: controller.signal,
+        });
+        if (!precheckResponse.ok) {
+          throw new Error(`預檢查失敗: ${precheckResponse.status}`);
+        }
+        const precheckResult = await precheckResponse.json();
+        if (cancelled) return;
+        if (precheckResult.success) {
+          type = precheckResult.type;
+        }
+
+        // 如果不是 m3u8 類型，設定不支持的類型並返回
+        if (type !== 'm3u8') {
+          setUnsupportedType(type);
+          setIsVideoLoading(false);
+          return;
+        }
+
+        // 重置不支持的類型
+        setUnsupportedType(null);
+
+        const customType = { m3u8: m3u8Loader };
+        const targetUrl = `/api/proxy/m3u8?${liveProxyParams.toString()}`;
+        if (cancelled) return;
+
+        // 銷燬之前的播放器實例並創建新的。只有目前預檢仍有效時才切換，
+        // 避免較慢的舊頻道請求覆蓋使用者後來選擇的頻道。
+        if (artPlayerRef.current) {
+          cleanupPlayer();
+        }
+
         // 創建新的播放器實例
         Artplayer.USE_RAF = false;
         Artplayer.FULLSCREEN_WEB_IN_BODY = true;
@@ -910,7 +996,8 @@ function LivePageClient() {
 
         // 監聽播放器事件
         artPlayerRef.current.on('ready', () => {
-          setError(null);
+          if (cancelled) return;
+          setPlaybackError(null);
           setIsVideoLoading(false);
         });
 
@@ -932,6 +1019,10 @@ function LivePageClient() {
 
         artPlayerRef.current.on('error', (err: any) => {
           console.error('播放器錯誤:', err);
+          if (!cancelled) {
+            setIsVideoLoading(false);
+            setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
+          }
         });
 
         if (artPlayerRef.current?.video) {
@@ -941,11 +1032,17 @@ function LivePageClient() {
           );
         }
       } catch (err) {
+        if (cancelled || (err as Error)?.name === 'AbortError') return;
         console.error('創建播放器失敗:', err);
-        // 不設定錯誤，只記錄日誌
+        setIsVideoLoading(false);
+        setPlaybackError('直播源連線失敗，請檢查網路或嘗試其他頻道');
       }
     };
-    preload();
+    void preload();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
   }, [Artplayer, Hls, videoUrl, currentChannel, loading]);
 
   // 清理播放器資源
@@ -1033,10 +1130,6 @@ function LivePageClient() {
         loadingMessage={loadingMessage}
       />
     );
-  }
-
-  if (error) {
-    return <LiveErrorView error={error} />;
   }
 
   return (
@@ -1129,6 +1222,19 @@ function LivePageClient() {
 
                 {/* 影片加載蒙層 */}
                 {isVideoLoading && <LiveVideoLoadingOverlay />}
+
+                {playbackError && !isVideoLoading && (
+                  <div className='absolute inset-0 z-[550] flex items-center justify-center rounded-xl bg-black/85 px-6 text-center'>
+                    <div>
+                      <p className='text-lg font-semibold text-red-300'>
+                        {playbackError}
+                      </p>
+                      <p className='mt-2 text-sm text-zinc-300'>
+                        頻道與直播源列表仍可使用，請切換後重試
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

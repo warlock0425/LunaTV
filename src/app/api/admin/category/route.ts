@@ -2,10 +2,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { isValidApiTextParam } from '@/lib/api-input-validation';
+import {
+  isValidApiTextParam,
+  readJsonObject,
+} from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
@@ -16,11 +20,12 @@ interface BaseBody {
   action?: Action;
 }
 
+function isCategoryType(value: unknown): value is 'movie' | 'tv' {
+  return value === 'movie' || value === 'tv';
+}
+
 export async function POST(request: NextRequest) {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
@@ -31,7 +36,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as BaseBody & Record<string, any>;
+    const body = await readJsonObject<BaseBody & Record<string, any>>(request);
+    if (!body) {
+      return NextResponse.json(
+        { error: '請提供有效的 JSON 物件' },
+        { status: 400 }
+      );
+    }
     const { action } = body;
 
     const authInfo = getAuthInfoFromCookie(request);
@@ -69,6 +80,12 @@ export async function POST(request: NextRequest) {
         if (!name || !type || !query) {
           return NextResponse.json({ error: '缺少必要參數' }, { status: 400 });
         }
+        if (!isCategoryType(type)) {
+          return NextResponse.json(
+            { error: 'type 格式不合法' },
+            { status: 400 }
+          );
+        }
         if (
           !isValidApiTextParam(name, 50) ||
           !isValidApiTextParam(query, 200)
@@ -105,6 +122,11 @@ export async function POST(request: NextRequest) {
             { error: '缺少 query 或 type 參數' },
             { status: 400 }
           );
+        if (!isCategoryType(type))
+          return NextResponse.json(
+            { error: 'type 格式不合法' },
+            { status: 400 }
+          );
         if (!isValidApiTextParam(query, 200))
           return NextResponse.json(
             { error: 'query 格式不合法' },
@@ -128,6 +150,11 @@ export async function POST(request: NextRequest) {
             { error: '缺少 query 或 type 參數' },
             { status: 400 }
           );
+        if (!isCategoryType(type))
+          return NextResponse.json(
+            { error: 'type 格式不合法' },
+            { status: 400 }
+          );
         if (!isValidApiTextParam(query, 200))
           return NextResponse.json(
             { error: 'query 格式不合法' },
@@ -149,6 +176,11 @@ export async function POST(request: NextRequest) {
         if (!query || !type)
           return NextResponse.json(
             { error: '缺少 query 或 type 參數' },
+            { status: 400 }
+          );
+        if (!isCategoryType(type))
+          return NextResponse.json(
+            { error: 'type 格式不合法' },
             { status: 400 }
           );
         if (!isValidApiTextParam(query, 200))

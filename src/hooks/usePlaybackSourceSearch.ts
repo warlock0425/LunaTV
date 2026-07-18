@@ -1,4 +1,4 @@
-import { MutableRefObject, useRef, useState } from 'react';
+import { MutableRefObject, useCallback, useRef, useState } from 'react';
 
 import { logger } from '@/lib/logger';
 import { calculateSourceScore, VideoTestResult } from '@/lib/play-page-utils';
@@ -54,14 +54,14 @@ export function usePlaybackSourceSearch({
   >(new Map());
   const speedTestAbortControllerRef = useRef<AbortController | null>(null);
 
-  const abortActiveSpeedTests = () => {
+  const abortActiveSpeedTests = useCallback(() => {
     if (speedTestAbortControllerRef.current) {
       speedTestAbortControllerRef.current.abort();
     }
     const newController = new AbortController();
     speedTestAbortControllerRef.current = newController;
     return newController.signal;
-  };
+  }, []);
 
   const runWithConcurrency = async <T, R>(
     items: T[],

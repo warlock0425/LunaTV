@@ -6,6 +6,7 @@ import {
   fetchSafeRemoteUrl,
   parseSafeRemoteUrl,
   readResponseBytesWithLimit,
+  readResponseJsonWithLimit,
   readResponseTextWithLimit,
 } from './url-safety';
 
@@ -96,6 +97,24 @@ describe('url safety helpers', () => {
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
+  it.each(['fe80::1', 'fe90::1', 'fea0::1', 'febf::1'])(
+    'rejects IPv6 link-local literal %s',
+    (address) => {
+      expect(parseSafeRemoteUrl(`http://[${address}]/private`)).toBeNull();
+    }
+  );
+
+  it('rejects hostnames that resolve anywhere inside fe80::/10', async () => {
+    mockedLookup.mockResolvedValue([
+      { address: 'fe9f::1234', family: 6 },
+    ] as unknown as Awaited<ReturnType<typeof lookup>>);
+
+    await expect(
+      fetchSafeRemoteUrl('https://ipv6-link-local.example.com/private')
+    ).rejects.toThrow('Unsafe resolved remote address');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
   it('allows hostnames that resolve to public addresses', async () => {
     mockedLookup.mockResolvedValue([
       { address: '93.184.216.34', family: 4 },
@@ -179,6 +198,18 @@ describe('url safety helpers', () => {
     ).resolves.toEqual(Array.from(new TextEncoder().encode('small')));
     await expect(
       readResponseBytesWithLimit(createTextResponse('too large'), 4)
+    ).rejects.toThrow('exceeds 4 bytes');
+  });
+
+  it('parses bounded JSON and rejects oversized JSON bodies', async () => {
+    await expect(
+      readResponseJsonWithLimit<{ ok: boolean }>(
+        createTextResponse('{"ok":true}'),
+        20
+      )
+    ).resolves.toEqual({ ok: true });
+    await expect(
+      readResponseJsonWithLimit(createTextResponse('{"ok":true}'), 4)
     ).rejects.toThrow('exceeds 4 bytes');
   });
 });

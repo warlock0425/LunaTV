@@ -4,6 +4,11 @@ import { ArrowLeft, Globe, Image as ImageIcon, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import {
+  clearStreamingSearchPreference,
+  readStreamingSearchPreference,
+  writeStreamingSearchPreference,
+} from '@/lib/streaming-search-preference';
 import { useMounted } from '@/hooks/useClientMount';
 
 const DATA_PROXY_OPTIONS = [
@@ -96,7 +101,7 @@ export default function SettingsPage() {
       : true
   );
   const [streamSearch, setStreamSearch] = useState(() =>
-    isClient ? localStorage.getItem('streamingSearchOutput') !== 'false' : true
+    isClient ? readStreamingSearchPreference(localStorage, true) : true
   );
   const [iptvDirect, setIptvDirect] = useState(() =>
     isClient ? localStorage.getItem('iptvDirectConnect') === 'true' : false
@@ -146,7 +151,7 @@ export default function SettingsPage() {
     localStorage.setItem('enableOptimization', String(enableOptimization));
     localStorage.setItem('defaultAggregateSearch', String(aggregateResults));
     localStorage.removeItem('defaultAggregateResults');
-    localStorage.setItem('streamingSearchOutput', String(streamSearch));
+    writeStreamingSearchPreference(localStorage, streamSearch);
     localStorage.setItem('iptvDirectConnect', String(iptvDirect));
     showSaveMessage('設定已儲存');
   };
@@ -159,7 +164,7 @@ export default function SettingsPage() {
     localStorage.removeItem('enableOptimization');
     localStorage.removeItem('defaultAggregateSearch');
     localStorage.removeItem('defaultAggregateResults');
-    localStorage.removeItem('streamingSearchOutput');
+    clearStreamingSearchPreference(localStorage);
     localStorage.removeItem('iptvDirectConnect');
     setDoubanSource('cmliussss-cdn-tencent');
     setProxyUrl('');

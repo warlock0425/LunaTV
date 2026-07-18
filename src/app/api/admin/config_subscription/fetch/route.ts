@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { readJsonObject } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import {
   fetchSafeRemoteUrl,
@@ -28,9 +29,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { url } = await request.json();
+    const body = await readJsonObject(request);
+    if (!body) {
+      return NextResponse.json(
+        { error: '請提供有效的 JSON 物件' },
+        { status: 400 }
+      );
+    }
+    const { url } = body;
 
-    if (!url) {
+    if (typeof url !== 'string' || !url.trim()) {
       return NextResponse.json({ error: '缺少URL參數' }, { status: 400 });
     }
 
@@ -63,7 +71,7 @@ export async function POST(request: NextRequest) {
       clearTimeout(timeoutId);
     }
 
-    // 对 configContent 进行 base58 解码
+    // 對 configContent 進行 base58 解碼
     let decodedContent;
     try {
       const bs58 = (await import('bs58')).default;

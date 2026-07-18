@@ -11,6 +11,7 @@ import {
   fetchSafeRemoteUrl,
   getSafeImageContentType,
   readResponseBytesWithLimit,
+  RemoteResponseTooLargeError,
   UnsafeRemoteUrlError,
 } from '@/lib/url-safety';
 
@@ -97,10 +98,21 @@ export async function GET(request: Request) {
     if (error instanceof UnsafeRemoteUrlError) {
       return NextResponse.json({ error: 'Invalid image URL' }, { status: 400 });
     }
+    if (error instanceof RemoteResponseTooLargeError) {
+      return NextResponse.json(
+        { error: 'Image exceeds the 10 MB limit' },
+        { status: 413 }
+      );
+    }
 
     return NextResponse.json(
       { error: 'Error fetching image' },
-      { status: 500 }
+      {
+        status:
+          error instanceof DOMException && error.name === 'AbortError'
+            ? 504
+            : 500,
+      }
     );
   }
 }

@@ -2,9 +2,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  isValidApiRemoteUrl,
+  isValidApiSource,
+  isValidApiTextParam,
+  readJsonObject,
+} from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
@@ -23,11 +30,20 @@ interface BaseBody {
   action?: Action;
 }
 
+function isValidSourceKey(value: unknown): value is string {
+  return isValidApiSource(value) && !value.includes('+');
+}
+
+function isValidSourceKeyList(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((item) => isValidSourceKey(item))
+  );
+}
+
 export async function POST(request: NextRequest) {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
@@ -38,7 +54,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = (await request.json()) as BaseBody & Record<string, any>;
+    const body = await readJsonObject<BaseBody & Record<string, any>>(request);
+    if (!body) {
+      return NextResponse.json(
+        { error: '請提供有效的 JSON 物件' },
+        { status: 400 }
+      );
+    }
     const { action } = body;
 
     const authInfo = getAuthInfoFromCookie(request);
@@ -86,14 +108,27 @@ export async function POST(request: NextRequest) {
         if (!key || !name || !api) {
           return NextResponse.json({ error: '缺少必要參數' }, { status: 400 });
         }
+        if (
+          !isValidSourceKey(key) ||
+          !isValidApiTextParam(name, 200) ||
+          !isValidApiRemoteUrl(api) ||
+          (detail !== undefined &&
+            (typeof detail !== 'string' ||
+              (detail.trim() !== '' && !isValidApiRemoteUrl(detail))))
+        ) {
+          return NextResponse.json(
+            { error: '來源參數格式不合法' },
+            { status: 400 }
+          );
+        }
         if (adminConfig.SourceConfig.some((s) => s.key === key)) {
           return NextResponse.json({ error: '該源已存在' }, { status: 400 });
         }
         adminConfig.SourceConfig.push({
-          key,
-          name,
-          api,
-          detail,
+          key: key.trim(),
+          name: name.trim(),
+          api: api.trim(),
+          detail: detail?.trim() || undefined,
           from: 'custom',
           disabled: false,
         });
@@ -101,7 +136,7 @@ export async function POST(request: NextRequest) {
       }
       case 'disable': {
         const { key } = body as { key?: string };
-        if (!key)
+        if (!isValidSourceKey(key))
           return NextResponse.json({ error: '缺少 key 參數' }, { status: 400 });
         const entry = adminConfig.SourceConfig.find((s) => s.key === key);
         if (!entry)
@@ -111,7 +146,7 @@ export async function POST(request: NextRequest) {
       }
       case 'enable': {
         const { key } = body as { key?: string };
-        if (!key)
+        if (!isValidSourceKey(key))
           return NextResponse.json({ error: '缺少 key 參數' }, { status: 400 });
         const entry = adminConfig.SourceConfig.find((s) => s.key === key);
         if (!entry)
@@ -121,7 +156,7 @@ export async function POST(request: NextRequest) {
       }
       case 'delete': {
         const { key } = body as { key?: string };
-        if (!key)
+        if (!isValidSourceKey(key))
           return NextResponse.json({ error: '缺少 key 參數' }, { status: 400 });
         const idx = adminConfig.SourceConfig.findIndex((s) => s.key === key);
         if (idx === -1)
@@ -152,7 +187,7 @@ export async function POST(request: NextRequest) {
       }
       case 'batch_disable': {
         const { keys } = body as { keys?: string[] };
-        if (!Array.isArray(keys) || keys.length === 0) {
+        if (!isValidSourceKeyList(keys)) {
           return NextResponse.json(
             { error: '缺少 keys 參數或為空' },
             { status: 400 }
@@ -168,7 +203,7 @@ export async function POST(request: NextRequest) {
       }
       case 'batch_enable': {
         const { keys } = body as { keys?: string[] };
-        if (!Array.isArray(keys) || keys.length === 0) {
+        if (!isValidSourceKeyList(keys)) {
           return NextResponse.json(
             { error: '缺少 keys 參數或為空' },
             { status: 400 }
@@ -184,7 +219,7 @@ export async function POST(request: NextRequest) {
       }
       case 'batch_delete': {
         const { keys } = body as { keys?: string[] };
-        if (!Array.isArray(keys) || keys.length === 0) {
+        if (!isValidSourceKeyList(keys)) {
           return NextResponse.json(
             { error: '缺少 keys 參數或為空' },
             { status: 400 }
@@ -230,7 +265,10 @@ export async function POST(request: NextRequest) {
       }
       case 'sort': {
         const { order } = body as { order?: string[] };
-        if (!Array.isArray(order)) {
+        if (
+          !Array.isArray(order) ||
+          !order.every((item) => isValidSourceKey(item))
+        ) {
           return NextResponse.json(
             { error: '排序列表格式錯誤' },
             { status: 400 }

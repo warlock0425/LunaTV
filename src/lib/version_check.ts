@@ -23,17 +23,14 @@ const VERSION_CHECK_URLS = [
 export async function checkForUpdates(): Promise<UpdateStatus> {
   try {
     // 嘗試從主要URL獲取版本資訊
-    const primaryVersion = await fetchVersionFromUrl(VERSION_CHECK_URLS[0]);
-    if (primaryVersion) {
-      return compareVersions(primaryVersion);
+    for (const url of VERSION_CHECK_URLS) {
+      const version = await fetchVersionFromUrl(url);
+      if (version) {
+        return compareVersions(version);
+      }
     }
 
     // 如果主要URL失敗，嘗試備用URL
-    const backupVersion = await fetchVersionFromUrl(VERSION_CHECK_URLS[1]);
-    if (backupVersion) {
-      return compareVersions(backupVersion);
-    }
-
     // 如果兩個URL都失敗，返回獲取失敗狀態
     return UpdateStatus.FETCH_FAILED;
   } catch (error) {
@@ -48,10 +45,10 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
  * @returns Promise<string | null> - 版本字符串或null
  */
 async function fetchVersionFromUrl(url: string): Promise<string | null> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超時
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
 
+  try {
     // 新增時間戳參數以避免緩存
     const timestamp = Date.now();
     const urlWithTimestamp = url.includes('?')
@@ -66,8 +63,6 @@ async function fetchVersionFromUrl(url: string): Promise<string | null> {
       },
     });
 
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -77,6 +72,8 @@ async function fetchVersionFromUrl(url: string): Promise<string | null> {
   } catch (error) {
     console.warn(`從 ${url} 獲取版本資訊失敗:`, error);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

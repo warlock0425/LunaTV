@@ -6,6 +6,7 @@ import {
 } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { toSearchSimplified } from '@/lib/chinese';
+import { createLinkedAbortController } from '@/lib/concurrency';
 import { getAvailableApiSites, getConfig, getValidUser } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
@@ -44,6 +45,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       { result: null, results: [], error: '缺少必要參數: q 或 resourceId' },
       {
+        status: 400,
         headers: PRIVATE_NO_STORE_HEADERS,
       }
     );
@@ -73,22 +75,28 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    let timeoutId: NodeJS.Timeout | undefined;
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      timeoutId = setTimeout(
-        () => reject(new Error(`${targetSite.name} timeout`)),
-        6000
+    const linked = createLinkedAbortController(request.signal, 6000);
+    let results: Awaited<ReturnType<typeof searchFromApi>>;
+    try {
+      results = await searchFromApi(
+        targetSite,
+        query,
+        undefined,
+        linked.controller.signal
       );
-    });
-
-    const results = await Promise.race([
-      searchFromApi(targetSite, query).finally(() => {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
-      }),
-      timeoutPromise,
-    ]);
+      if (linked.controller.signal.aborted && !request.signal.aborted) {
+        return NextResponse.json(
+          {
+            error: `${targetSite.name} timeout`,
+            result: null,
+            results: [],
+          },
+          { status: 504, headers: PRIVATE_NO_STORE_HEADERS }
+        );
+      }
+    } finally {
+      linked.cleanup();
+    }
     const normalizedQuery = normalizeSearchOneTitle(query);
     let result = results.filter(
       (r) => normalizeSearchOneTitle(r.title) === normalizedQuery

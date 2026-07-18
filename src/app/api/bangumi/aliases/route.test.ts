@@ -92,4 +92,16 @@ describe('/api/bangumi/aliases', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ aliases: ['Fallback Alias'] });
   });
+
+  it('does not cache an empty result after a transient upstream failure', async () => {
+    mockedDb.getBangumiAliasCache.mockResolvedValueOnce(null);
+    mockedFetchAliases.mockRejectedValueOnce(new Error('temporary outage'));
+
+    const response = await GET(requestFor('777004'));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ aliases: [] });
+    expect(response.headers).toEqual({ 'Cache-Control': 'no-store' });
+    expect(mockedDb.setBangumiAliasCache).not.toHaveBeenCalled();
+  });
 });

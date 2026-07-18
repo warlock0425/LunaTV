@@ -2,7 +2,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { isValidApiSearchQuery } from '@/lib/api-input-validation';
+import {
+  isValidApiSearchQuery,
+  readJsonObject,
+} from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
@@ -75,7 +78,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json();
+    const body = await readJsonObject<{ keyword?: unknown }>(request);
+    if (!body) {
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
     if (typeof body.keyword !== 'string') {
       return NextResponse.json(
         { error: 'Keyword is required' },

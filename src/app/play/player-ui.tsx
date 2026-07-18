@@ -199,7 +199,8 @@ export function VideoDetailsPanel({
   favorited: boolean;
   onToggleFavorite: () => void;
 }) {
-  const [coverImgError, setCoverImgError] = useState(false);
+  const [failedCover, setFailedCover] = useState<string | null>(null);
+  const coverImgError = Boolean(videoCover && failedCover === videoCover);
 
   return (
     <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
@@ -269,7 +270,7 @@ export function VideoDetailsPanel({
                       img.src = getProxiedImageUrl(videoCover);
                       return;
                     }
-                    setCoverImgError(true);
+                    setFailedCover(videoCover);
                   }}
                 />
 

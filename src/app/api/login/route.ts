@@ -9,6 +9,7 @@ import {
   consumeLoginAttempt,
   getSessionVersion,
 } from '@/lib/security-store';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
@@ -17,10 +18,35 @@ const LOGIN_RATE_LIMIT_MAX = 5; // 失敗次數上限
 const LOGIN_RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 鎖定 15 分鐘
 
 // 讀取儲存類型環境變量，預設 localstorage
-const STORAGE_TYPE =
-  ((process.env.STORAGE_TYPE || process.env.NEXT_PUBLIC_STORAGE_TYPE) as
-    'localstorage' | 'redis' | 'upstash' | 'kvrocks' | undefined) ||
-  'localstorage';
+const STORAGE_TYPE = getServerStorageType();
+
+async function checkLoginRateLimit(
+  identities: string[]
+): Promise<NextResponse | null> {
+  const results = await Promise.all(
+    identities.map((identity) =>
+      consumeLoginAttempt(
+        identity,
+        LOGIN_RATE_LIMIT_MAX,
+        LOGIN_RATE_LIMIT_WINDOW_MS / 1000
+      )
+    )
+  );
+  const blocked = results.find((result) => result.blocked);
+  if (!blocked) return null;
+
+  return NextResponse.json(
+    { ok: false, error: '登入嘗試過多，請稍後再試' },
+    {
+      status: 429,
+      headers: { 'Retry-After': String(blocked.retryAfter) },
+    }
+  );
+}
+
+async function clearLoginRateLimits(identities: string[]): Promise<void> {
+  await Promise.all(identities.map((identity) => clearLoginAttempts(identity)));
+}
 
 // 生成簽名
 async function generateSignature(
@@ -81,27 +107,12 @@ async function generateAuthCookie(
 export async function POST(req: NextRequest) {
   try {
     // 速率限制檢查
-    const clientIp =
+    const clientIp = (
       req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
       req.headers.get('x-real-ip') ||
-      'unknown';
+      'unknown'
+    ).slice(0, 128);
     const isE2ETest = process.env.PASSWORD === 'e2e-test-password';
-    if (!isE2ETest) {
-      const distributedLimit = await consumeLoginAttempt(
-        clientIp,
-        LOGIN_RATE_LIMIT_MAX,
-        LOGIN_RATE_LIMIT_WINDOW_MS / 1000
-      );
-      if (distributedLimit.blocked) {
-        return NextResponse.json(
-          { ok: false, error: '登入嘗試過多，請稍後再試' },
-          {
-            status: 429,
-            headers: { 'Retry-After': String(distributedLimit.retryAfter) },
-          }
-        );
-      }
-    }
     // 本地 / localStorage 模式——僅校驗固定密碼
     if (STORAGE_TYPE === 'localstorage') {
       const envPassword = process.env.PASSWORD;
@@ -130,9 +141,27 @@ export async function POST(req: NextRequest) {
         return response;
       }
 
-      const { password } = await req.json();
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch {
+        return NextResponse.json({ error: '請求格式錯誤' }, { status: 400 });
+      }
+      const password =
+        typeof body === 'object' && body !== null && 'password' in body
+          ? (body as { password?: unknown }).password
+          : undefined;
       if (typeof password !== 'string') {
         return NextResponse.json({ error: '密碼不能為空' }, { status: 400 });
+      }
+
+      const rateLimitIdentities = [
+        ...(clientIp === 'unknown' ? [] : [`login:ip:${clientIp}`]),
+        'login:user:localstorage',
+      ];
+      if (!isE2ETest) {
+        const limited = await checkLoginRateLimit(rateLimitIdentities);
+        if (limited) return limited;
       }
 
       if (password !== envPassword) {
@@ -143,7 +172,7 @@ export async function POST(req: NextRequest) {
       }
 
       // 驗證成功，設定認證cookie (使用 hmac 簽名 'localstorage'，避免儲存明文密碼)
-      await clearLoginAttempts(clientIp);
+      await clearLoginRateLimits(rateLimitIdentities);
       const response = NextResponse.json({ ok: true });
       const timestamp = Date.now();
       const sessionVersion = await getSessionVersion('localstorage');
@@ -185,18 +214,39 @@ export async function POST(req: NextRequest) {
         secure: isProd,
       });
 
-      await clearLoginAttempts(clientIp);
       return response;
     }
 
     // 資料庫 / redis 模式——校驗使用者名並嘗試連接資料庫
-    const { username, password } = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: '請求格式錯誤' }, { status: 400 });
+    }
+    const username =
+      typeof body === 'object' && body !== null && 'username' in body
+        ? (body as { username?: unknown }).username
+        : undefined;
+    const password =
+      typeof body === 'object' && body !== null && 'password' in body
+        ? (body as { password?: unknown }).password
+        : undefined;
 
     if (!username || typeof username !== 'string') {
       return NextResponse.json({ error: '使用者名不能為空' }, { status: 400 });
     }
     if (!password || typeof password !== 'string') {
       return NextResponse.json({ error: '密碼不能為空' }, { status: 400 });
+    }
+
+    const rateLimitIdentities = [
+      ...(clientIp === 'unknown' ? [] : [`login:ip:${clientIp}`]),
+      `login:user:${username.toLowerCase().slice(0, 128)}`,
+    ];
+    if (!isE2ETest) {
+      const limited = await checkLoginRateLimit(rateLimitIdentities);
+      if (limited) return limited;
     }
 
     // 可能是站長，直接讀環境變量
@@ -238,7 +288,7 @@ export async function POST(req: NextRequest) {
         secure: isProd && !process.env.CI,
       });
 
-      await clearLoginAttempts(clientIp);
+      await clearLoginRateLimits(rateLimitIdentities);
       return response;
     } else if (username === process.env.USERNAME) {
       return NextResponse.json(
@@ -297,7 +347,7 @@ export async function POST(req: NextRequest) {
         secure: isProd && !process.env.CI,
       });
 
-      await clearLoginAttempts(clientIp);
+      await clearLoginRateLimits(rateLimitIdentities);
       return response;
     } catch (err) {
       console.error('資料庫驗證失敗', err);

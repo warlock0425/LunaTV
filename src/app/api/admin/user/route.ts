@@ -2,10 +2,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  isValidApiSource,
+  isValidApiTextParam,
+  readJsonObject,
+} from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { revokeUserSessions } from '@/lib/security-store';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
@@ -24,11 +30,19 @@ const ACTIONS = [
   'batchUpdateUserGroups',
 ] as const;
 
+function isValidApiList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => isValidApiSource(item));
+}
+
+function isValidTextList(value: unknown, maxLength = 128): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => isValidApiTextParam(item, maxLength))
+  );
+}
+
 export async function POST(request: NextRequest) {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
@@ -39,7 +53,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonObject(request);
+    if (!body) {
+      return NextResponse.json(
+        { error: '請提供有效的 JSON 物件' },
+        { status: 400 }
+      );
+    }
 
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
@@ -320,6 +340,13 @@ export async function POST(request: NextRequest) {
 
         const { enabledApis } = body as { enabledApis?: string[] };
 
+        if (enabledApis !== undefined && !isValidApiList(enabledApis)) {
+          return NextResponse.json(
+            { error: 'enabledApis 格式不合法' },
+            { status: 400 }
+          );
+        }
+
         // 權限檢查：站長可配置所有人的採集源，管理員可配置普通使用者和自己的採集源
         if (
           isTargetAdmin &&
@@ -349,6 +376,17 @@ export async function POST(request: NextRequest) {
           groupName: string;
           enabledApis?: string[];
         };
+
+        if (
+          !['add', 'edit', 'delete'].includes(groupAction) ||
+          !isValidApiTextParam(groupName, 128) ||
+          (enabledApis !== undefined && !isValidApiList(enabledApis))
+        ) {
+          return NextResponse.json(
+            { error: '使用者群組參數格式不合法' },
+            { status: 400 }
+          );
+        }
 
         if (!adminConfig.UserConfig.Tags) {
           adminConfig.UserConfig.Tags = [];
@@ -438,6 +476,13 @@ export async function POST(request: NextRequest) {
 
         const { userGroups } = body as { userGroups: string[] };
 
+        if (!isValidTextList(userGroups)) {
+          return NextResponse.json(
+            { error: 'userGroups 格式不合法' },
+            { status: 400 }
+          );
+        }
+
         // 權限檢查：站長可配置所有人的使用者群組，管理員可配置普通使用者和自己的使用者群組
         if (
           isTargetAdmin &&
@@ -466,9 +511,15 @@ export async function POST(request: NextRequest) {
           userGroups: string[];
         };
 
-        if (!usernames || !Array.isArray(usernames) || usernames.length === 0) {
+        if (!isValidTextList(usernames) || usernames.length === 0) {
           return NextResponse.json(
             { error: '缺少使用者名列表' },
+            { status: 400 }
+          );
+        }
+        if (!isValidTextList(userGroups)) {
+          return NextResponse.json(
+            { error: 'userGroups 格式不合法' },
             { status: 400 }
           );
         }

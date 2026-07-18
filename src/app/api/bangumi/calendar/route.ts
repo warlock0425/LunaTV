@@ -30,8 +30,6 @@ export async function GET() {
           'BerserkerTV/2.1.9 (+https://github.com/Berserker8888/LunaTV)',
       },
     });
-    clearTimeout(timeoutId);
-
     if (!response.ok) {
       return createCalendarResponse(calendarCache?.data || []);
     }
@@ -49,8 +47,9 @@ export async function GET() {
 
     return createCalendarResponse(filteredData);
   } catch {
-    clearTimeout(timeoutId);
     return createCalendarResponse(calendarCache?.data || []);
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

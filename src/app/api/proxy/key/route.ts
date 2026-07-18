@@ -9,13 +9,17 @@ import {
 import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { logger } from '@/lib/logger';
+import { getServerStorageType } from '@/lib/storage-runtime';
 import {
   fetchSafeRemoteUrl,
   isSafeRemoteUrl,
+  readResponseBytesWithLimit,
   UnsafeRemoteUrlError,
 } from '@/lib/url-safety';
 
 export const runtime = 'nodejs';
+const KEY_FETCH_TIMEOUT_MS = 10000;
+const MAX_KEY_BYTES = 1024 * 1024;
 
 export async function GET(request: Request) {
   // 1. 身份與權限驗證
@@ -24,10 +28,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   let isAuthorized = false;
 
   if (storageType === 'localstorage') {
@@ -75,11 +76,15 @@ export async function GET(request: Request) {
   }
 
   const config = await getConfig();
-  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
+  const liveSource = config.LiveConfig?.find(
+    (s: any) => s.key === source && !s.disabled
+  );
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }
   const ua = liveSource.ua || 'AptvPlayer/1.4.10';
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), KEY_FETCH_TIMEOUT_MS);
 
   try {
     logger.debug('Proxy key request:', url);
@@ -87,19 +92,21 @@ export async function GET(request: Request) {
       headers: {
         'User-Agent': ua,
       },
+      signal: controller.signal,
     });
     if (!response.ok) {
+      void response.body?.cancel();
       return NextResponse.json(
         { error: 'Failed to fetch key' },
         { status: 500 }
       );
     }
-    const keyData = await response.arrayBuffer();
+    const keyData = await readResponseBytesWithLimit(response, MAX_KEY_BYTES);
     return new Response(keyData, {
       headers: {
         'Content-Type': 'application/octet-stream',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Cache-Control': 'public, max-age=3600',
       },
     });
@@ -108,6 +115,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Invalid url' }, { status: 400 });
     }
 
-    return NextResponse.json({ error: 'Failed to fetch key' }, { status: 500 });
+    return NextResponse.json(
+      { error: 'Failed to fetch key' },
+      { status: controller.signal.aborted ? 504 : 500 }
+    );
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

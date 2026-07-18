@@ -59,6 +59,7 @@ function AdminPageClient() {
   // showLoading 用於控製是否在請求期間顯示整體加載骨架。
   const fetchConfig = useCallback(async (showLoading = false) => {
     try {
+      setError(null);
       if (showLoading) {
         setLoading(true);
       }
@@ -73,6 +74,7 @@ function AdminPageClient() {
       const data = (await response.json()) as AdminConfigResult;
       setConfig(data.Config);
       setRole(data.Role);
+      setError(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : '獲取配置失敗';
       showError(msg, showAlert);
@@ -142,8 +144,31 @@ function AdminPageClient() {
   }
 
   if (error) {
-    // 錯誤已通過彈窗展示，此處直接返回空
-    return null;
+    return (
+      <PageLayout activePath='/admin'>
+        <div className='flex min-h-[60vh] items-center justify-center px-4'>
+          <div className='text-center'>
+            <p className='mb-4 text-red-500'>{error}</p>
+            <button
+              type='button'
+              onClick={() => fetchConfig(true)}
+              className={buttonStyles.primary}
+            >
+              重新載入
+            </button>
+          </div>
+        </div>
+        <AlertModal
+          isOpen={alertModal.isOpen}
+          onClose={hideAlert}
+          type={alertModal.type}
+          title={alertModal.title}
+          message={alertModal.message}
+          timer={alertModal.timer}
+          showConfirm={alertModal.showConfirm}
+        />
+      </PageLayout>
+    );
   }
 
   return (

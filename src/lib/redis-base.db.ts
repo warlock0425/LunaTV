@@ -9,6 +9,24 @@ import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 
 // 搜索歷史最大條數
 const SEARCH_HISTORY_LIMIT = 20;
+const LOCK_RELEASE_RECEIPT_TTL_MS = 60_000;
+const RENEW_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+`;
+const RELEASE_LOCK_SCRIPT = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  redis.call('DEL', KEYS[1])
+  redis.call('SET', KEYS[2], ARGV[1], 'PX', ARGV[2])
+  return 1
+end
+if redis.call('GET', KEYS[2]) == ARGV[1] then
+  return 1
+end
+return 0
+`;
 
 // 數據類型轉換辅助函數
 function ensureString(value: any): string {
@@ -167,6 +185,45 @@ export abstract class BaseRedisStorage implements IStorage {
   constructor(config: RedisConnectionConfig, globalSymbol: symbol) {
     this.client = createRedisClient(config, globalSymbol);
     this.withRetry = createRetryWrapper(config.clientName, () => this.client);
+  }
+
+  async acquireLock(
+    key: string,
+    ownerToken: string,
+    ttlMs: number
+  ): Promise<boolean> {
+    const result = await this.withRetry(() =>
+      this.client.set(key, ownerToken, { NX: true, PX: ttlMs })
+    );
+    if (result === 'OK') return true;
+
+    // SET may have succeeded even if its response was lost before a retry.
+    return (await this.withRetry(() => this.client.get(key))) === ownerToken;
+  }
+
+  async renewLock(
+    key: string,
+    ownerToken: string,
+    ttlMs: number
+  ): Promise<boolean> {
+    const result = await this.withRetry(() =>
+      this.client.eval(RENEW_LOCK_SCRIPT, {
+        keys: [key],
+        arguments: [ownerToken, String(ttlMs)],
+      })
+    );
+    return Number(result) === 1;
+  }
+
+  async releaseLock(key: string, ownerToken: string): Promise<boolean> {
+    const receiptKey = `${key}:released:${ownerToken}`;
+    const result = await this.withRetry(() =>
+      this.client.eval(RELEASE_LOCK_SCRIPT, {
+        keys: [key, receiptKey],
+        arguments: [ownerToken, String(LOCK_RELEASE_RECEIPT_TTL_MS)],
+      })
+    );
+    return Number(result) === 1;
   }
 
   // ---------- 播放記錄 ----------

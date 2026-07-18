@@ -3,17 +3,16 @@
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
+import { readJsonObject } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
@@ -24,7 +23,13 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonObject(request);
+    if (!body) {
+      return NextResponse.json(
+        { error: '請提供有效的 JSON 物件' },
+        { status: 400 }
+      );
+    }
 
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
@@ -63,6 +68,9 @@ export async function POST(request: NextRequest) {
       typeof SiteName !== 'string' ||
       typeof Announcement !== 'string' ||
       typeof SearchDownstreamMaxPage !== 'number' ||
+      !Number.isInteger(SearchDownstreamMaxPage) ||
+      SearchDownstreamMaxPage < 1 ||
+      SearchDownstreamMaxPage > 20 ||
       typeof SiteInterfaceCacheTime !== 'number' ||
       typeof DoubanProxyType !== 'string' ||
       typeof DoubanProxy !== 'string' ||

@@ -2,18 +2,22 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { readJsonObject } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig, refineConfig, setCachedConfig } from '@/lib/config';
+import {
+  getConfig,
+  parseConfigFile,
+  refineConfig,
+  setCachedConfig,
+} from '@/lib/config';
 import { db } from '@/lib/db';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
@@ -42,7 +46,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 獲取請求體
-    const body = await request.json();
+    const body = await readJsonObject(request);
+    if (!body) {
+      return NextResponse.json(
+        { error: '請提供有效的 JSON 物件' },
+        { status: 400 }
+      );
+    }
     const { configFile, subscriptionUrl, autoUpdate, lastCheckTime } = body;
 
     if (!configFile || typeof configFile !== 'string') {
@@ -52,19 +62,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 驗證 JSON 格式
+    // 驗證 JSON 與執行時結構，避免把錯誤型別寫進共享設定。
     try {
-      JSON.parse(configFile);
+      parseConfigFile(configFile);
     } catch (e) {
       return NextResponse.json(
-        { error: '配置文件格式錯誤，請檢查 JSON 語法' },
+        {
+          error: '配置文件格式錯誤',
+          details: e instanceof Error ? e.message : undefined,
+        },
         { status: 400 }
       );
     }
 
-    adminConfig.ConfigFile = configFile;
-    if (!adminConfig.ConfigSubscription) {
-      adminConfig.ConfigSubscription = {
+    if (subscriptionUrl !== undefined && typeof subscriptionUrl !== 'string') {
+      return NextResponse.json({ error: '訂閱網址格式錯誤' }, { status: 400 });
+    }
+    if (autoUpdate !== undefined && typeof autoUpdate !== 'boolean') {
+      return NextResponse.json({ error: '自動更新格式錯誤' }, { status: 400 });
+    }
+    if (lastCheckTime !== undefined && typeof lastCheckTime !== 'string') {
+      return NextResponse.json({ error: '檢查時間格式錯誤' }, { status: 400 });
+    }
+
+    const nextConfig = structuredClone(adminConfig);
+    nextConfig.ConfigFile = configFile;
+    if (!nextConfig.ConfigSubscription) {
+      nextConfig.ConfigSubscription = {
         URL: '',
         AutoUpdate: false,
         LastCheck: '',
@@ -73,14 +97,14 @@ export async function POST(request: NextRequest) {
 
     // 更新訂閱配置
     if (subscriptionUrl !== undefined) {
-      adminConfig.ConfigSubscription.URL = subscriptionUrl;
+      nextConfig.ConfigSubscription.URL = subscriptionUrl;
     }
     if (autoUpdate !== undefined) {
-      adminConfig.ConfigSubscription.AutoUpdate = autoUpdate;
+      nextConfig.ConfigSubscription.AutoUpdate = autoUpdate;
     }
-    adminConfig.ConfigSubscription.LastCheck = lastCheckTime || '';
+    nextConfig.ConfigSubscription.LastCheck = lastCheckTime || '';
 
-    adminConfig = refineConfig(adminConfig);
+    adminConfig = refineConfig(nextConfig);
     // 更新配置文件
     await db.saveAdminConfig(adminConfig);
     setCachedConfig(adminConfig);

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   deleteFavorite,
@@ -35,18 +35,27 @@ export function useFavorite({
   searchTitle,
 }: UseFavoriteOptions) {
   const [favorited, setFavorited] = useState(false);
+  const favoriteMutationRef = useRef(0);
 
   // 每當 source 或 id 變化時檢查收藏狀態
   useEffect(() => {
-    if (!currentSource || !currentId) return;
+    let active = true;
+    if (!currentSource || !currentId) {
+      return () => {
+        active = false;
+      };
+    }
     (async () => {
       try {
         const fav = await isFavorited(currentSource, currentId);
-        setFavorited(fav);
+        if (active) setFavorited(fav);
       } catch (err) {
         logger.error('檢查收藏狀態失敗:', err);
       }
     })();
+    return () => {
+      active = false;
+    };
   }, [currentSource, currentId]);
 
   // 監聽收藏資料更新事件
@@ -67,38 +76,40 @@ export function useFavorite({
 
   // 切換收藏
   const handleToggleFavorite = async () => {
+    const source = currentSourceRef.current;
+    const id = currentIdRef.current;
+    const currentDetail = detailRef.current;
     const stableTitle = getStableTitle(
       videoTitleRef.current,
-      detailRef.current?.title
+      currentDetail?.title
     );
-    if (
-      !stableTitle ||
-      !detailRef.current ||
-      !currentSourceRef.current ||
-      !currentIdRef.current
-    )
-      return;
+    if (!stableTitle || !currentDetail || !source || !id) return;
+
+    const mutationId = ++favoriteMutationRef.current;
+    const canUpdateCurrentItem = () =>
+      mutationId === favoriteMutationRef.current &&
+      currentSourceRef.current === source &&
+      currentIdRef.current === id;
 
     try {
       if (favorited) {
-        await deleteFavorite(currentSourceRef.current, currentIdRef.current);
-        setFavorited(false);
+        await deleteFavorite(source, id);
+        if (canUpdateCurrentItem()) setFavorited(false);
       } else {
-        await saveFavorite(currentSourceRef.current, currentIdRef.current, {
+        await saveFavorite(source, id, {
           title: stableTitle,
-          source_name: detailRef.current?.source_name || '',
-          year: detailRef.current?.year,
+          source_name: currentDetail.source_name || '',
+          year: currentDetail.year,
           cover:
-            detailRef.current?.poster ||
+            currentDetail.poster ||
             videoCoverRef.current ||
-            getCachedDetail(currentSourceRef.current, currentIdRef.current)
-              ?.poster ||
+            getCachedDetail(source, id)?.poster ||
             '',
-          total_episodes: detailRef.current?.episodes.length || 1,
+          total_episodes: currentDetail.episodes.length || 1,
           save_time: Date.now(),
           search_title: searchTitle || stableTitle,
         });
-        setFavorited(true);
+        if (canUpdateCurrentItem()) setFavorited(true);
       }
     } catch (err) {
       logger.error('切換收藏失敗:', err);

@@ -411,8 +411,12 @@ function DoubanPageClient() {
         throw new Error(data.message || '獲取資料失敗');
       }
     } catch (err) {
-      setError((err as Error).message || '獲取資料失敗，請稍後重試');
-      setLoading(false); // 發生錯誤時總是停止loading狀態
+      // 僅在請求參數仍與當前一致時才呈現錯誤，避免過期請求覆蓋新狀態
+      const currentSnapshot = { ...currentParamsRef.current };
+      if (isSnapshotEqual(requestSnapshot, currentSnapshot)) {
+        setError((err as Error).message || '獲取資料失敗，請稍後重試');
+        setLoading(false);
+      }
     }
   }, [
     type,
@@ -551,7 +555,11 @@ function DoubanPageClient() {
         } catch (err) {
           // 忽略錯誤，加載更多失敗不影響現有資料
         } finally {
-          setIsLoadingMore(false);
+          if (
+            isSnapshotEqual(requestSnapshot, { ...currentParamsRef.current })
+          ) {
+            setIsLoadingMore(false);
+          }
         }
       };
 

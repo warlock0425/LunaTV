@@ -1,22 +1,51 @@
 import { toSearchSimplified } from './chinese';
-import type { ApiSite } from './config';
-import { searchFromApi } from './downstream';
-import { fetchSafeRemoteUrl } from './url-safety';
+import { type ApiSite, getConfig } from './config';
+import {
+  DownstreamNotFoundError,
+  DownstreamTimeoutError,
+  DownstreamUpstreamError,
+  getDetailFromApi,
+  searchFromApi,
+} from './downstream';
+import {
+  recordSourceFailure,
+  recordSourceSuccess,
+} from './source-circuit-breaker';
+import { fetchSafeRemoteUrl, readResponseJsonWithLimit } from './url-safety';
 
+jest.mock('./config', () => {
+  const actual = jest.requireActual<typeof import('./config')>('./config');
+  return { ...actual, getConfig: jest.fn() };
+});
+jest.mock('./source-circuit-breaker', () => ({
+  isSourceTripped: jest.fn(() => false),
+  recordSourceFailure: jest.fn(),
+  recordSourceSuccess: jest.fn(),
+}));
 jest.mock('./url-safety', () => ({
   fetchSafeRemoteUrl: jest.fn(),
+  readResponseJsonWithLimit: jest.fn(),
+  readResponseTextWithLimit: jest.fn(),
 }));
 
 const mockedFetchSafeRemoteUrl = fetchSafeRemoteUrl as jest.MockedFunction<
   typeof fetchSafeRemoteUrl
 >;
+const mockedReadResponseJsonWithLimit =
+  readResponseJsonWithLimit as jest.MockedFunction<
+    typeof readResponseJsonWithLimit
+  >;
+const mockedGetConfig = jest.mocked(getConfig);
+const mockedRecordSourceFailure = jest.mocked(recordSourceFailure);
+const mockedRecordSourceSuccess = jest.mocked(recordSourceSuccess);
 
 function mockSearchResponse(list: unknown[] = []) {
-  mockedFetchSafeRemoteUrl.mockResolvedValue({
+  const response = {
     ok: true,
     status: 200,
-    json: async () => ({ list, pagecount: 1 }),
-  } as Response);
+  } as Response;
+  mockedFetchSafeRemoteUrl.mockResolvedValue(response);
+  mockedReadResponseJsonWithLimit.mockResolvedValue({ list, pagecount: 1 });
 }
 
 function getCalledKeyword(callIndex = 0): string {
@@ -44,6 +73,9 @@ describe('downstream query normalization', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedGetConfig.mockResolvedValue({
+      SiteConfig: { SearchDownstreamMaxPage: 5 },
+    } as Awaited<ReturnType<typeof getConfig>>);
   });
 
   it('normalizes traditional query to simplified before calling upstream', async () => {
@@ -90,23 +122,24 @@ describe('downstream query normalization', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({ list: [], pagecount: 1 }),
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: async () => ({
-          list: [
-            {
-              vod_id: 'hit',
-              vod_name: '后备查询',
-              vod_pic: '',
-              vod_play_url: '1$https://example.test/1.m3u8',
-            },
-          ],
-          pagecount: 1,
-        }),
       } as Response);
+    mockedReadResponseJsonWithLimit
+      .mockResolvedValueOnce({ list: [], pagecount: 1 })
+      .mockResolvedValueOnce({
+        list: [
+          {
+            vod_id: 'hit',
+            vod_name: '后备查询',
+            vod_pic: '',
+            vod_play_url: '1$https://example.test/1.m3u8',
+          },
+        ],
+        pagecount: 1,
+      });
 
     const results = await searchFromApi(site, '查询', [
       '精确查询',
@@ -137,5 +170,148 @@ describe('downstream query normalization', () => {
 
     expect(results[0]?.title).toBe('\u8fdb\u51fb\u7684\u5de8\u4eba');
     expect(results[0]?.type_name).toBe('\u52a8\u6f2b');
+  });
+
+  it('records success only after an OK response has valid JSON', async () => {
+    mockedFetchSafeRemoteUrl.mockResolvedValue({
+      ok: true,
+      status: 200,
+    } as Response);
+    mockedReadResponseJsonWithLimit.mockRejectedValue(
+      new SyntaxError('invalid JSON')
+    );
+
+    await searchFromApi(site, 'invalid-json', ['invalid-json']);
+
+    expect(mockedRecordSourceSuccess).not.toHaveBeenCalled();
+    expect(mockedRecordSourceFailure).toHaveBeenCalledWith('test');
+  });
+
+  it('caps extra pages at 20 total and fetches at most four concurrently', async () => {
+    mockedGetConfig.mockResolvedValue({
+      SiteConfig: { SearchDownstreamMaxPage: 1000 },
+    } as Awaited<ReturnType<typeof getConfig>>);
+    mockedFetchSafeRemoteUrl.mockResolvedValue({
+      ok: true,
+      status: 200,
+    } as Response);
+
+    let readCall = 0;
+    let activeReads = 0;
+    let maxActiveReads = 0;
+    mockedReadResponseJsonWithLimit.mockImplementation(async () => {
+      const currentCall = readCall++;
+      if (currentCall === 0) {
+        return {
+          list: [
+            {
+              vod_id: 'hit',
+              vod_name: 'fanout-query',
+              vod_pic: '',
+              vod_play_url: '1$https://example.test/1.m3u8',
+            },
+          ],
+          pagecount: 1000,
+        };
+      }
+
+      activeReads++;
+      maxActiveReads = Math.max(maxActiveReads, activeReads);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      activeReads--;
+      return { list: [], pagecount: 1000 };
+    });
+
+    await searchFromApi(site, 'fanout-query', ['fanout-query']);
+
+    expect(mockedFetchSafeRemoteUrl).toHaveBeenCalledTimes(20);
+    expect(maxActiveReads).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('downstream detail errors', () => {
+  const site = {
+    key: 'test',
+    api: 'https://example.test/api.php/provide/vod',
+    name: 'Test',
+  } as ApiSite;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('reports an upstream 404 as not found', async () => {
+    mockedFetchSafeRemoteUrl.mockResolvedValue({
+      ok: false,
+      status: 404,
+      body: null,
+    } as Response);
+
+    await expect(getDetailFromApi(site, 'missing')).rejects.toBeInstanceOf(
+      DownstreamNotFoundError
+    );
+  });
+
+  it('reports an upstream HTTP failure separately from not found', async () => {
+    mockedFetchSafeRemoteUrl.mockResolvedValue({
+      ok: false,
+      status: 503,
+      body: null,
+    } as Response);
+
+    await expect(getDetailFromApi(site, 'unavailable')).rejects.toMatchObject({
+      name: DownstreamUpstreamError.name,
+      status: 503,
+    });
+  });
+
+  it('keeps the timeout active while the response body is being parsed', async () => {
+    jest.useFakeTimers();
+    let requestSignal: AbortSignal | null = null;
+    let markReadStarted!: () => void;
+    const readStarted = new Promise<void>((resolve) => {
+      markReadStarted = resolve;
+    });
+
+    mockedFetchSafeRemoteUrl.mockImplementation(async (_url, init) => {
+      requestSignal = init?.signal as AbortSignal;
+      return { ok: true, status: 200 } as Response;
+    });
+    mockedReadResponseJsonWithLimit.mockImplementation(
+      () =>
+        new Promise((_, reject) => {
+          markReadStarted();
+          requestSignal?.addEventListener(
+            'abort',
+            () => reject(new DOMException('Aborted', 'AbortError')),
+            { once: true }
+          );
+        })
+    );
+
+    const detailPromise = getDetailFromApi(site, 'slow-body');
+    await readStarted;
+
+    jest.advanceTimersByTime(10000);
+
+    await expect(detailPromise).rejects.toBeInstanceOf(DownstreamTimeoutError);
+  });
+
+  it('treats malformed upstream JSON as an upstream failure', async () => {
+    mockedFetchSafeRemoteUrl.mockResolvedValue({
+      ok: true,
+      status: 200,
+    } as Response);
+    mockedReadResponseJsonWithLimit.mockRejectedValue(
+      new SyntaxError('invalid JSON')
+    );
+
+    await expect(getDetailFromApi(site, 'invalid-json')).rejects.toBeInstanceOf(
+      DownstreamUpstreamError
+    );
   });
 });

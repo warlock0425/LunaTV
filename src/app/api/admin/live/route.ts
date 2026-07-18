@@ -2,12 +2,47 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import {
+  isValidApiRemoteUrl,
+  isValidApiSource,
+  isValidApiTextParam,
+  readJsonObject,
+} from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { deleteCachedLiveChannels, refreshLiveChannels } from '@/lib/live';
 
 export const runtime = 'nodejs';
+
+const LIVE_ACTIONS = [
+  'add',
+  'delete',
+  'enable',
+  'disable',
+  'edit',
+  'sort',
+] as const;
+type LiveAction = (typeof LIVE_ACTIONS)[number];
+
+function isOptionalText(
+  value: unknown,
+  maxLength: number
+): value is string | undefined {
+  return (
+    value === undefined ||
+    (typeof value === 'string' &&
+      (value.trim() === '' || isValidApiTextParam(value, maxLength)))
+  );
+}
+
+function isOptionalRemoteUrl(value: unknown): value is string | undefined {
+  return (
+    value === undefined ||
+    (typeof value === 'string' &&
+      (value.trim() === '' || isValidApiRemoteUrl(value)))
+  );
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,8 +58,50 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json();
+    const body = await readJsonObject(request);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ error: '參數格式錯誤' }, { status: 400 });
+    }
     const { action, key, name, url, ua, epg } = body;
+
+    if (
+      typeof action !== 'string' ||
+      !LIVE_ACTIONS.includes(action as LiveAction)
+    ) {
+      return NextResponse.json({ error: '未知操作' }, { status: 400 });
+    }
+
+    if (action !== 'sort' && (!isValidApiSource(key) || key.includes('+'))) {
+      return NextResponse.json({ error: 'key 格式不合法' }, { status: 400 });
+    }
+
+    if (action === 'add' || action === 'edit') {
+      if (
+        !isValidApiTextParam(name, 200) ||
+        !isValidApiRemoteUrl(url) ||
+        !isOptionalText(ua, 512) ||
+        !isOptionalRemoteUrl(epg)
+      ) {
+        return NextResponse.json(
+          { error: '直播源參數格式不合法' },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (action === 'sort') {
+      const { order } = body;
+      if (
+        !Array.isArray(order) ||
+        !order.every((item) => isValidApiSource(item)) ||
+        new Set(order).size !== order.length
+      ) {
+        return NextResponse.json(
+          { error: '排序列表格式錯誤或包含重複 key' },
+          { status: 400 }
+        );
+      }
+    }
 
     if (!config) {
       return NextResponse.json({ error: '配置不存在' }, { status: 404 });
@@ -46,11 +123,11 @@ export async function POST(request: NextRequest) {
         }
 
         const liveInfo = {
-          key: key as string,
-          name: name as string,
-          url: url as string,
-          ua: ua || '',
-          epg: epg || '',
+          key: (key as string).trim(),
+          name: (name as string).trim(),
+          url: (url as string).trim(),
+          ua: (ua as string | undefined)?.trim() || '',
+          epg: (epg as string | undefined)?.trim() || '',
           from: 'custom' as 'custom' | 'config',
           channelNumber: 0,
           disabled: false,
@@ -83,7 +160,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        deleteCachedLiveChannels(key);
+        deleteCachedLiveChannels(key as string);
 
         config.LiveConfig.splice(deleteIndex, 1);
         break;
@@ -104,6 +181,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: '直播源不存在' }, { status: 404 });
         }
         disableSource.disabled = true;
+        deleteCachedLiveChannels(key as string);
         break;
 
       case 'edit':
@@ -122,10 +200,10 @@ export async function POST(request: NextRequest) {
         }
 
         // 更新字段（除了 key 和 from）
-        editSource.name = name as string;
-        editSource.url = url as string;
-        editSource.ua = ua || '';
-        editSource.epg = epg || '';
+        editSource.name = (name as string).trim();
+        editSource.url = (url as string).trim();
+        editSource.ua = (ua as string | undefined)?.trim() || '';
+        editSource.epg = (epg as string | undefined)?.trim() || '';
 
         // 重新整理頻道數
         try {

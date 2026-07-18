@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
 import { getFreshAdminUser } from '@/lib/config';
 import { getSessionVersion } from '@/lib/security-store';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -12,10 +13,7 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
 
   if (!process.env.PASSWORD) {
     // 如果沒有設定密碼，重新導向到警告頁面
@@ -101,7 +99,7 @@ function handleAuthFailure(
 }
 
 // 判斷是否需要跳過認證的路徑
-function shouldSkipAuth(pathname: string): boolean {
+export function shouldSkipAuth(pathname: string): boolean {
   const skipPaths = [
     '/_next',
     '/favicon.ico',
@@ -110,7 +108,11 @@ function shouldSkipAuth(pathname: string): boolean {
     '/sw.js',
     '/icons/',
     '/logo.png',
-    '/screenshot.png',
+    '/offline.html',
+    '/splash/',
+    '/screenshot1.png',
+    '/screenshot2.png',
+    '/screenshot3.png',
   ];
 
   return skipPaths.some((path) => pathname.startsWith(path));

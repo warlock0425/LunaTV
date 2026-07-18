@@ -39,8 +39,8 @@ export async function GET(request: NextRequest) {
 
   // 獲取參數
   const kind = searchParams.get('kind');
-  const pageLimit = parseInt(searchParams.get('limit') || '20');
-  const pageStart = parseInt(searchParams.get('start') || '0');
+  const pageLimit = Number(searchParams.get('limit') ?? '20');
+  const pageStart = Number(searchParams.get('start') ?? '0');
   const categoryRaw = searchParams.get('category');
   const formatRaw = searchParams.get('format');
   const regionRaw = searchParams.get('region');
@@ -63,6 +63,24 @@ export async function GET(request: NextRequest) {
 
   if (!kind) {
     return NextResponse.json({ error: '缺少必要參數: kind' }, { status: 400 });
+  }
+  if (kind !== 'movie' && kind !== 'tv') {
+    return NextResponse.json(
+      { error: 'kind 參數必須是 tv 或 movie' },
+      { status: 400 }
+    );
+  }
+  if (!Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > 100) {
+    return NextResponse.json(
+      { error: 'limit 必須在 1-100 之間' },
+      { status: 400 }
+    );
+  }
+  if (!Number.isInteger(pageStart) || pageStart < 0 || pageStart > 10000) {
+    return NextResponse.json(
+      { error: 'start 必須在 0-10000 之間' },
+      { status: 400 }
+    );
   }
 
   const selectedCategories = { 类型: category } as any;

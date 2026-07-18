@@ -5,7 +5,6 @@ import {
   TransformStream,
   WritableStream,
 } from 'node:stream/web';
-import { MessageChannel, MessagePort } from 'node:worker_threads';
 
 Object.defineProperty(globalThis, 'TextDecoder', {
   configurable: true,
@@ -27,13 +26,21 @@ Object.defineProperty(globalThis, 'WritableStream', {
   configurable: true,
   value: WritableStream,
 });
-Object.defineProperty(globalThis, 'MessagePort', {
-  configurable: true,
-  value: MessagePort,
-});
+// React scheduler 只需要 postMessage/onmessage。Node 的原生 MessageChannel
+// 會留下 worker_threads handle，讓 Jest 在測試完成後無法退出。
+class TestMessageChannel {
+  constructor() {
+    this.port1 = { onmessage: null };
+    this.port2 = {
+      postMessage: (data) => {
+        setTimeout(() => this.port1.onmessage?.({ data }), 0);
+      },
+    };
+  }
+}
 Object.defineProperty(globalThis, 'MessageChannel', {
   configurable: true,
-  value: MessageChannel,
+  value: TestMessageChannel,
 });
 
 // Allow router mocks.

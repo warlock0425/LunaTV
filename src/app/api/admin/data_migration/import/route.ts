@@ -10,11 +10,13 @@ import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { isHashed } from '@/lib/password';
 import { parseStorageKey } from '@/lib/storage-key';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
 const MAX_ENCRYPTED_FILE_BYTES = 20 * 1024 * 1024;
 const MAX_DECOMPRESSED_BYTES = 50 * 1024 * 1024;
+const MAX_MULTIPART_BYTES = MAX_ENCRYPTED_FILE_BYTES + 1024 * 1024;
 
 function gunzipWithLimit(data: Buffer): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -38,15 +40,14 @@ async function restoreUserPassword(username: string, password: string) {
   const storage = (db as any).storage;
   const client = storage?.client;
   if (!client || typeof client.set !== 'function') {
-    await db.registerUser(username, password);
-    return;
+    throw new Error(`目前的儲存後端無法還原使用者 ${username} 的雜湊密碼`);
   }
 
   await client.set(`u:${username}:pwd`, password);
   if (typeof client.sAdd === 'function') {
-    await client.sAdd('users', username);
+    await client.sAdd('sys:users', username);
   } else if (typeof client.sadd === 'function') {
-    await client.sadd('users', username);
+    await client.sadd('sys:users', username);
   }
 }
 
@@ -57,6 +58,8 @@ async function backupExistingData(): Promise<{
     {
       playRecords: Record<string, any>;
       favorites: Record<string, any>;
+      searchHistory: string[];
+      skipConfigs: Record<string, any>;
       password?: string;
     }
   >;
@@ -67,37 +70,48 @@ async function backupExistingData(): Promise<{
     {
       playRecords: Record<string, any>;
       favorites: Record<string, any>;
+      searchHistory: string[];
+      skipConfigs: Record<string, any>;
       password?: string;
     }
   > = {};
 
-  const users = await db.getAllUsers();
-  if (process.env.USERNAME && !users.includes(process.env.USERNAME)) {
-    users.push(process.env.USERNAME);
-  }
+  const persistedUsers = await db.getAllUsers();
+  const configuredUsers = adminConfig.UserConfig.Users.map(
+    (user: { username: string }) => user.username
+  );
+  const users = Array.from(
+    new Set(
+      [...persistedUsers, ...configuredUsers, process.env.USERNAME].filter(
+        Boolean
+      )
+    )
+  ) as string[];
 
   for (const username of users) {
-    try {
-      const playRecords = await db.getAllPlayRecords(username);
-      const favorites = await db.getAllFavorites(username);
-      let password: string | undefined;
-      try {
-        const storageClient = (db as any).storage?.client;
-        if (storageClient && typeof storageClient.get === 'function') {
-          password =
-            (await storageClient.get(`u:${username}:pwd`)) || undefined;
-        }
-      } catch {
-        // 無法讀取密碼不中斷備份
+    const playRecords = await db.getAllPlayRecords(username);
+    const favorites = await db.getAllFavorites(username);
+    const searchHistory = await db.getSearchHistory(username);
+    const skipConfigs = await db.getAllSkipConfigs(username);
+    let password: string | undefined;
+    if (username !== process.env.USERNAME) {
+      const storageClient = (db as any).storage?.client;
+      if (!storageClient || typeof storageClient.get !== 'function') {
+        throw new Error(`無法備份使用者 ${username} 的登入資料`);
       }
-      userBackups[username] = {
-        playRecords,
-        favorites,
-        ...(password ? { password } : {}),
-      };
-    } catch {
-      // 備份單個使用者失敗不中斷整體
+      const storedPassword = await storageClient.get(`u:${username}:pwd`);
+      if (!storedPassword) {
+        throw new Error(`無法備份使用者 ${username} 的登入資料`);
+      }
+      password = String(storedPassword);
     }
+    userBackups[username] = {
+      playRecords,
+      favorites,
+      searchHistory,
+      skipConfigs,
+      ...(password ? { password } : {}),
+    };
   }
 
   return { adminConfig, userBackups };
@@ -110,6 +124,8 @@ async function restoreBackup(backup: {
     {
       playRecords: Record<string, any>;
       favorites: Record<string, any>;
+      searchHistory: string[];
+      skipConfigs: Record<string, any>;
       password?: string;
     }
   >;
@@ -127,16 +143,34 @@ async function restoreBackup(backup: {
     for (const [key, favorite] of Object.entries(userData.favorites)) {
       await (db as any).storage.setFavorite(username, key, favorite);
     }
+    for (const keyword of [...userData.searchHistory].reverse()) {
+      await db.addSearchHistory(username, keyword);
+    }
+    for (const [key, skipConfig] of Object.entries(userData.skipConfigs)) {
+      const parsedKey = parseStorageKey(key);
+      if (parsedKey) {
+        await db.setSkipConfig(
+          username,
+          parsedKey.source,
+          parsedKey.id,
+          skipConfig as any
+        );
+      }
+    }
   }
+}
+
+async function clearDataForUsers(usernames: Iterable<string>): Promise<void> {
+  for (const username of new Set(Array.from(usernames).filter(Boolean))) {
+    await db.deleteUser(username);
+  }
+  await db.clearAllData();
 }
 
 export async function POST(req: NextRequest) {
   try {
     // 檢查存儲類型
-    const storageType =
-      process.env.STORAGE_TYPE ||
-      process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-      'localstorage';
+    const storageType = getServerStorageType();
     if (storageType === 'localstorage') {
       return NextResponse.json(
         { error: '不支持本地存儲進行數據遷移' },
@@ -155,6 +189,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: '權限不足，只有站長可以導入數據' },
         { status: 401 }
+      );
+    }
+
+    const contentLength = Number(req.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_BYTES) {
+      return NextResponse.json(
+        { error: '備份文件過大，最大允許 20 MB' },
+        { status: 413 }
       );
     }
 
@@ -259,22 +301,94 @@ export async function POST(req: NextRequest) {
       serverVersion?: string;
     };
 
+    if (
+      typeof validImportData.data.adminConfig !== 'object' ||
+      validImportData.data.adminConfig === null ||
+      Array.isArray(validImportData.data.adminConfig) ||
+      typeof validImportData.data.adminConfig.SiteConfig !== 'object' ||
+      validImportData.data.adminConfig.SiteConfig === null ||
+      typeof validImportData.data.adminConfig.UserConfig !== 'object' ||
+      validImportData.data.adminConfig.UserConfig === null ||
+      !Array.isArray(validImportData.data.adminConfig.UserConfig.Users) ||
+      !Array.isArray(validImportData.data.adminConfig.SourceConfig) ||
+      !Array.isArray(validImportData.data.adminConfig.CustomCategories) ||
+      (validImportData.data.adminConfig.LiveConfig !== undefined &&
+        !Array.isArray(validImportData.data.adminConfig.LiveConfig)) ||
+      typeof validImportData.data.userData !== 'object' ||
+      validImportData.data.userData === null ||
+      Array.isArray(validImportData.data.userData)
+    ) {
+      return NextResponse.json({ error: '備份文件格式無效' }, { status: 400 });
+    }
+
+    let importedAdminConfig: AdminConfig;
+    try {
+      importedAdminConfig = configSelfCheck(validImportData.data.adminConfig);
+    } catch {
+      return NextResponse.json(
+        { error: '備份文件中的管理設定無效' },
+        { status: 400 }
+      );
+    }
+
+    const userData = validImportData.data.userData;
+    const ownerUsername = process.env.USERNAME;
+    const configuredUsers = new Set(
+      importedAdminConfig.UserConfig.Users.map((user) => user.username)
+    );
+
+    for (const [username, rawUser] of Object.entries(userData)) {
+      if (
+        !username.trim() ||
+        typeof rawUser !== 'object' ||
+        rawUser === null ||
+        Array.isArray(rawUser)
+      ) {
+        return NextResponse.json(
+          { error: '備份文件中的使用者資料無效' },
+          { status: 400 }
+        );
+      }
+      if (
+        username !== ownerUsername &&
+        (typeof rawUser.password !== 'string' || !rawUser.password)
+      ) {
+        return NextResponse.json(
+          { error: `使用者 ${username} 缺少登入資料` },
+          { status: 400 }
+        );
+      }
+      if (username !== ownerUsername && !configuredUsers.has(username)) {
+        importedAdminConfig.UserConfig.Users.push({
+          username,
+          role: 'user',
+          banned: false,
+        });
+        configuredUsers.add(username);
+      }
+    }
+
+    for (const username of configuredUsers) {
+      if (username === ownerUsername) continue;
+      const user = userData[username];
+      if (!user || typeof user.password !== 'string' || !user.password) {
+        return NextResponse.json(
+          { error: `使用者 ${username} 缺少登入資料` },
+          { status: 400 }
+        );
+      }
+    }
+
     // 備份現有資料，以便匯入失敗時回滾
     const backup = await backupExistingData();
 
-    // 開始導入數據 - 先清空現有數據
-    await db.clearAllData();
-
-    // 導入管理員配置
-    validImportData.data.adminConfig = configSelfCheck(
-      validImportData.data.adminConfig
-    );
-    await db.saveAdminConfig(validImportData.data.adminConfig);
-    await setCachedConfig(validImportData.data.adminConfig);
-
-    // 導入使用者數據
-    const userData = validImportData.data.userData;
     try {
+      // 所有可能失敗的破壞性步驟都必須位於同一個回滾邊界內。
+      await clearDataForUsers(Object.keys(backup.userBackups));
+      await db.saveAdminConfig(importedAdminConfig);
+      await setCachedConfig(importedAdminConfig);
+
+      // 導入使用者數據
       for (const username in userData) {
         const user = userData[username];
 
@@ -324,7 +438,11 @@ export async function POST(req: NextRequest) {
       // 匯入中途失敗，嘗試還原備份
       console.error('數據導入中途失敗，嘗試還原備份:', importErr);
       try {
-        await db.clearAllData();
+        await clearDataForUsers([
+          ...Object.keys(backup.userBackups),
+          ...Object.keys(userData),
+          ...importedAdminConfig.UserConfig.Users.map((user) => user.username),
+        ]);
         await restoreBackup(backup);
         console.error('備份已成功還原');
         return NextResponse.json(

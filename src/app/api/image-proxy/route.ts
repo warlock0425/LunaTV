@@ -4,44 +4,14 @@ import {
   fetchSafeRemoteUrl,
   getSafeImageContentType,
   isSafeRemoteUrl,
+  readResponseBytesWithLimit,
+  RemoteResponseTooLargeError,
   UnsafeRemoteUrlError,
 } from '@/lib/url-safety';
 
 export const runtime = 'nodejs';
 const IMAGE_PROXY_TIMEOUT_MS = 15_000;
 const IMAGE_PROXY_MAX_BYTES = 20 * 1024 * 1024;
-
-function limitStreamSize(
-  body: ReadableStream<Uint8Array>,
-  maxBytes: number
-): ReadableStream<Uint8Array> {
-  const reader = body.getReader();
-  let received = 0;
-
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const { done, value } = await reader.read();
-        if (done) {
-          controller.close();
-          return;
-        }
-        received += value.byteLength;
-        if (received > maxBytes) {
-          await reader.cancel('Image size limit exceeded');
-          controller.error(new Error('Image size limit exceeded'));
-          return;
-        }
-        controller.enqueue(value);
-      } catch (error) {
-        controller.error(error);
-      }
-    },
-    async cancel(reason) {
-      await reader.cancel(reason);
-    },
-  });
-}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -55,12 +25,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Invalid image URL' }, { status: 400 });
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    IMAGE_PROXY_TIMEOUT_MS
+  );
+
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      IMAGE_PROXY_TIMEOUT_MS
-    );
     const reqHeaders: Record<string, string> = {
       'User-Agent':
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
@@ -85,15 +56,10 @@ export async function GET(request: Request) {
     // 「空 Referer 放行、外站 Referer 阻擋」，帶圖床自身 origin
     // 反而可能不在白名單而被擋。
 
-    let imageResponse: Response;
-    try {
-      imageResponse = await fetchSafeRemoteUrl(imageUrl, {
-        headers: reqHeaders,
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+    const imageResponse = await fetchSafeRemoteUrl(imageUrl, {
+      headers: reqHeaders,
+      signal: controller.signal,
+    });
 
     if (!imageResponse.ok) {
       return NextResponse.json(
@@ -125,12 +91,10 @@ export async function GET(request: Request) {
       );
     }
 
-    if (!imageResponse.body) {
-      return NextResponse.json(
-        { error: 'Image response has no body' },
-        { status: 500 }
-      );
-    }
+    const imageData = await readResponseBytesWithLimit(
+      imageResponse,
+      IMAGE_PROXY_MAX_BYTES
+    );
 
     const headers = new Headers();
     headers.set('Content-Type', contentType);
@@ -141,21 +105,23 @@ export async function GET(request: Request) {
     headers.set('Vercel-CDN-Cache-Control', 'public, s-maxage=15720000');
     headers.set('Netlify-Vary', 'query');
 
-    return new Response(
-      limitStreamSize(imageResponse.body, IMAGE_PROXY_MAX_BYTES),
-      {
-        status: 200,
-        headers,
-      }
-    );
+    return new Response(imageData, { status: 200, headers });
   } catch (error) {
     if (error instanceof UnsafeRemoteUrlError) {
       return NextResponse.json({ error: 'Invalid image URL' }, { status: 400 });
     }
+    if (error instanceof RemoteResponseTooLargeError) {
+      return NextResponse.json(
+        { error: 'Image exceeds the 20 MB limit' },
+        { status: 413 }
+      );
+    }
 
     return NextResponse.json(
       { error: 'Error fetching image' },
-      { status: 500 }
+      { status: controller.signal.aborted ? 504 : 500 }
     );
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

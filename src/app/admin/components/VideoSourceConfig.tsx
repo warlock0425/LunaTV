@@ -376,19 +376,18 @@ export const VideoSourceConfig = ({
         // 設定超時，防止長時間等待
         validationTimeoutRef.current = setTimeout(() => {
           if (!isMountedRef.current) return;
-          if (eventSource.readyState === EventSource.OPEN) {
-            eventSource.close();
-            if (eventSourceRef.current === eventSource) {
-              eventSourceRef.current = null;
-            }
-            validationTimeoutRef.current = null;
-            setIsValidating(false);
-            showAlert({
-              type: 'warning',
-              title: '驗證超時',
-              message: '檢測超時，請重試',
-            });
-          }
+          if (eventSourceRef.current !== eventSource) return;
+
+          // CONNECTING 也可能永久沒有回應，超時時一律結束目前請求。
+          eventSource.close();
+          eventSourceRef.current = null;
+          validationTimeoutRef.current = null;
+          setIsValidating(false);
+          showAlert({
+            type: 'warning',
+            title: '驗證超時',
+            message: '檢測超時，請重試',
+          });
         }, 60000); // 60秒超時
       } catch (error) {
         if (!isMountedRef.current) return;

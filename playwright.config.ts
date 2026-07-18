@@ -17,8 +17,10 @@ const standaloneCommand = [
   '&& node .next/standalone/server.js',
 ].join('');
 
-const devCommand =
-  'pnpm gen:manifest && pnpm exec next dev --webpack -H 127.0.0.1 -p 3100';
+// Windows build 不使用 standalone 輸出，但 test:e2e 已先執行 next build，
+// 因此直接啟動 production server，避免 dev 首次編譯造成平行測試逾時／重載。
+const standardCommand =
+  'node node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3100';
 
 export default defineConfig({
   testDir: './e2e',
@@ -35,15 +37,16 @@ export default defineConfig({
     { name: 'mobile-chromium', use: { ...devices['Pixel 5'] } },
   ],
   webServer: {
-    command: isStandalone ? standaloneCommand : devCommand,
+    command: isStandalone ? standaloneCommand : standardCommand,
     url: 'http://127.0.0.1:3100/login',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
       ...process.env,
-      ...(isStandalone
-        ? { PORT: '3100', HOSTNAME: '127.0.0.1' }
-        : {}),
+      // E2E server 使用本機 HTTP；避免 production 模式寫入 Secure cookie
+      // 後 APIRequestContext 無法在 HTTP 請求中帶回 session。
+      CI: process.env.CI || 'true',
+      ...(isStandalone ? { PORT: '3100', HOSTNAME: '127.0.0.1' } : {}),
       USERNAME: process.env.USERNAME || 'e2e-test-admin',
       PASSWORD: 'e2e-test-password',
       NEXT_PUBLIC_STORAGE_TYPE: 'localstorage',

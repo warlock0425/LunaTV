@@ -5,6 +5,7 @@ import './globals.css';
 
 import { getConfig } from '@/lib/config';
 import { serializeForInlineScript } from '@/lib/safe-json';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { PwaRegister } from '../components/PwaRegister';
@@ -38,10 +39,7 @@ export const dynamic = 'force-dynamic';
 
 // 動態生成 metadata，支持配置更新後的標題變化
 export async function generateMetadata(): Promise<Metadata> {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
   const config = await getConfig();
   let siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'BerserkerTV';
   if (storageType !== 'localstorage') {
@@ -75,10 +73,7 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
 
   let siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'BerserkerTV';
   let announcement =

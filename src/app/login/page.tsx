@@ -10,6 +10,8 @@ import { useClientValue, useMounted } from '@/hooks/useClientMount';
 
 import { useSite } from '@/components/SiteProvider';
 
+import { getSafeLoginRedirect } from './login-redirect';
+
 function VersionDisplay() {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
   const [isChecking, setIsChecking] = useState(true);
@@ -106,7 +108,7 @@ function LoginPageClient() {
       });
 
       if (res.ok) {
-        const redirect = searchParams.get('redirect') || '/';
+        const redirect = getSafeLoginRedirect(searchParams.get('redirect'));
         router.replace(redirect);
       } else if (res.status === 401) {
         setError('密碼錯誤');

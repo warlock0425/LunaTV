@@ -19,5 +19,7 @@ export async function GET(request: NextRequest) {
     StorageMessage: storageStatus.message,
     Version: CURRENT_VERSION,
   };
-  return NextResponse.json(result);
+  return NextResponse.json(result, {
+    status: storageStatus.configured ? 200 : 503,
+  });
 }

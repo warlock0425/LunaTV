@@ -4,6 +4,13 @@ import { Agent } from 'undici';
 
 import { setBoundedMapValue } from './bounded-map';
 
+export {
+  readResponseBytesWithLimit,
+  readResponseJsonWithLimit,
+  readResponseTextWithLimit,
+  RemoteResponseTooLargeError,
+} from './response-limit';
+
 const PRIVATE_HOST_PATTERNS = [
   /^localhost$/i,
   /^0\.0\.0\.0$/,
@@ -15,7 +22,7 @@ const PRIVATE_HOST_PATTERNS = [
   /^::1$/,
   /^fc00:/i,
   /^fd00:/i,
-  /^fe80:/i,
+  /^fe[89ab][0-9a-f]:/i,
 ];
 const DNS_SAFETY_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_DNS_SAFETY_CACHE_ENTRIES = 1000;
@@ -81,7 +88,7 @@ function isPrivateResolvedAddress(address: string): boolean {
       normalized === '::1' ||
       normalized.startsWith('fc') ||
       normalized.startsWith('fd') ||
-      normalized.startsWith('fe80:')
+      /^fe[89ab][0-9a-f]:/i.test(normalized)
     );
   }
 
@@ -249,82 +256,6 @@ export async function fetchSafeRemoteUrl(
   }
 
   throw new UnsafeRemoteUrlError('Too many redirects');
-}
-
-export async function readResponseTextWithLimit(
-  response: Response,
-  maxBytes: number
-): Promise<string> {
-  if (!Number.isFinite(maxBytes) || maxBytes < 1) {
-    throw new Error('maxBytes must be a positive number');
-  }
-
-  const contentLength = Number(response.headers.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    response.body?.cancel();
-    throw new Error(`Remote response exceeds ${maxBytes} bytes`);
-  }
-
-  if (!response.body) return '';
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let totalBytes = 0;
-  let text = '';
-
-  let streamComplete = false;
-  while (!streamComplete) {
-    const { done, value } = await reader.read();
-    streamComplete = done;
-    if (streamComplete || !value) continue;
-    totalBytes += value.byteLength;
-    if (totalBytes > maxBytes) {
-      await reader.cancel();
-      throw new Error(`Remote response exceeds ${maxBytes} bytes`);
-    }
-    text += decoder.decode(value, { stream: true });
-  }
-
-  return text + decoder.decode();
-}
-
-export async function readResponseBytesWithLimit(
-  response: Response,
-  maxBytes: number
-): Promise<Uint8Array<ArrayBuffer>> {
-  if (!Number.isFinite(maxBytes) || maxBytes < 1) {
-    throw new Error('maxBytes must be a positive number');
-  }
-  const contentLength = Number(response.headers.get('content-length'));
-  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
-    response.body?.cancel();
-    throw new Error(`Remote response exceeds ${maxBytes} bytes`);
-  }
-  if (!response.body) return new Uint8Array();
-
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalBytes = 0;
-  let streamComplete = false;
-  while (!streamComplete) {
-    const { done, value } = await reader.read();
-    streamComplete = done;
-    if (streamComplete || !value) continue;
-    totalBytes += value.byteLength;
-    if (totalBytes > maxBytes) {
-      await reader.cancel();
-      throw new Error(`Remote response exceeds ${maxBytes} bytes`);
-    }
-    chunks.push(value);
-  }
-
-  const result = new Uint8Array(totalBytes);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return result;
 }
 
 export function getSafeImageContentType(

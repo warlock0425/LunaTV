@@ -2,12 +2,10 @@ import { Redis as UpstashRedis } from '@upstash/redis';
 import { createClient, RedisClientType } from 'redis';
 
 import { pruneExpiredMapValues, setBoundedMapValue } from './bounded-map';
+import { logger } from './logger';
+import { getServerStorageType } from './storage-runtime';
 
-type StorageType = 'localstorage' | 'redis' | 'kvrocks' | 'upstash';
-
-const storageType = (process.env.STORAGE_TYPE ||
-  process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-  'localstorage') as StorageType;
+const storageType = getServerStorageType();
 
 let redisClientPromise: Promise<RedisClientType> | null = null;
 let upstashClient: UpstashRedis | null = null;
@@ -22,6 +20,15 @@ if not current then
 end
 return redis.call('INCR', KEYS[1])
 `;
+const CONSUME_LOGIN_ATTEMPT_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+local ttl = redis.call('TTL', KEYS[1])
+if ttl < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+end
+return {count, ttl}
+`;
 
 function getRedisUrl(): string | null {
   return storageType === 'kvrocks'
@@ -34,6 +41,9 @@ async function getRedisClient(): Promise<RedisClientType | null> {
   if (!url || !['redis', 'kvrocks'].includes(storageType)) return null;
   if (!redisClientPromise) {
     const client = createClient({ url }) as RedisClientType;
+    client.on('error', (error) => {
+      logger.error('Security Redis client error:', error);
+    });
     redisClientPromise = client
       .connect()
       .then(() => client)
@@ -103,16 +113,23 @@ export async function consumeLoginAttempt(
   const key = `security:login:${identity}`;
   const upstash = getUpstashClient();
   if (upstash) {
-    const count = Number(await upstash.incr(key));
-    if (count === 1) await upstash.expire(key, windowSeconds);
-    const ttl = Math.max(1, Number(await upstash.ttl(key)));
+    const [rawCount, rawTtl] = (await upstash.eval(
+      CONSUME_LOGIN_ATTEMPT_SCRIPT,
+      [key],
+      [String(windowSeconds)]
+    )) as [number, number];
+    const count = Number(rawCount);
+    const ttl = Math.max(1, Number(rawTtl));
     return { blocked: count > limit, retryAfter: ttl };
   }
   const redis = await getRedisClient();
   if (redis) {
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, windowSeconds);
-    const ttl = Math.max(1, await redis.ttl(key));
+    const [rawCount, rawTtl] = (await redis.eval(CONSUME_LOGIN_ATTEMPT_SCRIPT, {
+      keys: [key],
+      arguments: [String(windowSeconds)],
+    })) as [number, number];
+    const count = Number(rawCount);
+    const ttl = Math.max(1, Number(rawTtl));
     return { blocked: count > limit, retryAfter: ttl };
   }
 

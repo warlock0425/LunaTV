@@ -220,6 +220,7 @@ function PlayPageClient() {
   const autoNextBusyRef = useRef(false);
   const bangumiSearchAliasesRef = useRef<string[]>([]);
   const detailRetryKeyRef = useRef<string | null>(null);
+  const sourceChangeRequestRef = useRef(0);
 
   // 收藏邏輯（useFavorite hook）
   const { favorited, handleToggleFavorite } = useFavorite({
@@ -1033,6 +1034,8 @@ function PlayPageClient() {
     newId: string,
     newTitle: string
   ) => {
+    const requestId = ++sourceChangeRequestRef.current;
+    const isLatestRequest = () => sourceChangeRequestRef.current === requestId;
     try {
       // 顯示換源加載狀態
       setVideoLoadingStage('sourceChanging');
@@ -1044,8 +1047,10 @@ function PlayPageClient() {
         (source) => source.source === newSource && source.id === newId
       );
       if (!targetDetail) {
-        setError('未找到匹配結果');
-        setIsVideoLoading(false);
+        if (isLatestRequest()) {
+          setError('未找到匹配結果');
+          setIsVideoLoading(false);
+        }
         return;
       }
       logger.debug('換源前當前播放時間:', currentPlayTime);
@@ -1069,6 +1074,8 @@ function PlayPageClient() {
           logger.error('清除播放記錄失敗:', err);
         }
       }
+
+      if (!isLatestRequest()) return;
 
       const newDetail = targetDetail;
 
@@ -1128,6 +1135,7 @@ function PlayPageClient() {
           if (!freshDetail?.episodes?.length) return;
           // 期間使用者可能又換了源，確認仍停留在本源才套用刷新結果
           if (
+            !isLatestRequest() ||
             currentSourceRef.current !== newSource ||
             currentIdRef.current !== newId
           ) {
@@ -1154,6 +1162,7 @@ function PlayPageClient() {
         }
       })();
     } catch (err) {
+      if (!isLatestRequest()) return;
       // 隱藏換源加載狀態
       setIsVideoLoading(false);
       setError(err instanceof Error ? err.message : '換源失敗');
@@ -1540,15 +1549,17 @@ function PlayPageClient() {
 
       // 監聽影片可播放事件，這時恢復播放進度更可靠
       artPlayerRef.current.on('video:canplay', () => {
+        const player = artPlayerRef.current;
+        if (!player) return;
         // 若存在需要恢復的播放進度，則跳轉
         if (resumeTimeRef.current && resumeTimeRef.current > 0) {
           try {
-            const duration = artPlayerRef.current.duration || 0;
+            const duration = player.duration || 0;
             let target = resumeTimeRef.current;
             if (duration && target >= duration - 2) {
               target = Math.max(0, duration - 5);
             }
-            artPlayerRef.current.currentTime = target;
+            player.currentTime = target;
             logger.debug('成功恢復播放進度到:', resumeTimeRef.current);
             // seek 完成後手動恢復播放（autoplay 已關閉避免 0:00 閃爍）
             setTimeout(() => {
@@ -1565,19 +1576,18 @@ function PlayPageClient() {
         resumeTimeRef.current = null;
 
         setTimeout(() => {
-          if (
-            Math.abs(artPlayerRef.current.volume - lastVolumeRef.current) > 0.01
-          ) {
-            artPlayerRef.current.volume = lastVolumeRef.current;
+          const currentPlayer = artPlayerRef.current;
+          if (!currentPlayer) return;
+          if (Math.abs(currentPlayer.volume - lastVolumeRef.current) > 0.01) {
+            currentPlayer.volume = lastVolumeRef.current;
           }
           if (
-            Math.abs(
-              artPlayerRef.current.playbackRate - lastPlaybackRateRef.current
-            ) > 0.01
+            Math.abs(currentPlayer.playbackRate - lastPlaybackRateRef.current) >
+            0.01
           ) {
-            artPlayerRef.current.playbackRate = lastPlaybackRateRef.current;
+            currentPlayer.playbackRate = lastPlaybackRateRef.current;
           }
-          artPlayerRef.current.notice.show = '';
+          currentPlayer.notice.show = '';
         }, 0);
 
         // 隱藏換源加載狀態
@@ -1663,6 +1673,13 @@ function PlayPageClient() {
               throw new Error(`detail refresh failed: ${response.status}`);
             }
             const freshDetail = (await response.json()) as SearchResult;
+            if (
+              currentSourceRef.current !== source ||
+              currentIdRef.current !== id ||
+              currentEpisodeIndexRef.current !== episodeIndex
+            ) {
+              return;
+            }
             setCachedDetail(source, id, freshDetail);
             setDetail(freshDetail);
             setVideoYear(freshDetail.year);

@@ -15,6 +15,7 @@ import React, {
 import { cleanQueryForApi } from '@/lib/chinese';
 import { addSearchHistory } from '@/lib/db.client';
 import { isFuzzyMatch } from '@/lib/searchEngine';
+import { readStreamingSearchPreference } from '@/lib/streaming-search-preference';
 import { SearchResult } from '@/lib/types';
 import { useClientValue } from '@/hooks/useClientMount';
 
@@ -28,12 +29,6 @@ import SearchResultFilter, {
 import SearchSuggestions from '@/components/SearchSuggestions';
 import VideoCard, { VideoCardHandle } from '@/components/VideoCard';
 import VirtualGrid from '@/components/VirtualGrid';
-
-function parseStoredBoolean(value: string | null, fallback: boolean): boolean {
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return fallback;
-}
 
 function SearchPageClient() {
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -57,9 +52,8 @@ function SearchPageClient() {
   const flushTimerRef = useRef<number | null>(null);
   // 流式搜尋偏好：初始值由瀏覽器端讀取，之後每次搜尋重讀時可覆寫
   const initialFluidSearch = useClientValue(() => {
-    const savedFluidSearch = localStorage.getItem('fluidSearch');
     const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
-    return parseStoredBoolean(savedFluidSearch, defaultFluidSearch);
+    return readStreamingSearchPreference(localStorage, defaultFluidSearch);
   }, true);
   const [fluidOverride, setFluidOverride] = useState<boolean | null>(null);
   const useFluidSearch = fluidOverride ?? initialFluidSearch;
@@ -462,11 +456,10 @@ function SearchPageClient() {
       const trimmed = query.trim();
       let currentFluidSearch = useFluidSearch;
       if (typeof window !== 'undefined') {
-        const savedFluidSearch = localStorage.getItem('fluidSearch');
         const defaultFluidSearch =
           window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
-        currentFluidSearch = parseStoredBoolean(
-          savedFluidSearch,
+        currentFluidSearch = readStreamingSearchPreference(
+          localStorage,
           defaultFluidSearch
         );
       }
@@ -485,7 +478,12 @@ function SearchPageClient() {
 
         let closed = false;
         es.onmessage = (event) => {
-          if (closed) return;
+          if (
+            closed ||
+            eventSourceRef.current !== es ||
+            currentQueryRef.current !== trimmed
+          )
+            return;
           if (!event.data) return;
           try {
             const payload = JSON.parse(event.data);
@@ -512,7 +510,15 @@ function SearchPageClient() {
                       : (payload.results as SearchResult[]);
                   pendingResultsRef.current.push(...incoming);
                   if (!flushTimerRef.current) {
-                    flushTimerRef.current = window.setTimeout(() => {
+                    const timerId = window.setTimeout(() => {
+                      if (
+                        flushTimerRef.current !== timerId ||
+                        closed ||
+                        eventSourceRef.current !== es ||
+                        currentQueryRef.current !== trimmed
+                      ) {
+                        return;
+                      }
                       const toAppend = pendingResultsRef.current;
                       pendingResultsRef.current = [];
                       startTransition(() => {
@@ -520,6 +526,7 @@ function SearchPageClient() {
                       });
                       flushTimerRef.current = null;
                     }, 80);
+                    flushTimerRef.current = timerId;
                   }
                 }
                 break;
@@ -554,6 +561,12 @@ function SearchPageClient() {
         };
 
         es.onerror = () => {
+          if (
+            closed ||
+            eventSourceRef.current !== es ||
+            currentQueryRef.current !== trimmed
+          )
+            return;
           closed = true;
           setIsLoading(false);
           if (pendingResultsRef.current.length > 0) {
@@ -604,7 +617,11 @@ function SearchPageClient() {
             setIsLoading(false);
           })
           .catch(() => {
-            if (!controller.signal.aborted) {
+            if (
+              !controller.signal.aborted &&
+              searchAbortRef.current === controller &&
+              currentQueryRef.current === trimmedQuery
+            ) {
               setIsLoading(false);
             }
           })

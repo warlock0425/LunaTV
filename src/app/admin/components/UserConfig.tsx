@@ -261,12 +261,13 @@ export const UserConfig = ({
   const handleAddUser = async () => {
     if (!newUser.username || !newUser.password) return;
     await withLoading('addUser', async () => {
-      await handleUserAction(
+      const succeeded = await handleUserAction(
         'add',
         newUser.username,
         newUser.password,
         newUser.userGroup
       );
+      if (!succeeded) return;
       setNewUser({ username: '', password: '', userGroup: '' });
       setShowAddUserForm(false);
     });
@@ -277,11 +278,12 @@ export const UserConfig = ({
     await withLoading(
       `changePassword_${changePasswordUser.username}`,
       async () => {
-        await handleUserAction(
+        const succeeded = await handleUserAction(
           'changePassword',
           changePasswordUser.username,
           changePasswordUser.password
         );
+        if (!succeeded) return;
         setChangePasswordUser({ username: '', password: '' });
         setShowChangePasswordForm(false);
       }
@@ -456,7 +458,7 @@ export const UserConfig = ({
     targetUsername: string,
     targetPassword?: string,
     userGroup?: string
-  ) => {
+  ): Promise<boolean> => {
     try {
       const res = await fetch('/api/admin/user', {
         method: 'POST',
@@ -476,8 +478,10 @@ export const UserConfig = ({
 
       // 成功後重新整理配置（無需整頁重新整理）
       await refreshConfig();
+      return true;
     } catch (err) {
       showError(err instanceof Error ? err.message : '操作失敗', showAlert);
+      return false;
     }
   };
 
@@ -486,7 +490,8 @@ export const UserConfig = ({
 
     await withLoading(`deleteUser_${deletingUser}`, async () => {
       try {
-        await handleUserAction('deleteUser', deletingUser);
+        const succeeded = await handleUserAction('deleteUser', deletingUser);
+        if (!succeeded) return;
         setShowDeleteUserModal(false);
         setDeletingUser(null);
       } catch (err) {

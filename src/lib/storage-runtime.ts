@@ -27,13 +27,17 @@ const STORAGE_TYPES = new Set<ServerStorageType>([
   'kvrocks',
 ]);
 
+export function normalizeStorageType(value: unknown): ServerStorageType {
+  return typeof value === 'string' &&
+    STORAGE_TYPES.has(value as ServerStorageType)
+    ? (value as ServerStorageType)
+    : 'localstorage';
+}
+
 export function getServerStorageType(env?: EnvLike): ServerStorageType {
   const source = (env || process.env) as EnvLike;
   const rawType = source.STORAGE_TYPE || source.NEXT_PUBLIC_STORAGE_TYPE;
-  if (rawType && STORAGE_TYPES.has(rawType as ServerStorageType)) {
-    return rawType as ServerStorageType;
-  }
-  return 'localstorage';
+  return normalizeStorageType(rawType);
 }
 
 function getMissingEnv(env: EnvLike, keys: string[]): string[] {

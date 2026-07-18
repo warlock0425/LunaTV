@@ -1,4 +1,5 @@
 import { db } from './db';
+import { getServerStorageType } from './storage-runtime';
 
 // A wrapper to align with the storage.hgetall and storage.hdel methods in the route
 export const storage = {
@@ -11,10 +12,7 @@ export const storage = {
     }
 
     // 伺服器端優先使用 STORAGE_TYPE（不帶 NEXT_PUBLIC_），避免在客戶端 bundle 暴露後端類型
-    const storageType =
-      process.env.STORAGE_TYPE ||
-      process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-      'localstorage';
+    const storageType = getServerStorageType();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storageImpl = (db as any).storage;
     if (!storageImpl || storageType === 'localstorage') {
@@ -61,10 +59,7 @@ export const storage = {
       actualKey = `u:${match[1]}:pr`;
     }
 
-    const storageType =
-      process.env.STORAGE_TYPE ||
-      process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-      'localstorage';
+    const storageType = getServerStorageType();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const storageImpl = (db as any).storage;
     if (!storageImpl || storageType === 'localstorage') {

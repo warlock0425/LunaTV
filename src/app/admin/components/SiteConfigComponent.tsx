@@ -24,7 +24,7 @@ const mapSiteConfig = (sc: AdminConfig['SiteConfig']): SiteConfig => ({
       : sc.DoubanImageProxyType || 'cmliussss-cdn-tencent',
   DoubanImageProxy: sc.DoubanImageProxy || '',
   DisableYellowFilter: sc.DisableYellowFilter || false,
-  FluidSearch: sc.FluidSearch || true,
+  FluidSearch: sc.FluidSearch ?? true,
   EnableWebLive: sc.EnableWebLive ?? false,
 });
 

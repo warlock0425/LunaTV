@@ -6,7 +6,12 @@ import {
 } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getAvailableApiSites, getValidUser } from '@/lib/config';
-import { getDetailFromApi } from '@/lib/downstream';
+import {
+  DownstreamNotFoundError,
+  DownstreamTimeoutError,
+  DownstreamUpstreamError,
+  getDetailFromApi,
+} from '@/lib/downstream';
 
 export const runtime = 'nodejs';
 
@@ -45,8 +50,23 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof DownstreamNotFoundError) {
+      return NextResponse.json({ error: 'Media not found' }, { status: 404 });
+    }
+    if (error instanceof DownstreamTimeoutError) {
+      return NextResponse.json(
+        { error: 'Upstream request timed out' },
+        { status: 504 }
+      );
+    }
+    if (error instanceof DownstreamUpstreamError) {
+      return NextResponse.json(
+        { error: 'Upstream request failed' },
+        { status: 502 }
+      );
+    }
     return NextResponse.json(
-      { error: (error as Error).message },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

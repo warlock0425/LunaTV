@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promisify } from 'util';
 import { gzip } from 'zlib';
 
+import { readJsonObject } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
@@ -58,7 +59,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const body = (await req.json()) as { password?: unknown };
+    const body = await readJsonObject(req);
+    if (!body) {
+      return NextResponse.json(
+        { error: '請提供有效的 JSON 物件' },
+        { status: 400 }
+      );
+    }
     if (typeof body.password !== 'string' || !body.password.trim()) {
       return NextResponse.json({ error: '請輸入備份密碼' }, { status: 400 });
     }
@@ -69,8 +76,14 @@ export async function POST(req: NextRequest) {
     }
 
     const users = await db.getAllUsers();
-    if (process.env.USERNAME) users.push(process.env.USERNAME);
-    const uniqueUsers = Array.from(new Set(users.filter(Boolean)));
+    const configuredUsers = adminConfig.UserConfig.Users.map(
+      (user) => user.username
+    );
+    const uniqueUsers = Array.from(
+      new Set(
+        [...users, ...configuredUsers, process.env.USERNAME].filter(Boolean)
+      )
+    ) as string[];
     const userData: Record<string, any> = {};
 
     for (const username of uniqueUsers) {

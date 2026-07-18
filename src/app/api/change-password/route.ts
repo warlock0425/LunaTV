@@ -2,17 +2,16 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { readJsonObject } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { revokeUserSessions } from '@/lib/security-store';
+import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
-  const storageType =
-    process.env.STORAGE_TYPE ||
-    process.env.NEXT_PUBLIC_STORAGE_TYPE ||
-    'localstorage';
+  const storageType = getServerStorageType();
 
   // 不支持 localstorage 模式
   if (storageType === 'localstorage') {
@@ -25,10 +24,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await readJsonObject<{
+      currentPassword?: unknown;
+      newPassword?: unknown;
+    }>(request);
+    if (!body) {
+      return NextResponse.json({ error: '請求格式錯誤' }, { status: 400 });
+    }
     const { currentPassword, newPassword } = body;
 
-    // 获取认证信息
+    // 取得認證資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -48,7 +53,7 @@ export async function POST(request: NextRequest) {
 
     const username = authInfo.username;
 
-    // 不允许站长修改密码（站长用户名等于 process.env.USERNAME）
+    // 不允許站長修改密碼（站長使用者名稱等於 process.env.USERNAME）
     if (username === process.env.USERNAME) {
       return NextResponse.json(
         { error: '站長不能通過此接口修改密碼' },

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { isValidApiTextParam } from '@/lib/api-input-validation';
+import {
+  isValidApiTextParam,
+  readJsonObject,
+} from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { storage } from '@/lib/storage';
 import { cleanSourceName, normalizePlayRecordTitle } from '@/lib/string-utils';
@@ -9,7 +12,13 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = await readJsonObject(req);
+    if (!body) {
+      return NextResponse.json(
+        { success: false, error: '請求格式錯誤' },
+        { status: 400 }
+      );
+    }
     const { vod_name, userId } = body;
     const authInfo = getAuthInfoFromCookie(req);
 
@@ -46,7 +55,13 @@ export async function POST(req: NextRequest) {
       (await storage.hgetall(`user:history:${mockUserId}`)) || {};
 
     // 允許前端傳入 source 做精確比對，避免抹除不同來源的同名記錄
-    const sourceForMatch = cleanSourceName(body.source_name || body.source);
+    const requestedSource =
+      typeof body.source_name === 'string'
+        ? body.source_name
+        : typeof body.source === 'string'
+          ? body.source
+          : undefined;
+    const sourceForMatch = cleanSourceName(requestedSource);
 
     // 3. 遍歷所有鍵值，只要劇名匹配，立刻執行 HDEL 徹底抹除，絕不留活口
     for (const [fieldKey, rawValue] of Object.entries(userHistory)) {
@@ -62,12 +77,7 @@ export async function POST(req: NextRequest) {
 
         // 刪除資料必須精確匹配正規化後的標題；模糊包含會誤刪短標題的其他作品。
         if (cleanRecordTitle && cleanRecordTitle === targetTitle) {
-          if (
-            sourceForMatch &&
-            sourceInRecord &&
-            sourceInRecord !== sourceForMatch
-          )
-            continue;
+          if (sourceForMatch && sourceInRecord !== sourceForMatch) continue;
           await storage.hdel(`user:history:${mockUserId}`, fieldKey);
         }
       } catch (e) {

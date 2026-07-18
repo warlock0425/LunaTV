@@ -103,3 +103,17 @@ export function isValidApiTextParam(
     !UNSAFE_TEXT_CHARS_PATTERN.test(trimmed)
   );
 }
+
+export async function readJsonObject<
+  T extends Record<string, unknown> = Record<string, unknown>,
+>(request: { json(): Promise<unknown> }): Promise<T | null> {
+  try {
+    const body = await request.json();
+    if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+      return null;
+    }
+    return body as T;
+  } catch {
+    return null;
+  }
+}

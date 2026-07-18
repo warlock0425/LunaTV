@@ -1,10 +1,21 @@
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
-import { fetchSafeRemoteUrl } from '@/lib/url-safety';
+import {
+  fetchSafeRemoteUrl,
+  readResponseTextWithLimit,
+} from '@/lib/url-safety';
+import {
+  consumeXmlTvBuffer,
+  XmlTvParseBudget,
+  XmlTvPrograms,
+} from '@/lib/xmltv';
 
 const defaultUA = 'AptvPlayer/1.4.10';
 const LIVE_FETCH_TIMEOUT_MS = 10000;
 const EPG_FETCH_TIMEOUT_MS = 12000;
+const MAX_LIVE_PLAYLIST_BYTES = 20 * 1024 * 1024;
+const MAX_EPG_BYTES = 30 * 1024 * 1024;
+const MAX_EPG_PROGRAMS = 50000;
 
 export interface LiveChannels {
   channelNumber: number;
@@ -37,15 +48,20 @@ export function deleteCachedLiveChannels(key: string) {
 export async function getCachedLiveChannels(
   key: string
 ): Promise<LiveChannels | null> {
+  const config = await getConfig();
+  const liveInfo = config.LiveConfig?.find(
+    (live) => live.key === key && !live.disabled
+  );
+  if (!liveInfo) {
+    deleteCachedLiveChannels(key);
+    return null;
+  }
+
   if (!cachedLiveChannels[key]) {
     const existingLoad = liveChannelLoads.get(key);
     if (existingLoad) return existingLoad;
 
     const load = (async () => {
-      const config = await getConfig();
-      const liveInfo = config.LiveConfig?.find((live) => live.key === key);
-      if (!liveInfo) return null;
-
       const channelNum = await refreshLiveChannels(liveInfo);
       if (channelNum === 0) return null;
 
@@ -71,6 +87,11 @@ export async function refreshLiveChannels(liveInfo: {
   channelNumber?: number;
   disabled?: boolean;
 }): Promise<number> {
+  if (liveInfo.disabled) {
+    deleteCachedLiveChannels(liveInfo.key);
+    return 0;
+  }
+
   const existingRefresh = liveRefreshes.get(liveInfo.key);
   if (existingRefresh) return existingRefresh;
 
@@ -91,6 +112,11 @@ async function performLiveChannelRefresh(liveInfo: {
   channelNumber?: number;
   disabled?: boolean;
 }): Promise<number> {
+  if (liveInfo.disabled) {
+    deleteCachedLiveChannels(liveInfo.key);
+    return 0;
+  }
+
   if (cachedLiveChannels[liveInfo.key]) {
     delete cachedLiveChannels[liveInfo.key];
   }
@@ -105,7 +131,7 @@ async function performLiveChannelRefresh(liveInfo: {
       },
       signal: controller.signal,
     });
-    data = await response.text();
+    data = await readResponseTextWithLimit(response, MAX_LIVE_PLAYLIST_BYTES);
   } finally {
     clearTimeout(timeoutId);
   }
@@ -116,6 +142,10 @@ async function performLiveChannelRefresh(liveInfo: {
     liveInfo.ua || defaultUA,
     result.channels.map((channel) => channel.tvgId).filter((tvgId) => tvgId)
   );
+  if (liveInfo.disabled) {
+    deleteCachedLiveChannels(liveInfo.key);
+    return 0;
+  }
   cachedLiveChannels[liveInfo.key] = {
     channelNumber: result.channels.length,
     channels: result.channels,
@@ -141,9 +171,7 @@ async function parseEpg(
   }
 
   const tvgs = new Set(tvgIds);
-  const result: {
-    [key: string]: { start: string; end: string; title: string }[];
-  } = {};
+  const result: XmlTvPrograms = {};
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), EPG_FETCH_TIMEOUT_MS);
@@ -159,7 +187,12 @@ async function parseEpg(
       return {};
     }
 
-    // 使用 ReadableStream 逐行处理，避免将整个文件加载到内存
+    const contentLength = Number(response.headers.get('content-length'));
+    if (Number.isFinite(contentLength) && contentLength > MAX_EPG_BYTES) {
+      return {};
+    }
+
+    // 使用 ReadableStream 逐行處理，避免將整個檔案載入記憶體
     const reader = response.body?.getReader();
     if (!reader) {
       return {};
@@ -167,75 +200,31 @@ async function parseEpg(
 
     const decoder = new TextDecoder();
     let buffer = '';
-    let currentTvgId = '';
-    let currentProgram: { start: string; end: string; title: string } | null =
-      null;
-    let shouldSkipCurrentProgram = false;
+    let totalBytes = 0;
+    const budget: XmlTvParseBudget = {
+      remainingPrograms: MAX_EPG_PROGRAMS,
+    };
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-
-      // 保留最后一行（可能不完整）
-      buffer = lines.pop() || '';
-
-      // 处理完整的行
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) continue;
-
-        // 解析 <programme> 标签
-        if (trimmedLine.startsWith('<programme')) {
-          // 提取 tvg-id
-          const tvgIdMatch = trimmedLine.match(/channel="([^"]*)"/);
-          currentTvgId = tvgIdMatch ? tvgIdMatch[1] : '';
-
-          // 提取开始时间
-          const startMatch = trimmedLine.match(/start="([^"]*)"/);
-          const start = startMatch ? startMatch[1] : '';
-
-          // 提取结束时间
-          const endMatch = trimmedLine.match(/stop="([^"]*)"/);
-          const end = endMatch ? endMatch[1] : '';
-
-          if (currentTvgId && start && end) {
-            currentProgram = { start, end, title: '' };
-            // 优化：如果当前频道不在我们关注的列表中，标记为跳过
-            shouldSkipCurrentProgram = !tvgs.has(currentTvgId);
-          }
-        }
-        // 解析 <title> 标签 - 只有在需要解析当前节目时才处理
-        else if (
-          trimmedLine.startsWith('<title') &&
-          currentProgram &&
-          !shouldSkipCurrentProgram
-        ) {
-          // 处理带有语言属性的title标签，如 <title lang="zh">远方的家2025-60</title>
-          const titleMatch = trimmedLine.match(
-            /<title(?:\s+[^>]*)?>(.*?)<\/title>/
-          );
-          if (titleMatch && currentProgram) {
-            currentProgram.title = titleMatch[1];
-
-            // 保存节目信息（这里不需要再检查tvgs.has，因为shouldSkipCurrentProgram已经确保了相关性）
-            if (!result[currentTvgId]) {
-              result[currentTvgId] = [];
-            }
-            result[currentTvgId].push({ ...currentProgram });
-
-            currentProgram = null;
-          }
-        }
-        // 处理 </programme> 标签
-        else if (trimmedLine === '</programme>') {
-          currentProgram = null;
-          currentTvgId = '';
-          shouldSkipCurrentProgram = false; // 重置跳过标志
-        }
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_EPG_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return {};
       }
+
+      buffer += decoder.decode(value, { stream: true });
+      buffer = consumeXmlTvBuffer(buffer, tvgs, result, false, budget);
+      if (budget.exceeded) {
+        await reader.cancel().catch(() => undefined);
+        break;
+      }
+    }
+    if (!budget.exceeded) {
+      buffer += decoder.decode();
+      consumeXmlTvBuffer(buffer, tvgs, result, true, budget);
     }
   } catch (error) {
     // ignore
@@ -310,18 +299,18 @@ function parseM3U(
       const groupTitleMatch = line.match(/group-title="([^"]*)"/);
       const group = groupTitleMatch ? groupTitleMatch[1] : '無分組';
 
-      // 提取标题（#EXTINF 行最后的逗号后面的内容）
+      // 提取標題（#EXTINF 行最後的逗號後面的內容）
       const titleMatch = line.match(/,([^,]*)$/);
       const title = titleMatch ? titleMatch[1].trim() : '';
 
-      // 优先使用 tvg-name，如果没有则使用标题
+      // 優先使用 tvg-name，如果沒有則使用標題
       const name = title || tvgName || '';
 
       // 检查下一行是否是URL
       if (i + 1 < lines.length && !lines[i + 1].startsWith('#')) {
         const url = lines[i + 1];
 
-        // 只有当有名称和URL时才添加到结果中
+        // 只有當有名稱和 URL 時才加入結果中
         if (name && url) {
           channels.push({
             id: `${sourceKey}-${channelIndex}`,
@@ -354,36 +343,36 @@ export function resolveUrl(baseUrl: string, relativePath: string) {
       return relativePath;
     }
 
-    // 如果是协议相对路径 (//example.com/path)
+    // 如果是協定相對路徑 (//example.com/path)
     if (relativePath.startsWith('//')) {
       const baseUrlObj = new URL(baseUrl);
       return `${baseUrlObj.protocol}${relativePath}`;
     }
 
-    // 使用 URL 构造函数处理相对路径
+    // 使用 URL 建構函式處理相對路徑
     const baseUrlObj = new URL(baseUrl);
     const resolvedUrl = new URL(relativePath, baseUrlObj);
     return resolvedUrl.href;
   } catch (error) {
-    // 降级处理
+    // 降級處理
     return fallbackUrlResolve(baseUrl, relativePath);
   }
 }
 
 function fallbackUrlResolve(baseUrl: string, relativePath: string) {
-  // 移除 baseUrl 末尾的文件名，保留目录路径
+  // 移除 baseUrl 末尾的檔名，保留目錄路徑
   let base = baseUrl;
   if (!base.endsWith('/')) {
     base = base.substring(0, base.lastIndexOf('/') + 1);
   }
 
-  // 处理不同类型的相对路径
+  // 處理不同類型的相對路徑
   if (relativePath.startsWith('/')) {
-    // 绝对路径 (/path/to/file)
+    // 絕對路徑 (/path/to/file)
     const urlObj = new URL(base);
     return `${urlObj.protocol}//${urlObj.host}${relativePath}`;
   } else if (relativePath.startsWith('../')) {
-    // 上级目录相对路径 (../path/to/file)
+    // 上級目錄相對路徑 (../path/to/file)
     const segments = base.split('/').filter((s) => s);
     const relativeSegments = relativePath.split('/').filter((s) => s);
 
@@ -398,7 +387,7 @@ function fallbackUrlResolve(baseUrl: string, relativePath: string) {
     const urlObj = new URL(base);
     return `${urlObj.protocol}//${urlObj.host}/${segments.join('/')}`;
   } else {
-    // 当前目录相对路径 (file.ts 或 ./file.ts)
+    // 當前目錄相對路徑 (file.ts 或 ./file.ts)
     const cleanRelative = relativePath.startsWith('./')
       ? relativePath.slice(2)
       : relativePath;
@@ -410,7 +399,7 @@ function fallbackUrlResolve(baseUrl: string, relativePath: string) {
 export function getBaseUrl(m3u8Url: string) {
   try {
     const url = new URL(m3u8Url);
-    // 如果 URL 以 .m3u8 结尾，移除文件名
+    // 如果 URL 以 .m3u8 結尾，移除檔名
     if (url.pathname.endsWith('.m3u8')) {
       url.pathname = url.pathname.substring(
         0,

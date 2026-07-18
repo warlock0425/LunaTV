@@ -36,6 +36,8 @@ export function PlayStatsPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const response = await fetch('/api/admin/play-stats');
       if (!response.ok) {

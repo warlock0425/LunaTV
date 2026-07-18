@@ -63,7 +63,9 @@ export default function NetflixHome({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [activeNav, setActiveNav] = useState<'home' | 'favorites'>('home');
+  const [activeNav, setActiveNav] = useState<'home' | 'favorites'>(() =>
+    tab === 'favorites' ? 'favorites' : 'home'
+  );
   const [showAnnouncement, setShowAnnouncement] = useState(false);
   const { toast } = useToast();
 

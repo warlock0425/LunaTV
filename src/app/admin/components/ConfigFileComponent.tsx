@@ -35,9 +35,7 @@ export const ConfigFileComponent = ({
   const [prevConfig, setPrevConfig] = useState(config);
   if (config !== prevConfig) {
     setPrevConfig(config);
-    if (config?.ConfigFile) {
-      setConfigContent(config.ConfigFile);
-    }
+    setConfigContent(config?.ConfigFile ?? '');
     if (config?.ConfigSubscription) {
       setSubscriptionUrl(config.ConfigSubscription.URL);
       setAutoUpdate(config.ConfigSubscription.AutoUpdate);

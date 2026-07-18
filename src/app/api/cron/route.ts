@@ -26,6 +26,7 @@ let activeCronStartedAt = '';
 const DEFAULT_CRON_MAX_RUNTIME_MS = process.env.VERCEL
   ? 50 * 1000
   : 8 * 60 * 1000;
+const LIVE_REFRESH_START_BUDGET_MS = 24 * 1000;
 
 function getCronDeadline() {
   const configuredMs = Number(process.env.CRON_MAX_RUNTIME_MS);
@@ -171,16 +172,19 @@ async function cronJob() {
   await refreshRecordAndFavorites(deadline);
   if (shouldStopCron(deadline, 'live channel refresh')) return;
 
-  await refreshAllLiveChannels();
+  await refreshAllLiveChannels(deadline);
 }
 
-async function refreshAllLiveChannels() {
+async function refreshAllLiveChannels(deadline: number) {
   const config = await getConfig();
 
   const enabledSources = (config.LiveConfig || []).filter(
     (liveInfo) => !liveInfo.disabled
   );
   await mapWithConcurrency(enabledSources, 3, async (liveInfo) => {
+    // 單一來源最多會用掉約 10 秒播放清單 + 12 秒 EPG；預留儲存時間，
+    // 不在期限尾端再啟動一個注定超時的刷新。
+    if (Date.now() + LIVE_REFRESH_START_BUDGET_MS >= deadline) return;
     try {
       const nums = await refreshLiveChannels(liveInfo);
       liveInfo.channelNumber = nums;

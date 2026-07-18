@@ -38,8 +38,8 @@ export async function GET(request: Request) {
   const kind = searchParams.get('kind') || 'movie';
   const category = searchParams.get('category');
   const type = searchParams.get('type');
-  const pageLimit = parseInt(searchParams.get('limit') || '20');
-  const pageStart = parseInt(searchParams.get('start') || '0');
+  const pageLimit = Number(searchParams.get('limit') ?? '20');
+  const pageStart = Number(searchParams.get('start') ?? '0');
 
   // 驗證參數
   if (!kind || !category || !type) {
@@ -56,14 +56,14 @@ export async function GET(request: Request) {
     );
   }
 
-  if (pageLimit < 1 || pageLimit > 100) {
+  if (!Number.isInteger(pageLimit) || pageLimit < 1 || pageLimit > 100) {
     return NextResponse.json(
       { error: 'pageSize 必須在 1-100 之間' },
       { status: 400 }
     );
   }
 
-  if (pageStart < 0) {
+  if (!Number.isInteger(pageStart) || pageStart < 0 || pageStart > 10000) {
     return NextResponse.json(
       { error: 'pageStart 不能小於 0' },
       { status: 400 }
@@ -73,7 +73,7 @@ export async function GET(request: Request) {
   const simCategory = toSimplified(category);
   const simType = toSimplified(type);
 
-  // 检查缓存
+  // 檢查快取
   const cacheKey = `douban:categories:${kind}:${simCategory}:${simType}:${pageLimit}:${pageStart}`;
   const now = Date.now();
   const cached = CATEGORIES_CACHE.get(cacheKey);
@@ -112,7 +112,7 @@ export async function GET(request: Request) {
       list: list,
     };
 
-    // 存入缓存
+    // 存入快取
     setBoundedMapValue(
       CATEGORIES_CACHE,
       cacheKey,

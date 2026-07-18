@@ -50,21 +50,21 @@ export default function EpgScrollableRow({
   };
 
   // 判斷節目是否正在播放（需宣告於使用之前）
-  const isCurrentlyPlaying = (program: EpgProgram) => {
+  const isCurrentlyPlaying = (program: EpgProgram, now: Date = currentTime) => {
     try {
       const start = parseCustomTimeFormat(program.start);
       const end = parseCustomTimeFormat(program.end);
-      return currentTime >= start && currentTime < end;
+      return now >= start && now < end;
     } catch {
       return false;
     }
   };
 
   // 自動滾動到正在播放的節目
-  const scrollToCurrentProgram = () => {
+  const scrollToCurrentProgram = (now: Date = currentTime) => {
     if (containerRef.current) {
       const currentProgramIndex = programs.findIndex((program) =>
-        isCurrentlyPlaying(program)
+        isCurrentlyPlaying(program, now)
       );
       if (currentProgramIndex !== -1) {
         const programElement = containerRef.current.children[
@@ -129,12 +129,13 @@ export default function EpgScrollableRow({
   useEffect(() => {
     // 每分鐘刷新一次正在播放狀態
     const interval = setInterval(() => {
+      const now = new Date();
       // 更新當前正在播放的節目索引
       const newPlayingIndex = programs.findIndex((program) => {
         try {
           const start = parseCustomTimeFormat(program.start);
           const end = parseCustomTimeFormat(program.end);
-          return currentTime >= start && currentTime < end;
+          return now >= start && now < end;
         } catch {
           return false;
         }
@@ -143,7 +144,7 @@ export default function EpgScrollableRow({
       if (newPlayingIndex !== currentPlayingIndex) {
         setCurrentPlayingIndex(newPlayingIndex);
         // 如果正在播放的節目發生變化，自動滾動到新位置
-        scrollToCurrentProgram();
+        scrollToCurrentProgram(now);
       }
     }, 60000); // 60秒 = 1分鐘
 
@@ -208,7 +209,7 @@ export default function EpgScrollableRow({
         </h4>
         {currentPlayingIndex !== -1 && (
           <button
-            onClick={scrollToCurrentProgram}
+            onClick={() => scrollToCurrentProgram()}
             className='flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 sm:py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:text-green-600 dark:hover:text-green-400 bg-zinc-300/50 dark:bg-zinc-800 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:border-green-300 dark:hover:border-green-700 transition-all duration-200'
             title='滾動到當前播放位置'
           >

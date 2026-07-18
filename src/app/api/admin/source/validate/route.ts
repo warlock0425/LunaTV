@@ -3,10 +3,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
+import {
+  createLinkedAbortController,
+  mapWithConcurrency,
+} from '@/lib/concurrency';
 import { API_CONFIG, getAdminUser, getConfig } from '@/lib/config';
 import { fetchSafeRemoteUrl } from '@/lib/url-safety';
 
 export const runtime = 'nodejs';
+
+const SOURCE_VALIDATION_CONCURRENCY = 6;
+const SOURCE_VALIDATION_TIMEOUT_MS = 10_000;
 
 export async function GET(request: NextRequest) {
   const authInfo = getAuthInfoFromCookie(request);
@@ -19,109 +26,116 @@ export async function GET(request: NextRequest) {
   const searchKeyword = searchParams.get('q');
 
   if (!searchKeyword) {
-    return new Response(JSON.stringify({ error: '搜尋關鍵詞不能為空' }), {
-      status: 400,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
+    return NextResponse.json({ error: '搜尋關鍵詞不能為空' }, { status: 400 });
   }
 
   const config = await getConfig();
   const apiSites = config.SourceConfig;
-
-  // 共享狀態
   let streamClosed = false;
+  const validationAbortController = new AbortController();
+  const abortValidation = () => {
+    streamClosed = true;
+    validationAbortController.abort();
+  };
+  request.signal.addEventListener('abort', abortValidation, { once: true });
 
-  // 創建可讀流
   const stream = new ReadableStream({
-    async start(controller) {
+    async start(streamController) {
       const encoder = new TextEncoder();
+      let completedSources = 0;
+      let completeSent = false;
 
-      // 輔助函數：安全地向控製器寫入資料
       const safeEnqueue = (data: Uint8Array) => {
         try {
-          if (
-            streamClosed ||
-            (!controller.desiredSize && controller.desiredSize !== 0)
-          ) {
-            return false;
-          }
-          controller.enqueue(data);
+          if (streamClosed) return false;
+          streamController.enqueue(data);
           return true;
         } catch (error) {
           console.warn('Failed to enqueue data:', error);
-          streamClosed = true;
+          abortValidation();
           return false;
         }
       };
 
-      // 發送開始事件
+      const sendCompleteIfReady = () => {
+        if (
+          completeSent ||
+          streamClosed ||
+          completedSources !== apiSites.length
+        ) {
+          return;
+        }
+
+        completeSent = true;
+        const completeEvent = `data: ${JSON.stringify({
+          type: 'complete',
+          completedSources,
+        })}\n\n`;
+
+        if (safeEnqueue(encoder.encode(completeEvent))) {
+          try {
+            streamController.close();
+          } catch (error) {
+            console.warn('Failed to close controller:', error);
+          }
+        }
+      };
+
       const startEvent = `data: ${JSON.stringify({
         type: 'start',
         totalSources: apiSites.length,
       })}\n\n`;
 
       if (!safeEnqueue(encoder.encode(startEvent))) {
+        request.signal.removeEventListener('abort', abortValidation);
         return;
       }
 
-      // 記錄已完成的源數量
-      let completedSources = 0;
+      if (apiSites.length === 0) {
+        sendCompleteIfReady();
+        request.signal.removeEventListener('abort', abortValidation);
+        return;
+      }
 
-      // 為每個源創建驗證 Promise
-      const validationPromises = apiSites.map(async (site) => {
-        try {
-          // 構建搜尋URL，只獲取第一頁
-          const searchUrl = `${site.api}?ac=videolist&wd=${encodeURIComponent(
-            searchKeyword
-          )}`;
+      await mapWithConcurrency(
+        apiSites,
+        SOURCE_VALIDATION_CONCURRENCY,
+        async (site) => {
+          if (validationAbortController.signal.aborted) return;
 
-          // 設定超時控製
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000);
+          const linked = createLinkedAbortController(
+            validationAbortController.signal,
+            SOURCE_VALIDATION_TIMEOUT_MS
+          );
 
           try {
+            const searchUrl = `${site.api}?ac=videolist&wd=${encodeURIComponent(
+              searchKeyword
+            )}`;
             const response = await fetchSafeRemoteUrl(searchUrl, {
               headers: API_CONFIG.search.headers,
-              signal: controller.signal,
+              signal: linked.controller.signal,
             });
-
-            clearTimeout(timeoutId);
 
             if (!response.ok) {
               throw new Error(`HTTP ${response.status}`);
             }
 
+            // Keep the timeout active until the response body has been read and
+            // parsed. A server can send headers immediately and then stall.
             const data = (await response.json()) as any;
-
-            // 檢查結果是否有效
-            let status: 'valid' | 'no_results' | 'invalid';
-            if (
-              data &&
-              data.list &&
-              Array.isArray(data.list) &&
-              data.list.length > 0
-            ) {
-              // 檢查是否有標題包含搜尋詞的結果
-              const validResults = data.list.filter((item: any) => {
-                const title = item.vod_name || '';
-                return title
+            let status: 'valid' | 'no_results';
+            if (data && Array.isArray(data.list) && data.list.length > 0) {
+              const normalizedKeyword = searchKeyword.toLowerCase();
+              const hasMatchingResult = data.list.some((item: any) =>
+                String(item?.vod_name || '')
                   .toLowerCase()
-                  .includes(searchKeyword.toLowerCase());
-              });
-
-              if (validResults.length > 0) {
-                status = 'valid';
-              } else {
-                status = 'no_results';
-              }
+                  .includes(normalizedKeyword)
+              );
+              status = hasMatchingResult ? 'valid' : 'no_results';
             } else {
               status = 'no_results';
             }
-
-            // 發送該源的驗證結果
-            completedSources++;
 
             if (!streamClosed) {
               const sourceEvent = `data: ${JSON.stringify({
@@ -129,66 +143,37 @@ export async function GET(request: NextRequest) {
                 source: site.key,
                 status,
               })}\n\n`;
-
-              if (!safeEnqueue(encoder.encode(sourceEvent))) {
-                streamClosed = true;
-                return;
-              }
+              safeEnqueue(encoder.encode(sourceEvent));
+            }
+          } catch (error) {
+            if (!validationAbortController.signal.aborted) {
+              console.warn(`Source validation failed for ${site.name}:`, error);
+              const errorEvent = `data: ${JSON.stringify({
+                type: 'source_error',
+                source: site.key,
+                status: 'invalid',
+              })}\n\n`;
+              safeEnqueue(encoder.encode(errorEvent));
             }
           } finally {
-            clearTimeout(timeoutId);
-          }
-        } catch (error) {
-          console.warn(`驗證失敗 ${site.name}:`, error);
-
-          // 發送源錯誤事件
-          completedSources++;
-
-          if (!streamClosed) {
-            const errorEvent = `data: ${JSON.stringify({
-              type: 'source_error',
-              source: site.key,
-              status: 'invalid',
-            })}\n\n`;
-
-            if (!safeEnqueue(encoder.encode(errorEvent))) {
-              streamClosed = true;
-              return;
-            }
+            linked.cleanup();
+            completedSources++;
+            sendCompleteIfReady();
           }
         }
+      );
 
-        // 檢查是否所有源都已完成
-        if (completedSources === apiSites.length) {
-          if (!streamClosed) {
-            // 發送最終完成事件
-            const completeEvent = `data: ${JSON.stringify({
-              type: 'complete',
-              completedSources,
-            })}\n\n`;
-
-            if (safeEnqueue(encoder.encode(completeEvent))) {
-              try {
-                controller.close();
-              } catch (error) {
-                console.warn('Failed to close controller:', error);
-              }
-            }
-          }
-        }
-      });
-
-      // 等待所有驗證完成
-      await Promise.allSettled(validationPromises);
+      request.signal.removeEventListener('abort', abortValidation);
+      sendCompleteIfReady();
     },
 
     cancel() {
-      streamClosed = true;
+      abortValidation();
+      request.signal.removeEventListener('abort', abortValidation);
       console.log('Client disconnected, cancelling validation stream');
     },
   });
 
-  // 返回流式響應
   return new Response(stream, {
     headers: {
       'Content-Type': 'text/event-stream',

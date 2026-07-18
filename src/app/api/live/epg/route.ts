@@ -31,16 +31,7 @@ export async function GET(request: NextRequest) {
     const channelData = await getCachedLiveChannels(sourceKey);
 
     if (!channelData) {
-      // 頻道資訊未找到時返回空的節目單資料
-      return NextResponse.json({
-        success: true,
-        data: {
-          tvgId,
-          source: sourceKey,
-          epgUrl: '',
-          programs: [],
-        },
-      });
+      return NextResponse.json({ error: '直播源不存在' }, { status: 404 });
     }
 
     // 從epgs字段中獲取對應tvgId的節目單資訊

@@ -7,6 +7,7 @@ import {
   isValidApiStorageKey,
   isValidApiTextParam,
   parseAndValidateApiStorageKey,
+  readJsonObject,
 } from './api-input-validation';
 
 describe('api-input-validation helpers', () => {
@@ -119,6 +120,30 @@ describe('api-input-validation helpers', () => {
     it('should reject control characters or excessive length', () => {
       expect(isValidApiTextParam('Text with \x00 null')).toBe(false);
       expect(isValidApiTextParam('a'.repeat(201))).toBe(false);
+    });
+  });
+
+  describe('readJsonObject', () => {
+    it('accepts JSON objects', async () => {
+      await expect(
+        readJsonObject({ json: async () => ({ value: 1 }) })
+      ).resolves.toEqual({ value: 1 });
+    });
+
+    it('rejects malformed JSON and non-object roots', async () => {
+      await expect(
+        readJsonObject({
+          json: async () => {
+            throw new SyntaxError('invalid json');
+          },
+        })
+      ).resolves.toBeNull();
+      await expect(
+        readJsonObject({ json: async () => null })
+      ).resolves.toBeNull();
+      await expect(
+        readJsonObject({ json: async () => [] })
+      ).resolves.toBeNull();
     });
   });
 });

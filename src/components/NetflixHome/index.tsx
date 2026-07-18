@@ -1,6 +1,7 @@
 'use client';
 
 import { Search } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import {
@@ -18,6 +19,7 @@ import { SkeletonRow } from './Skeletons';
 import { deduplicatePlayRecords } from './utils';
 
 export function NetflixHomePage() {
+  const searchParams = useSearchParams();
   const [hotMovies, setHotMovies] = useState<DoubanItem[]>([]);
   const [hotTvShows, setHotTvShows] = useState<DoubanItem[]>([]);
   const [hotVarietyShows, setHotVarietyShows] = useState<DoubanItem[]>([]);
@@ -120,7 +122,9 @@ export function NetflixHomePage() {
     hotMovies.length === 0 &&
     hotTvShows.length === 0 &&
     hotVarietyShows.length === 0 &&
-    bangumiData.length === 0
+    bangumiData.length === 0 &&
+    playRecords.length === 0 &&
+    searchParams.get('tab') !== 'favorites'
   ) {
     return (
       <div className='min-h-screen bg-slate-50 dark:bg-[#040404] flex flex-col items-center justify-center p-6'>

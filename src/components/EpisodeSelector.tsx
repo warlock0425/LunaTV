@@ -130,9 +130,20 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     }
   }, [totalEpisodes]);
 
-  const initialPage = Math.floor((value - 1) / episodesPerPage);
-  const [currentPage, setCurrentPage] = useState<number>(initialPage);
+  const selectedValuePage = Math.min(
+    Math.max(0, pageCount - 1),
+    Math.max(0, Math.floor((value - 1) / episodesPerPage))
+  );
+  const selectedValuePageKey = `${value}:${episodesPerPage}:${pageCount}`;
+  const [currentPage, setCurrentPage] = useState<number>(selectedValuePage);
+  const [lastSelectedValuePageKey, setLastSelectedValuePageKey] =
+    useState(selectedValuePageKey);
   const [descending, setDescending] = useState<boolean>(false);
+
+  if (lastSelectedValuePageKey !== selectedValuePageKey) {
+    setLastSelectedValuePageKey(selectedValuePageKey);
+    setCurrentPage(selectedValuePage);
+  }
 
   const displayPage = useMemo(() => {
     if (descending) {

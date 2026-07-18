@@ -1,6 +1,7 @@
 'use client';
 
 import { parseStorageKey } from '../storage-key';
+import { normalizeStorageType } from '../storage-runtime';
 
 // ---- 全局錯誤觸發 ----
 // 全局錯誤触發函數
@@ -79,7 +80,7 @@ export const STORAGE_TYPE = (() => {
     (process.env.NEXT_PUBLIC_STORAGE_TYPE as
       'localstorage' | 'redis' | 'upstash' | 'kvrocks' | undefined) ||
     'localstorage';
-  return raw;
+  return normalizeStorageType(raw);
 })();
 
 // ---- 搜索歷史相關常量 ----

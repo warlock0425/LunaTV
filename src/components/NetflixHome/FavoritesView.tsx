@@ -3,7 +3,7 @@
 
 import { BookMarked, Plus, Settings2, Tag } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   clearAllFavorites,
@@ -17,6 +17,7 @@ import {
   getFavoriteTags,
   setItemTags,
 } from '@/lib/favorite-tags.client';
+import { logger } from '@/lib/logger';
 import { parseStorageKey } from '@/lib/storage-key';
 
 import { useToast } from '@/components/ToastProvider';
@@ -45,68 +46,91 @@ export function FavoritesView() {
   const [itemTags, setItemTagsState] = useState<Record<string, string[]>>({});
   const [editingItemKey, setEditingItemKey] = useState<string | null>(null);
   const [definedTags, setDefinedTags] = useState<FavoriteTag[]>([]);
+  const favoriteRefreshRequestRef = useRef(0);
 
   const updateFavoriteItems = useCallback(
     async (allFavorites: Record<string, unknown>) => {
-      const allPlayRecords = await getAllPlayRecords();
-      const sorted = Object.entries(allFavorites)
-        .sort(
-          ([, a], [, b]) =>
-            (b as { save_time: number }).save_time -
-            (a as { save_time: number }).save_time
-        )
-        .map(([key, fav]) => {
-          const parsedKey = parseStorageKey(key);
-          const source = parsedKey?.source || '';
-          const id = parsedKey?.id || '';
-          let playRecord = allPlayRecords[key];
-          if (!playRecord) {
-            playRecord =
-              (Object.values(allPlayRecords).find(
-                (r: any) =>
-                  r && (r.vod_id === id || r.id === id) && r.source === source
-              ) as typeof playRecord) ?? undefined;
-          }
-          const f = fav as {
-            title: string;
-            year?: string;
-            cover: string;
-            total_episodes: number;
-            source_name: string;
-            search_title?: string;
-          };
-          return {
-            id,
-            source,
-            title: f.title,
-            year: f.year,
-            poster: f.cover,
-            episodes: f.total_episodes,
-            source_name: f.source_name,
-            currentEpisode: playRecord?.index,
-            search_title: f.search_title,
-          };
-        });
-      setFavoriteItems(sorted);
+      const requestId = ++favoriteRefreshRequestRef.current;
+      try {
+        const allPlayRecords = await getAllPlayRecords();
+        const sorted = Object.entries(allFavorites)
+          .sort(
+            ([, a], [, b]) =>
+              (b as { save_time: number }).save_time -
+              (a as { save_time: number }).save_time
+          )
+          .map(([key, fav]) => {
+            const parsedKey = parseStorageKey(key);
+            const source = parsedKey?.source || '';
+            const id = parsedKey?.id || '';
+            let playRecord = allPlayRecords[key];
+            if (!playRecord) {
+              playRecord =
+                (Object.values(allPlayRecords).find(
+                  (r: any) =>
+                    r && (r.vod_id === id || r.id === id) && r.source === source
+                ) as typeof playRecord) ?? undefined;
+            }
+            const f = fav as {
+              title: string;
+              year?: string;
+              cover: string;
+              total_episodes: number;
+              source_name: string;
+              search_title?: string;
+            };
+            return {
+              id,
+              source,
+              title: f.title,
+              year: f.year,
+              poster: f.cover,
+              episodes: f.total_episodes,
+              source_name: f.source_name,
+              currentEpisode: playRecord?.index,
+              search_title: f.search_title,
+            };
+          });
+        if (requestId === favoriteRefreshRequestRef.current) {
+          setFavoriteItems(sorted);
+        }
+        return true;
+      } catch (error) {
+        logger.error('更新收藏列表失敗:', error);
+        return false;
+      }
     },
     []
   );
 
   useEffect(() => {
+    let active = true;
     const load = async () => {
-      const allFavorites = await getAllFavorites();
-      await updateFavoriteItems(allFavorites);
-      setItemTagsState(getAllItemTags());
-      setDefinedTags(getFavoriteTags());
-      setLoading(false);
+      try {
+        const allFavorites = await getAllFavorites();
+        const updated = await updateFavoriteItems(allFavorites);
+        if (!active) return;
+        if (!updated) toast('載入收藏失敗，請稍後再試', 'error');
+        setItemTagsState(getAllItemTags());
+        setDefinedTags(getFavoriteTags());
+      } catch (error) {
+        logger.error('載入收藏失敗:', error);
+        if (active) toast('載入收藏失敗，請稍後再試', 'error');
+      } finally {
+        if (active) setLoading(false);
+      }
     };
-    load();
+    void load();
     const unsub = subscribeToDataUpdates(
       'favoritesUpdated',
       updateFavoriteItems
     );
-    return unsub;
-  }, [updateFavoriteItems]);
+    return () => {
+      active = false;
+      favoriteRefreshRequestRef.current += 1;
+      unsub();
+    };
+  }, [toast, updateFavoriteItems]);
 
   const refreshTags = () => {
     setItemTagsState(getAllItemTags());

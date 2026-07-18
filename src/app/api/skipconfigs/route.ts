@@ -6,6 +6,7 @@ import {
   isValidApiMediaId,
   isValidApiSource,
   parseAndValidateApiStorageKey,
+  readJsonObject,
 } from '@/lib/api-input-validation';
 import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
@@ -85,10 +86,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const body = await request.json();
+    const body = await readJsonObject<{
+      key?: unknown;
+      config?: Record<string, unknown>;
+    }>(request);
+    if (!body) {
+      return NextResponse.json({ error: '請求格式錯誤' }, { status: 400 });
+    }
     const { key, config } = body;
 
-    if (!key || !config) {
+    if (
+      !key ||
+      !config ||
+      typeof config !== 'object' ||
+      Array.isArray(config)
+    ) {
       return NextResponse.json({ error: '缺少必要參數' }, { status: 400 });
     }
 
@@ -104,9 +116,9 @@ export async function POST(request: NextRequest) {
       !Number.isFinite(introTime) ||
       !Number.isFinite(outroTime) ||
       introTime < 0 ||
-      outroTime < 0 ||
       introTime > 6 * 60 * 60 ||
-      outroTime > 6 * 60 * 60
+      outroTime < -6 * 60 * 60 ||
+      outroTime > 0
     ) {
       return NextResponse.json({ error: '無效的跳過時間' }, { status: 400 });
     }

@@ -122,6 +122,9 @@ export default function HistoryPage() {
         (r.search_title || '').toLowerCase().includes(q)
     );
   }, [records, searchQuery]);
+  const allFilteredSelected =
+    filteredRecords.length > 0 &&
+    filteredRecords.every((record) => selectedKeys.has(record.key));
 
   const handleDelete = async (record: RecordEntry) => {
     try {
@@ -207,11 +210,14 @@ export default function HistoryPage() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedKeys.size === filteredRecords.length) {
-      setSelectedKeys(new Set());
-    } else {
-      setSelectedKeys(new Set(filteredRecords.map((r) => r.key)));
-    }
+    setSelectedKeys((previous) => {
+      const next = new Set(previous);
+      filteredRecords.forEach((record) => {
+        if (allFilteredSelected) next.delete(record.key);
+        else next.add(record.key);
+      });
+      return next;
+    });
   };
 
   const formatDate = (timestamp: number) => {
@@ -449,10 +455,7 @@ export default function HistoryPage() {
             <label className='flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 cursor-pointer select-none'>
               <input
                 type='checkbox'
-                checked={
-                  selectedKeys.size === filteredRecords.length &&
-                  filteredRecords.length > 0
-                }
+                checked={allFilteredSelected}
                 onChange={toggleSelectAll}
                 className='w-4 h-4 rounded border-zinc-300 dark:border-zinc-600 text-accent focus:ring-accent'
               />

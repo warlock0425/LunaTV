@@ -82,12 +82,9 @@ async function fetchWithTimeout(
   };
 
   try {
-    const response = await fetch(finalUrl, fetchOptions);
+    return await fetch(finalUrl, fetchOptions);
+  } finally {
     clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    throw error;
   }
 }
 
