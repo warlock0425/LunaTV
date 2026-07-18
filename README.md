@@ -5,7 +5,7 @@
   <p><strong>為中文使用者打造的自架影音聚合搜尋與播放平台</strong></p>
   <p>跨來源聚合搜尋・智慧片源優選・無廣告 HLS 播放・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-2.5.6-blue)
+![Version](https://img.shields.io/badge/Version-2.5.7-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -259,7 +259,7 @@ src/
 
 - **靜態把關**——TypeScript strict、ESLint 9 flat config，並全面啟用
   eslint-plugin-react-hooks 的 React Compiler 前置規則（`set-state-in-effect`、`purity` 等）
-- **測試**——300+ Jest 單元測試（含 Testing Library 元件測試）+ Playwright E2E
+- **測試**——400+ Jest 單元測試（含 API 路由、儲存層與 Testing Library 元件測試）+ Playwright E2E
   （桌面與行動雙環境，覆蓋登入、播放、導覽核心流程），覆蓋率門檻於 CI 防倒退
 - **提交管線**——husky + lint-staged + commitlint（Conventional Commits），
   另含簡體字檢查確保介面用語一致為繁體中文
