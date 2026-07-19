@@ -92,14 +92,3 @@ export function GlobalErrorIndicator() {
     </div>
   );
 }
-
-// 全局錯誤觸發函數
-export function triggerGlobalError(message: string) {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(
-      new CustomEvent('globalError', {
-        detail: { message },
-      })
-    );
-  }
-}
