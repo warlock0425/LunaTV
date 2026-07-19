@@ -27,15 +27,22 @@ const customJestConfig = {
     'src/app/live/live-epg-utils.ts',
     'src/app/play/player-skip-settings.ts',
   ],
-  // 防倒退門檻（2026-07 現況：lines/statements 54.9% / branches 73% /
-  // funcs 55.3%，統計範圍含 src/lib、src/hooks 與抽出的純邏輯模組）
-  // 注意：V8 coverage 數字隨 Node 版本浮動（CI 為 Node 24），門檻留約 3 點容差
+  // 防倒退門檻。統計範圍含 src/lib、src/hooks 與抽出的純邏輯模組。
+  //
+  // 務必以 `pnpm test:coverage` 量測後再調整門檻：該指令帶 --runInBand，
+  // 與 CI 一致。序列執行的數字明顯低於平行執行（branches 約差 8 點，因為
+  // 同一行程共用模組狀態，部分分支不會被走到），照平行執行的數字設門檻
+  // 會讓本機全綠、CI 卻失敗。
+  //
+  // 2026-07 以 --runInBand 實測：lines/statements 53.5% / branches 65.0% /
+  // funcs 55.7%。門檻各留約 3 點容差——實測數字本身就有約 1 點的執行間浮動，
+  // 貼太近會讓無關的小改動意外弄掛 CI。
   coverageThreshold: {
     global: {
-      lines: 52,
-      branches: 64,
+      lines: 50,
+      branches: 62,
       functions: 52,
-      statements: 52,
+      statements: 50,
     },
   },
 
