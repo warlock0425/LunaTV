@@ -415,10 +415,13 @@ function PlayPageClient() {
       skipConfigRef.current = newConfig;
       if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
-        const { skipToggle, setIntro, setOutro } = buildSkipSettingsForPlayer();
-        artPlayerRef.current.setting.update(skipToggle);
-        artPlayerRef.current.setting.update(setIntro);
-        artPlayerRef.current.setting.update(setOutro);
+        if (artPlayerRef.current) {
+          const { skipToggle, setIntro, setOutro } =
+            buildSkipSettingsForPlayer();
+          artPlayerRef.current.setting.update(skipToggle);
+          artPlayerRef.current.setting.update(setIntro);
+          artPlayerRef.current.setting.update(setOutro);
+        }
       } else {
         await saveSkipConfig(
           currentSourceRef.current,
@@ -1712,23 +1715,27 @@ function PlayPageClient() {
         ) {
           autoNextBusyRef.current = true;
           // 啟動 5 秒倒數計時
-          setAutoNextCountdown(5);
+          // 倒數狀態同時記在區域變數，讓切集等副作用留在 interval 回呼裡；
+          // setState 的 updater 必須是純函式（React 可能重複呼叫它）。
+          let remaining = 5;
+          setAutoNextCountdown(remaining);
           setShowCountdownOverlay(true);
           countdownTimerRef.current = setInterval(() => {
-            setAutoNextCountdown((prev) => {
-              if (prev <= 1) {
-                // 倒數結束，切換到下一集
-                if (countdownTimerRef.current) {
-                  clearInterval(countdownTimerRef.current);
-                  countdownTimerRef.current = null;
-                }
-                setShowCountdownOverlay(false);
-                autoNextBusyRef.current = false;
-                setCurrentEpisodeIndex(idx + 1);
-                return 0;
-              }
-              return prev - 1;
-            });
+            remaining -= 1;
+            if (remaining > 0) {
+              setAutoNextCountdown(remaining);
+              return;
+            }
+
+            // 倒數結束，切換到下一集
+            if (countdownTimerRef.current) {
+              clearInterval(countdownTimerRef.current);
+              countdownTimerRef.current = null;
+            }
+            setAutoNextCountdown(0);
+            setShowCountdownOverlay(false);
+            autoNextBusyRef.current = false;
+            setCurrentEpisodeIndex(idx + 1);
           }, 1000);
         }
       });
