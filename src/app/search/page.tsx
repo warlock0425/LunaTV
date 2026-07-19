@@ -50,6 +50,10 @@ function SearchPageClient() {
   const [completedSources, setCompletedSources] = useState(0);
   const pendingResultsRef = useRef<SearchResult[]>([]);
   const flushTimerRef = useRef<number | null>(null);
+  // 本輪搜尋累計收到的結果數（用於判斷是否需要豆瓣別名重搜）
+  const receivedCountRef = useRef(0);
+  // 已嘗試過別名重搜的查詢，避免重搜結果為空時無限迴圈
+  const aliasRetriedRef = useRef<string | null>(null);
   // 流式搜尋偏好：初始值由瀏覽器端讀取，之後每次搜尋重讀時可覆寫
   const initialFluidSearch = useClientValue(() => {
     const defaultFluidSearch = window.RUNTIME_CONFIG?.FLUID_SEARCH !== false;
@@ -66,6 +70,65 @@ function SearchPageClient() {
       { douban_id?: number; episodes?: number; source_names: string[] }
     >
   >(new Map());
+
+  /**
+   * 台灣片名在大陸片源站常有完全不同的譯名（魔戒→指环王），
+   * 字元轉換與內建別名表都涵蓋不到。搜尋完全沒有結果時，
+   * 改用豆瓣反查大陸片名再搜一輪；失敗則靜默維持原本的空結果。
+   */
+  const retryWithDoubanAlias = async (originalQuery: string) => {
+    if (aliasRetriedRef.current === originalQuery) return;
+    aliasRetriedRef.current = originalQuery;
+
+    try {
+      const proxyType =
+        localStorage.getItem('doubanDataSource') || 'cmliussss-cdn-tencent';
+      const aliasResponse = await fetch(
+        `/api/douban/alias?q=${encodeURIComponent(
+          originalQuery
+        )}&proxyType=${encodeURIComponent(proxyType)}`
+      );
+      if (!aliasResponse.ok) return;
+      const { primary } = (await aliasResponse.json()) as {
+        primary?: string | null;
+      };
+      if (!primary) return;
+      // 期間使用者可能已改搜別的關鍵字
+      if (currentQueryRef.current !== originalQuery) return;
+
+      setIsLoading(true);
+      const searchResponse = await fetch(
+        `/api/search?q=${encodeURIComponent(primary)}`
+      );
+      const data = await searchResponse.json();
+      if (currentQueryRef.current !== originalQuery) return;
+
+      // 即使重搜仍無結果，也告知使用者實際採用的大陸片名，
+      // 否則通知會退回顯示字元轉換版（例如「星际大战」而非「星球大战」）
+      setResolvedSearchQuery(primary);
+
+      if (Array.isArray(data.results) && data.results.length > 0) {
+        const activeYearOrder =
+          viewModeRef.current === 'agg'
+            ? filterAggRef.current.yearOrder
+            : filterAllRef.current.yearOrder;
+        const results: SearchResult[] =
+          activeYearOrder === 'none'
+            ? sortBatchForNoOrder(data.results as SearchResult[])
+            : (data.results as SearchResult[]);
+        receivedCountRef.current += results.length;
+        setSearchResults(results);
+        setTotalSources(1);
+        setCompletedSources(1);
+      }
+    } catch {
+      // 豆瓣不可用時維持原本的空結果
+    } finally {
+      if (currentQueryRef.current === originalQuery) {
+        setIsLoading(false);
+      }
+    }
+  };
 
   const getGroupRef = (key: string) => {
     let ref = groupRefs.current.get(key);
@@ -445,6 +508,7 @@ function SearchPageClient() {
       setResolvedSearchQuery('');
       setTotalSources(0);
       setCompletedSources(0);
+      receivedCountRef.current = 0;
       pendingResultsRef.current = [];
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
@@ -508,6 +572,7 @@ function SearchPageClient() {
                     activeYearOrder === 'none'
                       ? sortBatchForNoOrder(payload.results as SearchResult[])
                       : (payload.results as SearchResult[]);
+                  receivedCountRef.current += incoming.length;
                   pendingResultsRef.current.push(...incoming);
                   if (!flushTimerRef.current) {
                     const timerId = window.setTimeout(() => {
@@ -554,6 +619,9 @@ function SearchPageClient() {
                 } catch {}
                 if (eventSourceRef.current === es) {
                   eventSourceRef.current = null;
+                }
+                if (receivedCountRef.current === 0) {
+                  void retryWithDoubanAlias(trimmed);
                 }
                 break;
             }
@@ -610,11 +678,15 @@ function SearchPageClient() {
                   ? sortBatchForNoOrder(data.results as SearchResult[])
                   : (data.results as SearchResult[]);
 
+              receivedCountRef.current += results.length;
               setSearchResults(results);
               setTotalSources(1);
               setCompletedSources(1);
             }
             setIsLoading(false);
+            if (receivedCountRef.current === 0) {
+              void retryWithDoubanAlias(trimmedQuery);
+            }
           })
           .catch(() => {
             if (

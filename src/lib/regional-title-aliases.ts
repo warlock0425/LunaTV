@@ -34,6 +34,7 @@ export const REGIONAL_TITLE_ALIASES: RegionalTitleAlias[] = [
   { tw: '刺激1995', cn: '肖申克的救赎' },
   { tw: '三個傻瓜', cn: '三傻大闹宝莱坞' },
   { tw: '我和我的冠軍女兒', cn: '摔跤吧爸爸' },
+  { tw: '可可夜總會', cn: '寻梦环游记', alternatives: ['coco夜总会'] },
   { tw: 'COCO夜總會', cn: '寻梦环游记' },
   { tw: '鐵達尼號', cn: '泰坦尼克号' },
   { tw: '捍衛任務', cn: '疾速追杀' },
