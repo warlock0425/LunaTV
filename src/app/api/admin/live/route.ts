@@ -2,13 +2,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import {
   isValidApiRemoteUrl,
   isValidApiSource,
   isValidApiTextParam,
   readJsonObject,
 } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { deleteCachedLiveChannels, refreshLiveChannels } from '@/lib/live';
@@ -47,7 +47,7 @@ function isOptionalRemoteUrl(value: unknown): value is string | undefined {
 export async function POST(request: NextRequest) {
   try {
     // 權限檢查
-    const authInfo = getAuthInfoFromCookie(request);
+    const authInfo = await getVerifiedAuthInfo(request);
     const username = authInfo?.username;
     const config = await getConfig();
     if (username !== process.env.USERNAME) {

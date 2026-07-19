@@ -2,15 +2,15 @@
 
 import { NextRequest } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
 import { POST } from './route';
 
-jest.mock('@/lib/auth', () => ({
-  getAuthInfoFromCookie: jest.fn(),
+jest.mock('@/lib/api-auth', () => ({
+  getVerifiedAuthInfo: jest.fn(),
 }));
 jest.mock('@/lib/crypto', () => ({
   SimpleCrypto: { encrypt: jest.fn(() => 'encrypted-backup') },
@@ -30,7 +30,7 @@ jest.mock('@/lib/storage-runtime', () => ({
   getServerStorageType: jest.fn(),
 }));
 
-const mockedAuth = jest.mocked(getAuthInfoFromCookie);
+const mockedAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedEncrypt = jest.mocked(SimpleCrypto.encrypt);
 const mockedStorageType = jest.mocked(getServerStorageType);
 const mockedDb = db as unknown as {
@@ -48,7 +48,7 @@ describe('data migration export', () => {
     jest.clearAllMocks();
     process.env.USERNAME = 'owner';
     mockedStorageType.mockReturnValue('redis');
-    mockedAuth.mockReturnValue({ username: 'owner' });
+    mockedAuth.mockResolvedValue({ username: 'owner' });
     mockedDb.getAdminConfig.mockResolvedValue({
       SiteConfig: {},
       UserConfig: {

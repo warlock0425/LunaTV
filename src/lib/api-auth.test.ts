@@ -1,0 +1,167 @@
+import { webcrypto } from 'node:crypto';
+import { TextEncoder } from 'node:util';
+
+import { getVerifiedAuthInfo } from './api-auth';
+import { getAuthSignaturePayload } from './auth';
+
+Object.defineProperty(globalThis, 'crypto', {
+  configurable: true,
+  value: webcrypto,
+});
+Object.defineProperty(globalThis, 'TextEncoder', {
+  configurable: true,
+  value: TextEncoder,
+});
+
+// Polyfill Request for jsdom environment
+if (typeof globalThis.Request === 'undefined') {
+  class MockRequest {
+    url: string;
+    headers: { get: (name: string) => string | null };
+    constructor(url: string, init?: { headers?: Record<string, string> }) {
+      this.url = url;
+      const hdrs = init?.headers || {};
+      this.headers = {
+        get: (name: string) => hdrs[name.toLowerCase()] || null,
+      };
+    }
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).Request = MockRequest;
+}
+
+const SECRET = 'server-secret';
+
+async function sign(payload: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const encode = (text: string) =>
+    encoder.encode(text) as Uint8Array<ArrayBuffer>;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encode(payload));
+  return Array.from(new Uint8Array(signature))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+function requestWithAuth(authData: unknown): Request {
+  const cookie = `auth=${encodeURIComponent(JSON.stringify(authData))}`;
+  return new Request('https://example.com/api/admin/reset', {
+    headers: { cookie },
+  });
+}
+
+/** 產生一份對 `subject` 而言簽章正確的 cookie 內容 */
+async function signedAuth(
+  subject: string,
+  overrides: Record<string, unknown> = {},
+  timestamp = Date.now()
+) {
+  return {
+    username: subject,
+    timestamp,
+    sessionVersion: 1,
+    signature: await sign(
+      getAuthSignaturePayload(subject, timestamp, 1),
+      SECRET
+    ),
+    ...overrides,
+  };
+}
+
+describe('getVerifiedAuthInfo', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, PASSWORD: SECRET, STORAGE_TYPE: 'redis' };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('沒有 cookie 時回傳 null', async () => {
+    const request = new Request('https://example.com/api/admin/reset');
+    await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
+  });
+
+  it('接受簽章正確的 session', async () => {
+    const request = requestWithAuth(await signedAuth('alice'));
+    const result = await getVerifiedAuthInfo(request);
+    expect(result?.username).toBe('alice');
+  });
+
+  it('沒有 signature 欄位時回傳 null', async () => {
+    const request = requestWithAuth({ username: 'alice', timestamp: 1 });
+    await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
+  });
+
+  // 這是本 helper 存在的理由：cookie 內容完全由客戶端控制，
+  // 只解析不驗簽的話，冒用他人身分等於零成本。
+  it('拒絕冒用他人使用者名稱的偽造 cookie', async () => {
+    const alice = await signedAuth('alice');
+    const forged = { ...alice, username: 'owner' };
+    await expect(
+      getVerifiedAuthInfo(requestWithAuth(forged))
+    ).resolves.toBeNull();
+  });
+
+  it('拒絕憑空捏造的 cookie', async () => {
+    const request = requestWithAuth({
+      username: 'owner',
+      timestamp: Date.now(),
+      sessionVersion: 1,
+      signature: 'de'.repeat(32),
+    });
+    await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
+  });
+
+  it('拒絕以別的密鑰簽出來的 session', async () => {
+    const timestamp = Date.now();
+    const request = requestWithAuth({
+      username: 'alice',
+      timestamp,
+      sessionVersion: 1,
+      signature: await sign(
+        getAuthSignaturePayload('alice', timestamp, 1),
+        'other-secret'
+      ),
+    });
+    await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
+  });
+
+  it('拒絕過期的 session', async () => {
+    const expired = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    const request = requestWithAuth(await signedAuth('alice', {}, expired));
+    await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
+  });
+
+  it('未設定 PASSWORD 時回傳 null', async () => {
+    const request = requestWithAuth(await signedAuth('alice'));
+    delete process.env.PASSWORD;
+    await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
+  });
+
+  describe('localstorage 模式', () => {
+    beforeEach(() => {
+      process.env.STORAGE_TYPE = 'localstorage';
+    });
+
+    it('以固定主體 localstorage 驗簽', async () => {
+      // 登入時簽的是 'localstorage'，cookie 內的 username 也是它
+      const request = requestWithAuth(await signedAuth('localstorage'));
+      const result = await getVerifiedAuthInfo(request);
+      expect(result?.username).toBe('localstorage');
+    });
+
+    it('拒絕對其他主體簽名的 session', async () => {
+      const request = requestWithAuth(await signedAuth('alice'));
+      await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
+    });
+  });
+});

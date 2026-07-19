@@ -2,8 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import {
   fetchSafeRemoteUrl,
   parseSafeRemoteUrl,
@@ -17,7 +17,7 @@ const CONFIG_FETCH_MAX_BYTES = 5 * 1024 * 1024;
 export async function POST(request: NextRequest) {
   try {
     // 權限檢查：僅站長可以取得設定訂閱
-    const authInfo = getAuthInfoFromCookie(request);
+    const authInfo = await getVerifiedAuthInfo(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }

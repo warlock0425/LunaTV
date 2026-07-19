@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import {
   createLinkedAbortController,
   mapWithConcurrency,
@@ -16,7 +16,7 @@ const SOURCE_VALIDATION_CONCURRENCY = 6;
 const SOURCE_VALIDATION_TIMEOUT_MS = 10_000;
 
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
+  const authInfo = await getVerifiedAuthInfo(request);
   const user = await getAdminUser(authInfo?.username);
   if (!user) {
     return NextResponse.json({ error: '權限不足' }, { status: 401 });

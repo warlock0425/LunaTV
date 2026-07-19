@@ -2,13 +2,13 @@
 
 import { NextRequest } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 
 import { POST } from './route';
 
-jest.mock('@/lib/auth', () => ({ getAuthInfoFromCookie: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({
   getConfig: jest.fn(),
   setCachedConfig: jest.fn(),
@@ -25,7 +25,7 @@ jest.mock('@/lib/security-store', () => ({
   revokeUserSessions: jest.fn(),
 }));
 
-const mockedGetAuth = jest.mocked(getAuthInfoFromCookie);
+const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedGetConfig = jest.mocked(getConfig);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);
 
@@ -42,7 +42,7 @@ describe('/api/admin/user array validation', () => {
     jest.clearAllMocks();
     process.env.STORAGE_TYPE = 'redis';
     process.env.USERNAME = 'owner';
-    mockedGetAuth.mockReturnValue({
+    mockedGetAuth.mockResolvedValue({
       username: 'owner',
       signature: 'signed',
       timestamp: Date.now(),

@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 import { gzipSync } from 'node:zlib';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { configSelfCheck, getConfig, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
@@ -11,8 +11,8 @@ import { isHashed } from '@/lib/password';
 
 import { POST } from './route';
 
-jest.mock('@/lib/auth', () => ({
-  getAuthInfoFromCookie: jest.fn(),
+jest.mock('@/lib/api-auth', () => ({
+  getVerifiedAuthInfo: jest.fn(),
 }));
 jest.mock('@/lib/config', () => ({
   configSelfCheck: jest.fn(),
@@ -50,7 +50,7 @@ jest.mock('@/lib/password', () => ({
   isHashed: jest.fn(),
 }));
 
-const mockedAuth = jest.mocked(getAuthInfoFromCookie);
+const mockedAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedConfigSelfCheck = jest.mocked(configSelfCheck);
 const mockedGetConfig = jest.mocked(getConfig);
 const mockedSetCachedConfig = jest.mocked(setCachedConfig);
@@ -115,7 +115,7 @@ describe('data migration import', () => {
     jest.clearAllMocks();
     process.env.STORAGE_TYPE = 'redis';
     process.env.USERNAME = 'owner';
-    mockedAuth.mockReturnValue({ username: 'owner' });
+    mockedAuth.mockResolvedValue({ username: 'owner' });
     mockedConfigSelfCheck.mockImplementation((config) => config);
     mockedGetConfig.mockResolvedValue(existingConfig as never);
     mockedDb.getAllUsers.mockResolvedValue(['alice']);

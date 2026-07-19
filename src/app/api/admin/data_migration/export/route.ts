@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promisify } from 'util';
 import { gzip } from 'zlib';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { getServerStorageType } from '@/lib/storage-runtime';
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const authInfo = getAuthInfoFromCookie(req);
+    const authInfo = await getVerifiedAuthInfo(req);
     if (!authInfo?.username) {
       return NextResponse.json({ error: '未授權' }, { status: 401 });
     }

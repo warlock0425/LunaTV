@@ -2,12 +2,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import {
   isValidApiSource,
   isValidApiTextParam,
   readJsonObject,
 } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { getConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { revokeUserSessions } from '@/lib/security-store';
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const authInfo = getAuthInfoFromCookie(request);
+    const authInfo = await getVerifiedAuthInfo(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
