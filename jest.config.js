@@ -27,15 +27,15 @@ const customJestConfig = {
     'src/app/live/live-epg-utils.ts',
     'src/app/play/player-skip-settings.ts',
   ],
-  // 防倒退門檻（2026-07 現況：lines 46% / branches 76% / funcs 48%，
-  // 統計範圍含 src/lib、src/hooks 與抽出的純邏輯模組）
-  // 注意：V8 coverage 數字隨 Node 版本浮動（CI 為 Node 24），門檻需留足容差
+  // 防倒退門檻（2026-07 現況：lines/statements 54.9% / branches 73% /
+  // funcs 55.3%，統計範圍含 src/lib、src/hooks 與抽出的純邏輯模組）
+  // 注意：V8 coverage 數字隨 Node 版本浮動（CI 為 Node 24），門檻留約 3 點容差
   coverageThreshold: {
     global: {
-      lines: 43,
-      branches: 65,
-      functions: 43,
-      statements: 43,
+      lines: 52,
+      branches: 70,
+      functions: 52,
+      statements: 52,
     },
   },
 
