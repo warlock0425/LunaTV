@@ -21,7 +21,7 @@ const HISTORY_LIMIT = 20;
  */
 export async function GET(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const history = await db.getSearchHistory(authInfo.username);
     return NextResponse.json(history.slice(0, HISTORY_LIMIT), { status: 200 });
   } catch (err) {
-    console.error('獲取搜尋歷史失敗', err);
+    console.error('取得搜尋歷史失敗', err);
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     await db.addSearchHistory(authInfo.username, keyword);
 
-    // 再次獲取最新列表，確保客戶端與服務端同步
+    // 再次取得最新列表，確保客戶端與服務端同步
     const history = await db.getSearchHistory(authInfo.username);
     return NextResponse.json(history.slice(0, HISTORY_LIMIT), { status: 200 });
   } catch (err) {
@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

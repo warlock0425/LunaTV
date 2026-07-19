@@ -86,7 +86,7 @@ export function LiveLoadingView({
             </div>
           </div>
 
-          {/* 加載消息 */}
+          {/* 載入消息 */}
           <div className='space-y-2'>
             <p className='text-xl font-semibold text-zinc-800 dark:text-zinc-200 animate-pulse'>
               {loadingMessage}
@@ -143,7 +143,7 @@ export function LiveErrorView({ error }: { error: string }) {
   );
 }
 
-/** 不支持的直播流類型提示蒙層 */
+/** 不支援的直播流類型提示蒙層 */
 export function UnsupportedTypeOverlay({ type }: { type: string }) {
   return (
     <div className='absolute inset-0 bg-black/90 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[600] transition-all duration-300'>
@@ -156,7 +156,7 @@ export function UnsupportedTypeOverlay({ type }: { type: string }) {
         </div>
         <div className='space-y-4'>
           <h3 className='text-xl font-semibold text-white'>
-            暫不支持的直播流類型
+            暫不支援的直播流類型
           </h3>
           <div className='bg-orange-500/20 border border-orange-500/30 rounded-lg p-4'>
             <p className='text-orange-300 font-medium'>
@@ -164,7 +164,7 @@ export function UnsupportedTypeOverlay({ type }: { type: string }) {
               <span className='text-white font-bold'>{type.toUpperCase()}</span>
             </p>
             <p className='text-sm text-orange-200 mt-2'>
-              目前僅支持 M3U8 格式的直播流
+              目前僅支援 M3U8 格式的直播流
             </p>
           </div>
           <p className='text-sm text-zinc-300'>請嘗試其他頻道</p>
@@ -174,7 +174,7 @@ export function UnsupportedTypeOverlay({ type }: { type: string }) {
   );
 }
 
-/** IPTV 影片加載蒙層 */
+/** IPTV 影片載入蒙層 */
 export function LiveVideoLoadingOverlay() {
   return (
     <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[500] transition-all duration-300'>
@@ -187,7 +187,7 @@ export function LiveVideoLoadingOverlay() {
         </div>
         <div className='space-y-2'>
           <p className='text-xl font-semibold text-white animate-pulse'>
-            🔄 IPTV 加載中...
+            🔄 IPTV 載入中...
           </p>
         </div>
       </div>

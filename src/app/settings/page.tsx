@@ -213,7 +213,7 @@ export default function SettingsPage() {
             <div>
               <h2 className='font-bold text-base'>豆瓣資料代理</h2>
               <p className='text-xs text-zinc-500 mt-0.5'>
-                選擇獲取豆瓣資料的方式
+                選擇取得豆瓣資料的方式
               </p>
             </div>
           </div>
@@ -279,7 +279,7 @@ export default function SettingsPage() {
             <div>
               <h2 className='font-bold text-base'>豆瓣圖片代理</h2>
               <p className='text-xs text-zinc-500 mt-0.5'>
-                選擇獲取豆瓣圖片的方式
+                選擇取得豆瓣圖片的方式
               </p>
             </div>
           </div>

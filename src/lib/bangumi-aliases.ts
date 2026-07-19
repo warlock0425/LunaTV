@@ -117,7 +117,7 @@ export async function fetchBangumiSubjectAliases(
     const data = (await response.json()) as BangumiSubjectInfo;
     return extractBangumiAliases(data);
   } catch (error) {
-    logger.warn('獲取 Bangumi 別名失敗:', error);
+    logger.warn('取得 Bangumi 別名失敗:', error);
     throw error;
   } finally {
     clearTimeout(timeoutId);

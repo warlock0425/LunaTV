@@ -19,16 +19,16 @@ export async function getSearchHistory(): Promise<string[]> {
     return [];
   }
 
-  // 數據庫存儲模式：使用混合緩存策略（包括 redis 和 upstash）
+  // 數據庫存儲模式：使用混合快取策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 优先從緩存獲取數據
+    // 优先從快取取得數據
     const cachedData = cacheManager.getCachedSearchHistory();
 
     if (cachedData) {
-      // 返回緩存數據，同時后台異步更新
+      // 返回快取數據，同時后台異步更新
       fetchFromApi<string[]>(`/api/searchhistory`)
         .then((freshData) => {
-          // 只有數據真正不同時才更新緩存
+          // 只有數據真正不同時才更新快取
           if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
             cacheManager.cacheSearchHistory(freshData);
             // 触發數據更新事件
@@ -46,14 +46,14 @@ export async function getSearchHistory(): Promise<string[]> {
 
       return cachedData;
     } else {
-      // 緩存为空，直接從 API 獲取並緩存
+      // 快取为空，直接從 API 取得並快取
       try {
         const freshData = await fetchFromApi<string[]>(`/api/searchhistory`);
         cacheManager.cacheSearchHistory(freshData);
         return freshData;
       } catch (err) {
-        console.error('獲取搜索歷史失敗:', err);
-        triggerGlobalError('獲取搜索歷史失敗');
+        console.error('取得搜索歷史失敗:', err);
+        triggerGlobalError('取得搜索歷史失敗');
         return [];
       }
     }
@@ -74,8 +74,8 @@ export async function getSearchHistory(): Promise<string[]> {
 }
 
 /**
- * 将關键字添加到搜索歷史。
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 将關键字新增到搜索歷史。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */
 export async function addSearchHistory(keyword: string): Promise<void> {
   const trimmed = keyword.trim();
@@ -83,7 +83,7 @@ export async function addSearchHistory(keyword: string): Promise<void> {
 
   // 資料庫存儲模式：樂觀更新策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 保存舊狀態以便 rollback
+    // 儲存舊狀態以便 rollback
     const cachedHistory = cacheManager.getCachedSearchHistory() || [];
     const prevHistory = [...cachedHistory];
     const newHistory = [trimmed, ...cachedHistory.filter((k) => k !== trimmed)];
@@ -110,7 +110,7 @@ export async function addSearchHistory(keyword: string): Promise<void> {
         body: JSON.stringify({ keyword: trimmed }),
       });
     } catch (err) {
-      // 先 rollback 快取至原始狀態，再嘗試從 API 兜底刷新
+      // 先 rollback 快取至原始狀態，再嘗試從 API 兜底重新整理
       cacheManager.cacheSearchHistory(prevHistory);
       window.dispatchEvent(
         new CustomEvent('searchHistoryUpdated', {
@@ -139,19 +139,19 @@ export async function addSearchHistory(keyword: string): Promise<void> {
       })
     );
   } catch (err) {
-    console.error('保存搜索歷史失敗:', err);
-    triggerGlobalError('保存搜索歷史失敗');
+    console.error('儲存搜索歷史失敗:', err);
+    triggerGlobalError('儲存搜索歷史失敗');
   }
 }
 
 /**
  * 清空搜索歷史。
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */
 export async function clearSearchHistory(): Promise<void> {
   // 數據庫存儲模式：乐觀更新策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 立即更新緩存
+    // 立即更新快取
     cacheManager.cacheSearchHistory([]);
 
     // 触發立即更新事件
@@ -184,7 +184,7 @@ export async function clearSearchHistory(): Promise<void> {
 
 /**
  * 刪除單條搜索歷史。
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */
 export async function deleteSearchHistory(keyword: string): Promise<void> {
   const trimmed = keyword.trim();
@@ -192,7 +192,7 @@ export async function deleteSearchHistory(keyword: string): Promise<void> {
 
   // 數據庫存儲模式：乐觀更新策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 立即更新緩存
+    // 立即更新快取
     const cachedHistory = cacheManager.getCachedSearchHistory() || [];
     const newHistory = cachedHistory.filter((k) => k !== trimmed);
     cacheManager.cacheSearchHistory(newHistory);

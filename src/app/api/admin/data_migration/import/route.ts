@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
     const storageType = getServerStorageType();
     if (storageType === 'localstorage') {
       return NextResponse.json(
-        { error: '不支持本地存儲進行數據遷移' },
+        { error: '不支援本地存儲進行數據遷移' },
         { status: 400 }
       );
     }
@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
     const contentLength = Number(req.headers.get('content-length'));
     if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_BYTES) {
       return NextResponse.json(
-        { error: '備份文件過大，最大允許 20 MB' },
+        { error: '備份檔案過大，最大允許 20 MB' },
         { status: 413 }
       );
     }
@@ -206,12 +206,12 @@ export async function POST(req: NextRequest) {
     const password = formData.get('password') as string;
 
     if (!file) {
-      return NextResponse.json({ error: '請選擇備份文件' }, { status: 400 });
+      return NextResponse.json({ error: '請選擇備份檔案' }, { status: 400 });
     }
 
     if (file.size > MAX_ENCRYPTED_FILE_BYTES) {
       return NextResponse.json(
-        { error: '備份文件過大，最大允許 20 MB' },
+        { error: '備份檔案過大，最大允許 20 MB' },
         { status: 413 }
       );
     }
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: '請提供解密密碼' }, { status: 400 });
     }
 
-    // 读取文件内容
+    // 读取檔案内容
     const encryptedData = await file.text();
 
     // 解密数据
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
     try {
       importData = JSON.parse(decompressedData);
     } catch (error) {
-      return NextResponse.json({ error: '備份文件格式錯誤' }, { status: 400 });
+      return NextResponse.json({ error: '備份檔案格式錯誤' }, { status: 400 });
     }
 
     // 驗證數據格式
@@ -280,7 +280,7 @@ export async function POST(req: NextRequest) {
         >)
       )
     ) {
-      return NextResponse.json({ error: '備份文件格式無效' }, { status: 400 });
+      return NextResponse.json({ error: '備份檔案格式無效' }, { status: 400 });
     }
 
     const validImportData = importData as {
@@ -318,7 +318,7 @@ export async function POST(req: NextRequest) {
       validImportData.data.userData === null ||
       Array.isArray(validImportData.data.userData)
     ) {
-      return NextResponse.json({ error: '備份文件格式無效' }, { status: 400 });
+      return NextResponse.json({ error: '備份檔案格式無效' }, { status: 400 });
     }
 
     let importedAdminConfig: AdminConfig;
@@ -326,7 +326,7 @@ export async function POST(req: NextRequest) {
       importedAdminConfig = configSelfCheck(validImportData.data.adminConfig);
     } catch {
       return NextResponse.json(
-        { error: '備份文件中的管理設定無效' },
+        { error: '備份檔案中的管理設定無效' },
         { status: 400 }
       );
     }
@@ -345,7 +345,7 @@ export async function POST(req: NextRequest) {
         Array.isArray(rawUser)
       ) {
         return NextResponse.json(
-          { error: '備份文件中的使用者資料無效' },
+          { error: '備份檔案中的使用者資料無效' },
           { status: 400 }
         );
       }
@@ -419,7 +419,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // 導入跳過片頭片尾配置
+        // 導入跳過片頭片尾設定
         if (user.skipConfigs) {
           for (const [key, skipConfig] of Object.entries(user.skipConfigs)) {
             const parsedKey = parseStorageKey(key);
@@ -452,7 +452,7 @@ export async function POST(req: NextRequest) {
       } catch (restoreErr) {
         console.error('備份還原也失敗了:', restoreErr);
         return NextResponse.json(
-          { error: '導入失敗且備份還原失敗，請使用備份文件重新導入' },
+          { error: '導入失敗且備份還原失敗，請使用備份檔案重新導入' },
           { status: 500 }
         );
       }

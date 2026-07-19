@@ -83,7 +83,7 @@ export const SiteConfigComponent = ({
     { value: 'custom', label: '自定義代理' },
   ];
 
-  // 獲取感謝資訊
+  // 取得感謝資訊
   const getThanksInfo = (dataSource: string) => {
     switch (dataSource) {
       case 'cors-proxy-zwei':
@@ -162,7 +162,7 @@ export const SiteConfigComponent = ({
     }));
   };
 
-  // 儲存站點配置
+  // 儲存站點設定
   const handleSave = async () => {
     await withLoading('saveSiteConfig', async () => {
       try {
@@ -189,7 +189,7 @@ export const SiteConfigComponent = ({
   if (!config) {
     return (
       <div className='text-center text-zinc-500 dark:text-zinc-400'>
-        加載中...
+        載入中...
       </div>
     );
   }
@@ -285,7 +285,7 @@ export const SiteConfigComponent = ({
             )}
           </div>
           <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
-            選擇獲取豆瓣資料的方式
+            選擇取得豆瓣資料的方式
           </p>
 
           {/* 感謝資訊 */}
@@ -395,7 +395,7 @@ export const SiteConfigComponent = ({
             )}
           </div>
           <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
-            選擇獲取豆瓣圖片的方式
+            選擇取得豆瓣圖片的方式
           </p>
 
           {/* 感謝資訊 */}
@@ -445,10 +445,10 @@ export const SiteConfigComponent = ({
         )}
       </div>
 
-      {/* 搜尋接口可拉取最大頁數 */}
+      {/* 搜尋接口可取得最大頁數 */}
       <div>
         <label className='block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2'>
-          搜尋接口可拉取最大頁數
+          搜尋接口可取得最大頁數
         </label>
         <input
           type='number'
@@ -464,10 +464,10 @@ export const SiteConfigComponent = ({
         />
       </div>
 
-      {/* 站點接口緩存時間 */}
+      {/* 站點接口快取時間 */}
       <div>
         <label className='block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2'>
-          站點接口緩存時間（秒）
+          站點接口快取時間（秒）
         </label>
         <input
           type='number'

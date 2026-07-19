@@ -37,7 +37,7 @@ const notoSansTC = Noto_Sans_TC({
 });
 export const dynamic = 'force-dynamic';
 
-// 動態生成 metadata，支持配置更新後的標題變化
+// 動態生成 metadata，支援設定更新後的標題變化
 export async function generateMetadata(): Promise<Metadata> {
   const storageType = getServerStorageType();
   const config = await getConfig();
@@ -116,7 +116,7 @@ export default async function RootLayout({
     enableWebLive = config.SiteConfig.EnableWebLive ?? false;
   }
 
-  // 將運行時配置注入到全局 window 對象，供客戶端在運行時讀取
+  // 將運行時設定注入到全局 window 對象，供客戶端在運行時讀取
   const runtimeConfig = {
     STORAGE_TYPE: storageType,
     DOUBAN_PROXY_TYPE: doubanProxyType,
@@ -141,7 +141,7 @@ export default async function RootLayout({
             href={splash.src}
           />
         ))}
-        {/* 將配置序列化後直接寫入腳本，瀏覽器端可通過 window.RUNTIME_CONFIG 獲取 */}
+        {/* 將設定序列化後直接寫入腳本，瀏覽器端可透過 window.RUNTIME_CONFIG 取得 */}
         {}
         <script
           dangerouslySetInnerHTML={{

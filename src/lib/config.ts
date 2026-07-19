@@ -148,10 +148,10 @@ export const API_CONFIG = {
   },
 };
 
-// 在模塊加載時根據環境決定配置來源
+// 在模塊載入時根據環境決定設定來源
 let cachedConfig: AdminConfig;
 let cachedConfigTimestamp = 0;
-const CONFIG_CACHE_TTL = 300 * 1000; // 5 分鐘緩存 TTL
+const CONFIG_CACHE_TTL = 300 * 1000; // 5 分鐘快取 TTL
 const CONFIG_SUBSCRIPTION_TIMEOUT_MS = 15000;
 const MAX_CONFIG_SUBSCRIPTION_BYTES = 2 * 1024 * 1024;
 
@@ -200,7 +200,7 @@ export async function fetchSubscriptionConfigFile(
   }
 }
 
-// 從配置文件補充管理員配置
+// 從設定檔補充管理員設定
 export function refineConfig(adminConfig: AdminConfig): AdminConfig {
   let fileConfig: ConfigFileStruct;
   try {
@@ -209,7 +209,7 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
     fileConfig = {} as ConfigFileStruct;
   }
 
-  // 合併文件中的源資訊
+  // 合併檔案中的源資訊
   const apiSitesFromFile = Object.entries(fileConfig.api_site || []);
   const currentApiSites = new Map(
     (adminConfig.SourceConfig || []).map((s) => [s.key, s])
@@ -379,7 +379,7 @@ async function getInitConfig(
   try {
     userNames = await db.getAllUsers();
   } catch (e) {
-    console.error('獲取使用者列表失敗:', e);
+    console.error('取得使用者列表失敗:', e);
   }
   const allUsers = userNames
     .filter((u) => u !== process.env.USERNAME)
@@ -395,7 +395,7 @@ async function getInitConfig(
   });
   adminConfig.UserConfig.Users = allUsers as any;
 
-  // 從配置文件中補充源資訊
+  // 從設定檔中補充源資訊
   Object.entries(cfgFile.api_site || []).forEach(([key, site]) => {
     adminConfig.SourceConfig.push({
       key: key,
@@ -407,7 +407,7 @@ async function getInitConfig(
     });
   });
 
-  // 從配置文件中補充自定義分類資訊
+  // 從設定檔中補充自定義分類資訊
   cfgFile.custom_category?.forEach((category) => {
     adminConfig.CustomCategories.push({
       name: category.name || category.query,
@@ -418,7 +418,7 @@ async function getInitConfig(
     });
   });
 
-  // 從配置文件中補充直播源資訊
+  // 從設定檔中補充直播源資訊
   Object.entries(cfgFile.lives || []).forEach(([key, live]) => {
     if (!adminConfig.LiveConfig) {
       adminConfig.LiveConfig = [];
@@ -439,7 +439,7 @@ async function getInitConfig(
 }
 
 export async function getConfig(): Promise<AdminConfig> {
-  // 使用內存緩存，帶 TTL 過期檢查
+  // 使用內存快取，帶 TTL 過期檢查
   if (cachedConfig && Date.now() - cachedConfigTimestamp < CONFIG_CACHE_TTL) {
     return cachedConfig;
   }
@@ -449,10 +449,10 @@ export async function getConfig(): Promise<AdminConfig> {
   try {
     adminConfig = await db.getAdminConfig();
   } catch (e) {
-    console.error('獲取管理員配置失敗:', e);
+    console.error('取得管理員設定失敗:', e);
   }
 
-  // db 中無配置，執行一次初始化
+  // db 中無設定，執行一次初始化
   if (!adminConfig) {
     let defaultConfigFileContent = '';
     try {
@@ -478,7 +478,7 @@ export async function getConfig(): Promise<AdminConfig> {
   try {
     await db.saveAdminConfig(cachedConfig);
   } catch (error) {
-    console.error('保存自我修復後的管理員配置失敗:', error);
+    console.error('儲存自我修復後的管理員設定失敗:', error);
   }
   return cachedConfig;
 }
@@ -876,7 +876,7 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
     return [];
   }
 
-  // 優先根據使用者自己的 enabledApis 配置查找
+  // 優先根據使用者自己的 enabledApis 設定查找
   if (userConfig.enabledApis && userConfig.enabledApis.length > 0) {
     const userApiSitesSet = new Set(userConfig.enabledApis);
     return allApiSites
@@ -889,7 +889,7 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
       }));
   }
 
-  // 如果沒有 enabledApis 配置，則根據 tags 查找
+  // 如果沒有 enabledApis 設定，則根據 tags 查找
   if (userConfig.tags && userConfig.tags.length > 0 && config.UserConfig.Tags) {
     const enabledApisFromTags = new Set<string>();
 
@@ -915,7 +915,7 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
     }
   }
 
-  // 如果都沒有配置，返回所有可用的 API 站點
+  // 如果都沒有設定，返回所有可用的 API 站點
   return allApiSites;
 }
 

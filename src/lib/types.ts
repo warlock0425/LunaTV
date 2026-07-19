@@ -75,11 +75,11 @@ export interface IStorage {
   // 用户列表
   getAllUsers(): Promise<string[]>;
 
-  // 管理員配置相關
+  // 管理員設定相關
   getAdminConfig(): Promise<AdminConfig | null>;
   setAdminConfig(config: AdminConfig): Promise<void>;
 
-  // 跳過片頭片尾配置相關
+  // 跳過片頭片尾設定相關
   getSkipConfig(
     userName: string,
     source: string,
@@ -136,7 +136,7 @@ export interface DoubanResult {
   list: DoubanItem[];
 }
 
-// 跳过片头片尾配置資料結構
+// 跳过片头片尾設定資料結構
 export interface SkipConfig {
   enable: boolean; // 是否启用跳过片头片尾
   intro_time: number; // 片头时间（秒）

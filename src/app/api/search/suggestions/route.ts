@@ -17,7 +17,7 @@ const PRIVATE_NO_STORE_HEADERS = {
 
 export async function GET(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     const user = await getValidUser(authInfo?.username);
     if (!user) {
@@ -55,9 +55,9 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (error) {
-    console.error('獲取搜尋建議失敗', error);
+    console.error('取得搜尋建議失敗', error);
     return NextResponse.json(
-      { error: '獲取搜尋建議失敗' },
+      { error: '取得搜尋建議失敗' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }

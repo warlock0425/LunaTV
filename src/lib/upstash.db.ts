@@ -37,7 +37,7 @@ function ensureStringArray(value: any[]): string[] {
   return value.map((item) => String(item));
 }
 
-// 添加Upstash Redis操作重試包装器
+// 新增Upstash Redis操作重試包装器
 async function withRetry<T>(
   operation: () => Promise<T>,
   maxRetries = 3
@@ -269,7 +269,7 @@ export class UpstashRedisStorage implements IStorage {
     // 刪除收藏夹（Hash key 直接刪除）
     await withRetry(() => this.client.del(this.favHashKey(userName)));
 
-    // 刪除跳過片头片尾配置（Hash key 直接刪除）
+    // 刪除跳過片头片尾設定（Hash key 直接刪除）
     await withRetry(() => this.client.del(this.skipHashKey(userName)));
   }
 
@@ -305,7 +305,7 @@ export class UpstashRedisStorage implements IStorage {
     }
   }
 
-  // ---------- 獲取全部使用者 ----------
+  // ---------- 取得全部使用者 ----------
   private usersSetKey() {
     return 'sys:users';
   }
@@ -317,7 +317,7 @@ export class UpstashRedisStorage implements IStorage {
     return ensureStringArray(members as any[]);
   }
 
-  // ---------- 管理员配置 ----------
+  // ---------- 管理员設定 ----------
   private adminConfigKey() {
     return 'admin:config';
   }
@@ -331,9 +331,9 @@ export class UpstashRedisStorage implements IStorage {
     await withRetry(() => this.client.set(this.adminConfigKey(), config));
   }
 
-  // ---------- 跳過片头片尾配置 ----------
+  // ---------- 跳過片头片尾設定 ----------
   private skipHashKey(user: string) {
-    return `u:${user}:skip`; // 一個使用者的所有跳過配置存在一個 Hash 中
+    return `u:${user}:skip`; // 一個使用者的所有跳過設定存在一個 Hash 中
   }
 
   private skipField(source: string, id: string) {
@@ -482,7 +482,7 @@ export class UpstashRedisStorage implements IStorage {
           }
         }
         if (oldSkipKeys.length > 0) {
-          console.log(`遷移了 ${oldSkipKeys.length} 條跳過配置`);
+          console.log(`遷移了 ${oldSkipKeys.length} 條跳過設定`);
         }
       }
 
@@ -579,7 +579,7 @@ export class UpstashRedisStorage implements IStorage {
 
   async clearAllData(): Promise<void> {
     try {
-      // 獲取所有使用者
+      // 取得所有使用者
       const allUsers = await this.getAllUsers();
 
       // 刪除所有使用者及其數據
@@ -587,7 +587,7 @@ export class UpstashRedisStorage implements IStorage {
         await this.deleteUser(username);
       }
 
-      // 刪除管理员配置
+      // 刪除管理员設定
       await withRetry(() => this.client.del(this.adminConfigKey()));
       await withRetry(() => this.client.del(this.bangumiAliasHashKey()));
 
@@ -620,7 +620,7 @@ function getUpstashRedisClient(): Redis {
     client = new Redis({
       url: upstashUrl,
       token: upstashToken,
-      // 可選配置
+      // 可選設定
       retry: {
         retries: 3,
         backoff: (retryCount: number) =>

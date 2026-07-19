@@ -63,7 +63,7 @@ import {
   VideoLoadingOverlay,
 } from './player-ui';
 
-// 擴展 HTMLVideoElement 類型以支持 hls 屬性
+// 擴展 HTMLVideoElement 類型以支援 hls 屬性
 declare global {
   interface HTMLVideoElement {
     hls?: Hls;
@@ -87,7 +87,7 @@ function PlayPageClient() {
 
   // 收藏狀態（使用 useFavorite hook，宣告在依賴變數之後）
 
-  // 跳過片頭片尾配置
+  // 跳過片頭片尾設定
   const [skipConfig, setSkipConfig] = useState<{
     enable: boolean;
     intro_time: number;
@@ -304,7 +304,7 @@ function PlayPageClient() {
   const [isEpisodeSelectorCollapsed, setIsEpisodeSelectorCollapsed] =
     useState(false);
 
-  // 換源加載狀態
+  // 換源載入狀態
   const [isVideoLoading, setIsVideoLoading] = useState(true);
   const [videoLoadingStage, setVideoLoadingStage] = useState<
     'initing' | 'sourceChanging'
@@ -402,7 +402,7 @@ function PlayPageClient() {
       onChange: (cfg) => handleSkipConfigChange(cfg),
     });
 
-  // 跳過片頭片尾配置相關函數
+  // 跳過片頭片尾設定相關函數
   const handleSkipConfigChange = async (newConfig: {
     enable: boolean;
     intro_time: number;
@@ -426,9 +426,9 @@ function PlayPageClient() {
           newConfig
         );
       }
-      logger.debug('跳過片頭片尾配置已儲存:', newConfig);
+      logger.debug('跳過片頭片尾設定已儲存:', newConfig);
     } catch (err) {
-      logger.error('儲存跳過片頭片尾配置失敗:', err);
+      logger.error('儲存跳過片頭片尾設定失敗:', err);
     }
   };
 
@@ -477,7 +477,7 @@ function PlayPageClient() {
     videoYear,
   ]);
 
-  // 進入頁面時直接獲取全部源資訊
+  // 進入頁面時直接取得全部源資訊
   useEffect(() => {
     let active = true;
 
@@ -489,12 +489,12 @@ function PlayPageClient() {
         const params = new URLSearchParams({ source, id });
         const detailResponse = await fetch(`/api/detail?${params.toString()}`);
         if (!detailResponse.ok) {
-          throw new Error('獲取影片詳情失敗');
+          throw new Error('取得影片詳情失敗');
         }
         const detailData = (await detailResponse.json()) as SearchResult;
         return [detailData];
       } catch (err) {
-        logger.error('獲取影片詳情失敗:', err);
+        logger.error('取得影片詳情失敗:', err);
         return [];
       }
     };
@@ -529,7 +529,7 @@ function PlayPageClient() {
       setLoadingStage(currentSource && currentId ? 'fetching' : 'searching');
       setLoadingMessage(
         currentSource && currentId
-          ? '🎬 正在獲取影片詳情...'
+          ? '🎬 正在取得影片詳情...'
           : '🔍 正在搜尋播放源...'
       );
       setSourceSearchLoading(true);
@@ -810,7 +810,7 @@ function PlayPageClient() {
           }
         };
 
-        // 如果是直接加載，背景非阻塞檢索其他可用片源與最新詳情
+        // 如果是直接載入，背景非阻塞檢索其他可用片源與最新詳情
         if (
           (isDirectLoad || shouldCompleteSourceSearchInBackground) &&
           detailData
@@ -896,11 +896,11 @@ function PlayPageClient() {
           };
           runBackgroundSearch();
         } else if (detailData) {
-          // 搜尋路徑進入：詳情可能來自搜尋快取，背景刷新確保集數最新
+          // 搜尋路徑進入：詳情可能來自搜尋快取，背景重新整理確保集數最新
           void refreshDetailInBackground(detailData as SearchResult);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : '加載失敗');
+        setError(err instanceof Error ? err.message : '載入失敗');
         setSourceSearchError(err instanceof Error ? err.message : '搜尋失敗');
         setLoading(false);
       } finally {
@@ -999,11 +999,11 @@ function PlayPageClient() {
     };
   }, [currentSource, currentId]);
 
-  // 跳過片頭片尾配置處理
+  // 跳過片頭片尾設定處理
   useEffect(() => {
     let cancelled = false;
 
-    // 僅在初次掛載時檢查跳過片頭片尾配置
+    // 僅在初次掛載時檢查跳過片頭片尾設定
     const initSkipConfig = async () => {
       if (!currentSource || !currentId) return;
 
@@ -1017,7 +1017,7 @@ function PlayPageClient() {
         setSkipConfig(nextConfig);
         skipConfigRef.current = nextConfig;
       } catch (err) {
-        logger.error('讀取跳過片頭片尾配置失敗:', err);
+        logger.error('讀取跳過片頭片尾設定失敗:', err);
       }
     };
 
@@ -1037,7 +1037,7 @@ function PlayPageClient() {
     const requestId = ++sourceChangeRequestRef.current;
     const isLatestRequest = () => sourceChangeRequestRef.current === requestId;
     try {
-      // 顯示換源加載狀態
+      // 顯示換源載入狀態
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
 
@@ -1122,7 +1122,7 @@ function PlayPageClient() {
       setDetail(newDetail);
       setCurrentEpisodeIndex(targetIndex);
 
-      // 背景刷新最新詳情：availableSources 來自搜尋結果（可能吃到
+      // 背景重新整理最新詳情：availableSources 來自搜尋結果（可能吃到
       // 伺服器搜尋快取的舊集數），換源後需以詳情 API 為準更新選集列表
       void (async () => {
         try {
@@ -1133,7 +1133,7 @@ function PlayPageClient() {
           if (!response.ok) return;
           const freshDetail = (await response.json()) as SearchResult;
           if (!freshDetail?.episodes?.length) return;
-          // 期間使用者可能又換了源，確認仍停留在本源才套用刷新結果
+          // 期間使用者可能又換了源，確認仍停留在本源才套用重新整理結果
           if (
             !isLatestRequest() ||
             currentSourceRef.current !== newSource ||
@@ -1158,12 +1158,12 @@ function PlayPageClient() {
             setCurrentEpisodeIndex(freshDetail.episodes.length - 1);
           }
         } catch (refreshErr) {
-          logger.error('換源後背景刷新詳情失敗:', refreshErr);
+          logger.error('換源後背景重新整理詳情失敗:', refreshErr);
         }
       })();
     } catch (err) {
       if (!isLatestRequest()) return;
-      // 隱藏換源加載狀態
+      // 隱藏換源載入狀態
       setIsVideoLoading(false);
       setError(err instanceof Error ? err.message : '換源失敗');
     }
@@ -1360,11 +1360,11 @@ function PlayPageClient() {
         moreVideoAttr: {
           crossOrigin: 'anonymous',
         },
-        // HLS 支持配置
+        // HLS 支援設定
         customType: {
           m3u8: function (video: HTMLVideoElement, url: string) {
             if (!Hls) {
-              logger.error('HLS.js 未加載');
+              logger.error('HLS.js 未載入');
               return;
             }
 
@@ -1452,7 +1452,7 @@ function PlayPageClient() {
           },
           skipSettings.skipToggle,
           {
-            html: '刪除跳過配置',
+            html: '刪除跳過設定',
             onClick: function () {
               handleSkipConfigChange({
                 enable: false,
@@ -1465,7 +1465,7 @@ function PlayPageClient() {
           skipSettings.setIntro,
           skipSettings.setOutro,
         ],
-        // 控製欄配置
+        // 控製欄設定
         controls: [
           {
             position: 'left',
@@ -1590,7 +1590,7 @@ function PlayPageClient() {
           currentPlayer.notice.show = '';
         }, 0);
 
-        // 隱藏換源加載狀態
+        // 隱藏換源載入狀態
         setIsVideoLoading(false);
       });
 
@@ -1891,7 +1891,7 @@ function PlayPageClient() {
                   />
                 )}
 
-                {/* 換源加載蒙層 */}
+                {/* 換源載入蒙層 */}
                 {isVideoLoading && (
                   <VideoLoadingOverlay stage={videoLoadingStage} />
                 )}

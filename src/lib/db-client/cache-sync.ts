@@ -11,11 +11,11 @@ import {
 } from './shared';
 import { getAuthInfoFromBrowserCookie } from '../auth';
 import { SkipConfig } from '../types';
-// ---------------- 混合緩存辅助函數 ----------------
+// ---------------- 混合快取辅助函數 ----------------
 
 /**
- * 清除目前使用者的所有緩存數據
- * 用於使用者登出時清理緩存
+ * 清除目前使用者的所有快取數據
+ * 用於使用者登出時清理快取
  */
 export function clearUserCache(): void {
   if (STORAGE_TYPE !== 'localstorage') {
@@ -24,14 +24,14 @@ export function clearUserCache(): void {
 }
 
 /**
- * 手動刷新所有緩存數據
- * 强制從服務器重新獲取數據並更新緩存
+ * 手動重新整理所有快取數據
+ * 强制從服務器重新取得數據並更新快取
  */
 export async function refreshAllCache(): Promise<void> {
   if (STORAGE_TYPE === 'localstorage') return;
 
   try {
-    // 並行刷新所有數據
+    // 並行重新整理所有數據
     const [playRecords, favorites, searchHistory, skipConfigs] =
       await Promise.allSettled([
         fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`),
@@ -76,14 +76,14 @@ export async function refreshAllCache(): Promise<void> {
       );
     }
   } catch (err) {
-    console.error('刷新緩存失敗:', err);
-    triggerGlobalError('刷新緩存失敗');
+    console.error('重新整理快取失敗:', err);
+    triggerGlobalError('重新整理快取失敗');
   }
 }
 
 /**
- * 獲取緩存狀態信息
- * 用於調試和監控緩存健康狀態
+ * 取得快取狀態資訊
+ * 用於調試和監控快取健康狀態
  */
 export function getCacheStatus(): {
   hasPlayRecords: boolean;

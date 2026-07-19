@@ -37,13 +37,13 @@ function ensureStringArray(value: any[]): string[] {
   return value.map((item) => String(item));
 }
 
-// 連接配置接口
+// 連接設定接口
 export interface RedisConnectionConfig {
   url: string;
   clientName: string; // 用於日志顯示，如 "Redis" 或 "Pika"
 }
 
-// 添加Redis操作重試包装器
+// 新增Redis操作重試包装器
 function createRetryWrapper(
   clientName: string,
   getClient: () => RedisClientType
@@ -110,7 +110,7 @@ export function createRedisClient(
       throw new Error(`${config.clientName}_URL env variable not set`);
     }
 
-    // 創建客戶端配置
+    // 創建客戶端設定
     const clientConfig: any = {
       url: config.url,
       socket: {
@@ -131,13 +131,13 @@ export function createRedisClient(
         // 設置no delay，减少延迟
         noDelay: true,
       },
-      // 添加其他配置
+      // 新增其他設定
       pingInterval: 30000, // 30秒ping一次，保持連接活跃
     };
 
     client = createClient(clientConfig);
 
-    // 添加錯誤事件監听
+    // 新增錯誤事件監听
     client.on('error', (err) => {
       console.error(`${config.clientName} client error:`, err);
     });
@@ -384,7 +384,7 @@ export abstract class BaseRedisStorage implements IStorage {
     // 刪除收藏夹（Hash key 直接刪除）
     await this.withRetry(() => this.client.del(this.favHashKey(userName)));
 
-    // 刪除跳過片头片尾配置（Hash key 直接刪除）
+    // 刪除跳過片头片尾設定（Hash key 直接刪除）
     await this.withRetry(() => this.client.del(this.skipHashKey(userName)));
   }
 
@@ -424,7 +424,7 @@ export abstract class BaseRedisStorage implements IStorage {
     }
   }
 
-  // ---------- 獲取全部使用者 ----------
+  // ---------- 取得全部使用者 ----------
   private usersSetKey() {
     return 'sys:users';
   }
@@ -436,7 +436,7 @@ export abstract class BaseRedisStorage implements IStorage {
     return ensureStringArray(members as any[]);
   }
 
-  // ---------- 管理员配置 ----------
+  // ---------- 管理员設定 ----------
   private adminConfigKey() {
     return 'admin:config';
   }
@@ -454,9 +454,9 @@ export abstract class BaseRedisStorage implements IStorage {
     );
   }
 
-  // ---------- 跳過片头片尾配置 ----------
+  // ---------- 跳過片头片尾設定 ----------
   private skipHashKey(user: string) {
-    return `u:${user}:skip`; // 一個使用者的所有跳過配置存在一個 Hash 中
+    return `u:${user}:skip`; // 一個使用者的所有跳過設定存在一個 Hash 中
   }
 
   private skipField(source: string, id: string) {
@@ -608,7 +608,7 @@ export abstract class BaseRedisStorage implements IStorage {
             );
           }
           await this.withRetry(() => this.client.del(oldSkipKeys));
-          console.log(`遷移了 ${oldSkipKeys.length} 條跳過配置`);
+          console.log(`遷移了 ${oldSkipKeys.length} 條跳過設定`);
         }
       }
 
@@ -707,7 +707,7 @@ export abstract class BaseRedisStorage implements IStorage {
 
   async clearAllData(): Promise<void> {
     try {
-      // 獲取所有使用者
+      // 取得所有使用者
       const allUsers = await this.getAllUsers();
 
       // 刪除所有使用者及其數據
@@ -715,7 +715,7 @@ export abstract class BaseRedisStorage implements IStorage {
         await this.deleteUser(username);
       }
 
-      // 刪除管理员配置
+      // 刪除管理员設定
       await this.withRetry(() => this.client.del(this.adminConfigKey()));
       await this.withRetry(() => this.client.del(this.bangumiAliasHashKey()));
 

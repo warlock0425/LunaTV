@@ -24,7 +24,7 @@ export class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
           stats: any,
           context: any
         ) {
-          // 如果是m3u8文件，處理內容以移除廣告分段
+          // 如果是m3u8檔案，處理內容以移除廣告分段
           if (response.data && typeof response.data === 'string') {
             // 過濾掉廣告段 - 實現更精確的廣告過濾邏輯
             const filtered = filterAdsFromM3U8Detailed(response.data);

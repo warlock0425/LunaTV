@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!config) {
-      return NextResponse.json({ error: '配置不存在' }, { status: 404 });
+      return NextResponse.json({ error: '設定不存在' }, { status: 404 });
     }
 
     // 確保 LiveConfig 存在
@@ -155,7 +155,7 @@ export async function POST(request: NextRequest) {
         const liveSource = config.LiveConfig[deleteIndex];
         if (liveSource.from === 'config') {
           return NextResponse.json(
-            { error: '不能刪除配置文件中的直播源' },
+            { error: '不能刪除設定檔中的直播源' },
             { status: 400 }
           );
         }
@@ -191,10 +191,10 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: '直播源不存在' }, { status: 404 });
         }
 
-        // 配置文件中的直播源不允許編輯
+        // 設定檔中的直播源不允許編輯
         if (editSource.from === 'config') {
           return NextResponse.json(
-            { error: '不能編輯配置文件中的直播源' },
+            { error: '不能編輯設定檔中的直播源' },
             { status: 400 }
           );
         }
@@ -248,7 +248,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '未知操作' }, { status: 400 });
     }
 
-    // 儲存配置
+    // 儲存設定
     await db.saveAdminConfig(config);
     setCachedConfig(config);
 

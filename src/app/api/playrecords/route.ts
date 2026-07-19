@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     const records = await db.getAllPlayRecords(authInfo.username);
     return NextResponse.json(records, { status: 200 });
   } catch (err) {
-    console.error('獲取播放記錄失敗', err);
+    console.error('取得播放記錄失敗', err);
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -4,7 +4,7 @@ import { CURRENT_VERSION } from '@/lib/version';
 
 export const metadata: Metadata = {
   title: '安全警告 - BerserkerTV',
-  description: '站點安全配置警告',
+  description: '站點安全設定警告',
 };
 
 export default function WarningPage() {
@@ -32,7 +32,7 @@ export default function WarningPage() {
 
           <div className='text-center mb-6 sm:mb-8'>
             <h1 className='text-2xl sm:text-3xl font-bold text-white mb-2'>
-              安全合規配置警告
+              安全合規設定警告
             </h1>
             <div className='w-12 sm:w-16 h-1 bg-accent mx-auto rounded-full' />
           </div>
@@ -43,7 +43,7 @@ export default function WarningPage() {
                 ⚠️ 安全風險提示
               </p>
               <p className='text-sm sm:text-base text-zinc-300'>
-                檢測到您的站點未配置存取控制，存在潛在的安全風險和法律合規問題。
+                檢測到您的站點未設定存取控制，存在潛在的安全風險和法律合規問題。
               </p>
             </div>
 
@@ -73,10 +73,10 @@ export default function WarningPage() {
 
             <div className='bg-accent/5 border border-accent/20 rounded-lg p-3 sm:p-4'>
               <h3 className='text-base sm:text-lg font-semibold text-accent mb-2'>
-                🔒 安全配置建議
+                🔒 安全設定建議
               </h3>
               <p className='text-sm sm:text-base text-zinc-300'>
-                請立即配置{' '}
+                請立即設定{' '}
                 <code className='bg-[#1a1a1a] px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono text-accent border border-accent/20'>
                   PASSWORD
                 </code>{' '}
@@ -89,7 +89,7 @@ export default function WarningPage() {
             <div className='text-center text-xs sm:text-sm text-zinc-500'>
               <p>
                 BerserkerTV v{CURRENT_VERSION} ·
-                為確保系統安全性和合規性，請及時完成安全配置
+                為確保系統安全性和合規性，請及時完成安全設定
               </p>
             </div>
           </div>

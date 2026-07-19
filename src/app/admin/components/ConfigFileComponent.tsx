@@ -43,7 +43,7 @@ export const ConfigFileComponent = ({
     }
   }
 
-  // 拉取訂閱配置
+  // 取得訂閱設定
   const handleFetchConfig = async () => {
     if (!subscriptionUrl.trim()) {
       showError('請輸入訂閱URL', showAlert);
@@ -60,27 +60,27 @@ export const ConfigFileComponent = ({
 
         if (!resp.ok) {
           const data = await resp.json().catch(() => ({}));
-          throw new Error(data.error || `拉取失敗: ${resp.status}`);
+          throw new Error(data.error || `取得失敗: ${resp.status}`);
         }
 
         const data = await resp.json();
         if (data.configContent) {
           setConfigContent(data.configContent);
-          // 更新本地配置的最後檢查時間
+          // 更新本地設定的最後檢查時間
           const currentTime = new Date().toISOString();
           setLastCheckTime(currentTime);
-          showSuccess('配置拉取成功', showAlert);
+          showSuccess('設定取得成功', showAlert);
         } else {
-          showError('拉取失敗：未獲取到配置內容', showAlert);
+          showError('取得失敗：未取得設定內容', showAlert);
         }
       } catch (err) {
-        showError(err instanceof Error ? err.message : '拉取失敗', showAlert);
+        showError(err instanceof Error ? err.message : '取得失敗', showAlert);
         throw err;
       }
     });
   };
 
-  // 儲存配置文件
+  // 儲存設定檔
   const handleSave = async () => {
     await withLoading('saveConfig', async () => {
       try {
@@ -100,7 +100,7 @@ export const ConfigFileComponent = ({
           throw new Error(data.error || `儲存失敗: ${resp.status}`);
         }
 
-        showSuccess('配置文件儲存成功', showAlert);
+        showSuccess('設定檔儲存成功', showAlert);
         await refreshConfig();
       } catch (err) {
         showError(err instanceof Error ? err.message : '儲存失敗', showAlert);
@@ -112,18 +112,18 @@ export const ConfigFileComponent = ({
   if (!config) {
     return (
       <div className='text-center text-zinc-500 dark:text-zinc-400'>
-        加載中...
+        載入中...
       </div>
     );
   }
 
   return (
     <div className='space-y-4'>
-      {/* 配置訂閱區域 */}
+      {/* 設定訂閱區域 */}
       <div className='bg-white dark:bg-zinc-800 rounded-lg p-6 border border-zinc-200 dark:border-zinc-700 shadow-sm'>
         <div className='flex items-center justify-between mb-6'>
           <h3 className='text-xl font-semibold text-zinc-900 dark:text-zinc-100'>
-            配置訂閱
+            設定訂閱
           </h3>
           <div className='text-sm text-zinc-500 dark:text-zinc-400 px-3 py-1.5 rounded-full'>
             最後更新:{' '}
@@ -148,11 +148,11 @@ export const ConfigFileComponent = ({
               className='w-full px-4 py-3 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 shadow-sm hover:border-zinc-400 dark:hover:border-zinc-500'
             />
             <p className='mt-2 text-xs text-zinc-500 dark:text-zinc-400'>
-              輸入配置文件的訂閱地址，要求 JSON 格式，且使用 Base58 編碼
+              輸入設定檔的訂閱地址，要求 JSON 格式，且使用 Base58 編碼
             </p>
           </div>
 
-          {/* 拉取配置按鈕 */}
+          {/* 取得設定按鈕 */}
           <div className='pt-2'>
             <button
               onClick={handleFetchConfig}
@@ -166,10 +166,10 @@ export const ConfigFileComponent = ({
               {isLoading('fetchConfig') ? (
                 <div className='flex items-center justify-center gap-2'>
                   <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
-                  拉取中…
+                  取得中…
                 </div>
               ) : (
-                '拉取配置'
+                '取得設定'
               )}
             </button>
           </div>
@@ -181,7 +181,7 @@ export const ConfigFileComponent = ({
                 自動更新
               </label>
               <p className='text-xs text-zinc-500 dark:text-zinc-400 mt-1'>
-                啟用後系統將定期自動拉取最新配置
+                啟用後系統將定期自動取得最新設定
               </p>
             </div>
             <button
@@ -206,14 +206,14 @@ export const ConfigFileComponent = ({
         </div>
       </div>
 
-      {/* 配置文件編輯區域 */}
+      {/* 設定檔編輯區域 */}
       <div className='space-y-4'>
         <div className='relative'>
           <textarea
             value={configContent}
             onChange={(e) => setConfigContent(e.target.value)}
             rows={20}
-            placeholder='請輸入配置文件內容（JSON 格式）...'
+            placeholder='請輸入設定檔內容（JSON 格式）...'
             disabled={false}
             className='w-full px-4 py-3 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-mono text-sm leading-relaxed resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 hover:border-zinc-400 dark:hover:border-zinc-500'
             style={{
@@ -227,7 +227,7 @@ export const ConfigFileComponent = ({
 
         <div className='flex items-center justify-between'>
           <div className='text-xs text-zinc-500 dark:text-zinc-400'>
-            支持 JSON 格式，用於配置影片源和自定義分類
+            支援 JSON 格式，用於設定影片源和自定義分類
           </div>
           <button
             onClick={handleSave}

@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
-        error: '不支持本地存儲進行管理員配置',
+        error: '不支援本地存儲進行管理員設定',
       },
       { status: 400 }
     );
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     // 檢查使用者權限
     let adminConfig = await getConfig();
 
-    // 僅站長可以修改配置文件
+    // 僅站長可以修改設定檔
     if (username !== process.env.USERNAME) {
       return NextResponse.json(
         { error: '權限不足，只有站長可以修改設定檔' },
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 獲取請求體
+    // 取得請求體
     const body = await readJsonObject(request);
     if (!body) {
       return NextResponse.json(
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     if (!configFile || typeof configFile !== 'string') {
       return NextResponse.json(
-        { error: '配置文件內容不能為空' },
+        { error: '設定檔內容不能為空' },
         { status: 400 }
       );
     }
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
     } catch (e) {
       return NextResponse.json(
         {
-          error: '配置文件格式錯誤',
+          error: '設定檔格式錯誤',
           details: e instanceof Error ? e.message : undefined,
         },
         { status: 400 }
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    // 更新訂閱配置
+    // 更新訂閱設定
     if (subscriptionUrl !== undefined) {
       nextConfig.ConfigSubscription.URL = subscriptionUrl;
     }
@@ -105,18 +105,18 @@ export async function POST(request: NextRequest) {
     nextConfig.ConfigSubscription.LastCheck = lastCheckTime || '';
 
     adminConfig = refineConfig(nextConfig);
-    // 更新配置文件
+    // 更新設定檔
     await db.saveAdminConfig(adminConfig);
     setCachedConfig(adminConfig);
     return NextResponse.json({
       success: true,
-      message: '配置文件更新成功',
+      message: '設定檔更新成功',
     });
   } catch (error) {
-    console.error('更新配置文件失敗:', error);
+    console.error('更新設定檔失敗:', error);
     return NextResponse.json(
       {
-        error: '更新配置文件失敗',
+        error: '更新設定檔失敗',
         details: (error as Error).message,
       },
       { status: 500 }

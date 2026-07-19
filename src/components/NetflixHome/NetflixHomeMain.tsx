@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { BangumiCalendarData } from '@/lib/bangumi.client';
@@ -67,6 +67,18 @@ export default function NetflixHome({
     tab === 'favorites' ? 'favorites' : 'home'
   );
   const [showAnnouncement, setShowAnnouncement] = useState(false);
+  // 交錯電影與劇集，避免這一區塊與下方「熱門電影」「熱門劇集」顯示同一批內容
+  // （電影數量本來就超過 14，直接串接會讓前 14 筆全是電影）
+  const mixedHighlights = useMemo(() => {
+    const mixed: DoubanItem[] = [];
+    const longest = Math.max(hotMovies.length, hotTvShows.length);
+    for (let i = 0; i < longest && mixed.length < 14; i++) {
+      if (hotMovies[i]) mixed.push(hotMovies[i]);
+      if (mixed.length < 14 && hotTvShows[i]) mixed.push(hotTvShows[i]);
+    }
+    return mixed;
+  }, [hotMovies, hotTvShows]);
+
   const { toast } = useToast();
 
   // 狀態化管理繼續觀看，確保刪除時能即時反應
@@ -446,16 +458,14 @@ export default function NetflixHome({
 
               <section className='mb-10'>
                 <SectionTitle
-                  title='最新上架'
+                  title='熱門影劇'
                   icon={<Clapperboard className='w-5 h-5 text-accent' />}
                   viewAllHref='/douban?type=movie'
                 />
                 <div className='grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-4'>
-                  {[...hotMovies, ...hotTvShows]
-                    .slice(0, 14)
-                    .map((item, idx) => (
-                      <NetflixGridCard key={`${item.id}-${idx}`} item={item} />
-                    ))}
+                  {mixedHighlights.map((item, idx) => (
+                    <NetflixGridCard key={`${item.id}-${idx}`} item={item} />
+                  ))}
                 </div>
               </section>
 

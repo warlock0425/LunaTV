@@ -94,7 +94,7 @@ export const LiveSourceConfig = ({
         throw new Error(data.error || `操作失敗: ${resp.status}`);
       }
 
-      // 成功後重新整理配置
+      // 成功後重新整理設定
       await refreshConfig();
     } catch (err) {
       showError(err instanceof Error ? err.message : '操作失敗', showAlert);
@@ -138,7 +138,7 @@ export const LiveSourceConfig = ({
           throw new Error(data.error || `重新整理失敗: ${response.status}`);
         }
 
-        // 重新整理成功後重新獲取配置
+        // 重新整理成功後重新取得設定
         await refreshConfig();
         showAlert({
           type: 'success',
@@ -342,7 +342,7 @@ export const LiveSourceConfig = ({
   if (!config) {
     return (
       <div className='text-center text-zinc-500 dark:text-zinc-400'>
-        加載中...
+        載入中...
       </div>
     );
   }

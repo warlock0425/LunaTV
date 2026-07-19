@@ -131,7 +131,7 @@ export function processImageUrl(originalUrl: string): string {
 }
 
 /**
- * 從 m3u8 地址獲取影片質量等級和網路資訊
+ * 從 m3u8 地址取得影片質量等級和網路資訊
  * @param m3u8Url m3u8 播放列表的 URL
  * @returns Promise<{quality: string, loadSpeed: string, pingTime: number}> 影片質量等級和網路資訊
  */
@@ -294,7 +294,7 @@ export async function getVideoResolutionFromM3u8(
               pingTime: Math.round(pingTime),
             });
           } else {
-            // webkit 無法獲取尺寸，直接返回
+            // webkit 無法取得尺寸，直接返回
             resolveOnce({
               quality: playlistQualityHint || '未知',
               loadSpeed: actualLoadSpeed,

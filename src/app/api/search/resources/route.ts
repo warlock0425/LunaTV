@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: '獲取資源失敗' },
+      { error: '取得資源失敗' },
       { status: 500, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }

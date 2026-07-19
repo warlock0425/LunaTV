@@ -25,7 +25,7 @@ describe('VideoLoadingOverlay', () => {
 
   it('初始化階段顯示加載訊息', () => {
     render(<VideoLoadingOverlay stage='initing' />);
-    expect(screen.getByText('🔄 影片加載中...')).toBeInTheDocument();
+    expect(screen.getByText('🔄 影片載入中...')).toBeInTheDocument();
   });
 });
 

@@ -89,7 +89,7 @@ export const CategoryConfig = ({
         throw new Error(data.error || `操作失敗: ${resp.status}`);
       }
 
-      // 成功後重新整理配置
+      // 成功後重新整理設定
       await refreshConfig();
     } catch (err) {
       showError(err instanceof Error ? err.message : '操作失敗', showAlert);
@@ -259,7 +259,7 @@ export const CategoryConfig = ({
   if (!config) {
     return (
       <div className='text-center text-zinc-500 dark:text-zinc-400'>
-        加載中...
+        載入中...
       </div>
     );
   }

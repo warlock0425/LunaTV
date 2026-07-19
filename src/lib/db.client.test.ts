@@ -93,7 +93,7 @@ describe('savePlayRecord remote synchronization', () => {
       );
       expect(globalErrors).toEqual([]);
       expect(warnSpy).toHaveBeenCalledWith(
-        '播放紀錄已保存，但刷新播放紀錄快取失敗:',
+        '播放紀錄已儲存，但重新整理播放紀錄快取失敗:',
         expect.any(Error)
       );
 

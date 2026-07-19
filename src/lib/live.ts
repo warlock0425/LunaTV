@@ -275,7 +275,7 @@ function parseM3U(
 
     // 检查是否是 #EXTM3U 行，提取 tvg-url
     if (line.startsWith('#EXTM3U')) {
-      // 支持两种格式：x-tvg-url 和 url-tvg
+      // 支援两种格式：x-tvg-url 和 url-tvg
       const tvgUrlMatch = line.match(/(?:x-tvg-url|url-tvg)="([^"]*)"/);
       tvgUrl = tvgUrlMatch ? tvgUrlMatch[1].split(',')[0].trim() : '';
       continue;

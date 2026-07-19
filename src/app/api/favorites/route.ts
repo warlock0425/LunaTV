@@ -17,13 +17,13 @@ export const runtime = 'nodejs';
 /**
  * GET /api/favorites
  *
- * 支持兩種調用方式：
+ * 支援兩種調用方式：
  * 1. 不帶 query，返回全部收藏列表（Record<string, Favorite>）。
  * 2. 帶 key=source+id，返回單條收藏（Favorite | null）。
  */
 export async function GET(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -64,7 +64,7 @@ export async function GET(request: NextRequest) {
     const favorites = await db.getAllFavorites(authInfo.username);
     return NextResponse.json(favorites, { status: 200 });
   } catch (err) {
-    console.error('獲取收藏失敗', err);
+    console.error('取得收藏失敗', err);
     return NextResponse.json(
       { error: 'Internal Server Error' },
       { status: 500 }
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // 從 cookie 獲取使用者資訊
+    // 從 cookie 取得使用者資訊
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

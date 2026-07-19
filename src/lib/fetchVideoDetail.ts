@@ -11,7 +11,7 @@ interface FetchVideoDetailOptions {
   fallbackTitle?: string;
   /**
    * 優先直接呼叫詳情 API 取得最新資料（跳過搜尋快取）。
-   * 供 cron 刷新集數等對新鮮度敏感的場景使用；詳情失效時仍會回退到搜尋比對。
+   * 供 cron 重新整理集數等對新鮮度敏感的場景使用；詳情失效時仍會回退到搜尋比對。
    */
   preferDetailApi?: boolean;
 }
@@ -88,7 +88,7 @@ function findBestTitleFallback(
 }
 
 /**
- * 根據 source 與 id 獲取影片詳情。
+ * 根據 source 與 id 取得影片詳情。
  * 1. 若傳入 fallbackTitle，則先調用 /api/search 搜尋精確匹配。
  * 2. 若搜尋未命中或未提供 fallbackTitle，則直接調用 /api/detail。
  */
@@ -164,5 +164,5 @@ export async function fetchVideoDetail({
     return fallbackDetail;
   }
 
-  throw new Error('獲取影片詳情失敗');
+  throw new Error('取得影片詳情失敗');
 }

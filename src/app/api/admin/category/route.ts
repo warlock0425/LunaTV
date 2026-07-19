@@ -13,7 +13,7 @@ import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
-// 支持的操作類型
+// 支援的操作類型
 type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort';
 
 interface BaseBody {
@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
-        error: '不支持本地存儲進行管理員配置',
+        error: '不支援本地存儲進行管理員設定',
       },
       { status: 400 }
     );
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '參數格式錯誤' }, { status: 400 });
     }
 
-    // 获取配置与存储
+    // 获取設定与存储
     const adminConfig = await getConfig();
 
     // 權限與身份校驗

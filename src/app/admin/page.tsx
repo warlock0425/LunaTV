@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,react-hooks/exhaustive-deps */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import {
@@ -55,8 +55,8 @@ function AdminPageClient() {
     playStats: false,
   });
 
-  // 獲取管理員配置
-  // showLoading 用於控製是否在請求期間顯示整體加載骨架。
+  // 取得管理員設定
+  // showLoading 用於控製是否在請求期間顯示整體載入骨架。
   const fetchConfig = useCallback(async (showLoading = false) => {
     try {
       setError(null);
@@ -68,7 +68,7 @@ function AdminPageClient() {
 
       if (!response.ok) {
         const data = (await response.json()) as any;
-        throw new Error(`獲取配置失敗: ${data.error}`);
+        throw new Error(`取得設定失敗: ${data.error}`);
       }
 
       const data = (await response.json()) as AdminConfigResult;
@@ -76,8 +76,9 @@ function AdminPageClient() {
       setRole(data.Role);
       setError(null);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '獲取配置失敗';
-      showError(msg, showAlert);
+      // 錯誤已由頁面上的紅字與「重新載入」按鈕呈現，
+      // 不再另外彈出對話框（同一句話出現兩次且需多一次點擊才能關閉）
+      const msg = err instanceof Error ? err.message : '取得設定失敗';
       setError(msg);
     } finally {
       setLoading(false);
@@ -85,7 +86,7 @@ function AdminPageClient() {
   }, []);
 
   useEffect(() => {
-    // 首次加載骨架由 loading 初始值 true 提供，不需 showLoading
+    // 首次載入骨架由 loading 初始值 true 提供，不需 showLoading
     // 掛載時抓取資料：setState 皆發生於 await 之後，規則對具名函式為保守誤判
     // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchConfig();
@@ -99,7 +100,7 @@ function AdminPageClient() {
     }));
   };
 
-  // 新增: 重置配置處理函數
+  // 新增: 重置設定處理函數
   const handleResetConfig = () => {
     setShowResetConfigModal(true);
   };
@@ -185,7 +186,7 @@ function AdminPageClient() {
               </a>
             </div>
           )}
-          {/* 標題 + 重置配置按鈕 */}
+          {/* 標題 + 重置設定按鈕 */}
           <div className='flex items-center gap-2 mb-8'>
             <h1 className='text-2xl font-bold text-zinc-900 dark:text-zinc-100'>
               管理員設定
@@ -195,15 +196,15 @@ function AdminPageClient() {
                 onClick={handleResetConfig}
                 className={`px-3 py-1 text-xs rounded-md transition-colors ${buttonStyles.dangerSmall}`}
               >
-                重置配置
+                重置設定
               </button>
             )}
           </div>
 
-          {/* 配置文件標籤 - 僅站長可見 */}
+          {/* 設定檔標籤 - 僅站長可見 */}
           {role === 'owner' && (
             <CollapsibleTab
-              title='配置文件'
+              title='設定檔'
               icon={
                 <FileText
                   size={20}
@@ -220,9 +221,9 @@ function AdminPageClient() {
             </CollapsibleTab>
           )}
 
-          {/* 站點配置標籤 */}
+          {/* 站點設定標籤 */}
           <CollapsibleTab
-            title='站點配置'
+            title='站點設定'
             icon={
               <Settings
                 size={20}
@@ -236,9 +237,9 @@ function AdminPageClient() {
           </CollapsibleTab>
 
           <div className='space-y-4'>
-            {/* 使用者配置標籤 */}
+            {/* 使用者設定標籤 */}
             <CollapsibleTab
-              title='使用者配置'
+              title='使用者設定'
               icon={
                 <Users size={20} className='text-zinc-600 dark:text-zinc-400' />
               }
@@ -252,9 +253,9 @@ function AdminPageClient() {
               />
             </CollapsibleTab>
 
-            {/* 影片源配置標籤 */}
+            {/* 影片源設定標籤 */}
             <CollapsibleTab
-              title='影片源配置'
+              title='影片源設定'
               icon={
                 <Video size={20} className='text-zinc-600 dark:text-zinc-400' />
               }
@@ -264,9 +265,9 @@ function AdminPageClient() {
               <VideoSourceConfig config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
-            {/* 直播源配置標籤 */}
+            {/* 直播源設定標籤 */}
             <CollapsibleTab
-              title='直播源配置'
+              title='直播源設定'
               icon={
                 <Tv size={20} className='text-zinc-600 dark:text-zinc-400' />
               }
@@ -276,9 +277,9 @@ function AdminPageClient() {
               <LiveSourceConfig config={config} refreshConfig={fetchConfig} />
             </CollapsibleTab>
 
-            {/* 分類配置標籤 */}
+            {/* 分類設定標籤 */}
             <CollapsibleTab
-              title='分類配置'
+              title='分類設定'
               icon={
                 <FolderOpen
                   size={20}
@@ -334,7 +335,7 @@ function AdminPageClient() {
         showConfirm={alertModal.showConfirm}
       />
 
-      {/* 重置配置確認彈窗 */}
+      {/* 重置設定確認彈窗 */}
       {showResetConfigModal &&
         createPortal(
           <div
@@ -348,7 +349,7 @@ function AdminPageClient() {
               <div className='p-6'>
                 <div className='flex items-center justify-between mb-6'>
                   <h3 className='text-xl font-semibold text-zinc-900 dark:text-zinc-100'>
-                    確認重置配置
+                    確認重置設定
                   </h3>
                   <button
                     onClick={() => setShowResetConfigModal(false)}
@@ -391,7 +392,7 @@ function AdminPageClient() {
                       </span>
                     </div>
                     <p className='text-sm text-yellow-700 dark:text-yellow-400'>
-                      此操作將重置使用者封禁和管理員設定、自定義影片源，站點配置將重置為預設值，是否繼續？
+                      此操作將重置使用者封禁和管理員設定、自定義影片源，站點設定將重置為預設值，是否繼續？
                     </p>
                   </div>
                 </div>

@@ -89,7 +89,7 @@ export async function verifyAuthSession(
   );
 }
 
-// 從 cookie 獲取認證信息 (服務端使用，支援 NextRequest 與標準 Request)
+// 從 cookie 取得認證資訊 (服務端使用，支援 NextRequest 與標準 Request)
 export function getAuthInfoFromCookie(
   request: NextRequest | Request
 ): AuthInfo | null {
@@ -121,7 +121,7 @@ export function getAuthInfoFromCookie(
   }
 }
 
-// 從 cookie 獲取認證信息 (客戶端使用，優先讀取 user_info cookie)
+// 從 cookie 取得認證資訊 (客戶端使用，優先讀取 user_info cookie)
 export function getAuthInfoFromBrowserCookie(): AuthInfo | null {
   if (typeof window === 'undefined') {
     return null;

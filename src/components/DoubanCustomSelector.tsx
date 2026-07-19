@@ -80,7 +80,7 @@ const DoubanCustomSelector: React.FC<DoubanCustomSelectorProps> = ({
     }
   }, []);
 
-  // 添加二级选择器的鼠标滚轮事件监听器
+  // 新增二级选择器的鼠标滚轮事件监听器
   useEffect(() => {
     const scrollContainer = secondaryScrollContainerRef.current;
     const capsuleContainer = secondaryContainerRef.current;
@@ -101,13 +101,13 @@ const DoubanCustomSelector: React.FC<DoubanCustomSelectorProps> = ({
     }
   }, [handleSecondaryWheel]);
 
-  // 當二級選項變化時重新添加事件監聽器
+  // 當二級選項變化時重新新增事件監聽器
   useEffect(() => {
     const scrollContainer = secondaryScrollContainerRef.current;
     const capsuleContainer = secondaryContainerRef.current;
 
     if (scrollContainer && capsuleContainer && secondaryOptions.length > 0) {
-      // 重新添加事件監聽器
+      // 重新新增事件監聽器
       scrollContainer.addEventListener('wheel', handleSecondaryWheel, {
         passive: false,
       });

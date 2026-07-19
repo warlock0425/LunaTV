@@ -113,7 +113,7 @@ describe('fetchVideoDetail', () => {
         id: 'season-4-old',
         fallbackTitle: '關於我轉生變成史萊姆這檔事 第四季',
       })
-    ).rejects.toThrow('獲取影片詳情失敗');
+    ).rejects.toThrow('取得影片詳情失敗');
   });
 
   it('prefers fresh detail api over search when preferDetailApi is set', async () => {
@@ -181,6 +181,6 @@ describe('fetchVideoDetail', () => {
         id: 'old-id',
         fallbackTitle: '尖帽子的魔法工房',
       })
-    ).rejects.toThrow('獲取影片詳情失敗');
+    ).rejects.toThrow('取得影片詳情失敗');
   });
 });

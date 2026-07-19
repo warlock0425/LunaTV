@@ -5,7 +5,7 @@ import { Favorite, PlayRecord } from './shared';
 import { getAuthInfoFromBrowserCookie } from '../auth';
 import { SkipConfig } from '../types';
 
-// ---- 緩存數據結构 ----
+// ---- 快取數據結构 ----
 interface CacheData<T> {
   data: T;
   timestamp: number;
@@ -19,12 +19,12 @@ interface UserCacheStore {
   skipConfigs?: CacheData<Record<string, SkipConfig>>;
 }
 
-// 緩存相關常量
+// 快取相關常量
 const CACHE_PREFIX = 'moontv_cache_';
 const CACHE_VERSION = '1.0.0';
-const CACHE_EXPIRE_TIME = 60 * 60 * 1000; // 一小時緩存過期
+const CACHE_EXPIRE_TIME = 60 * 60 * 1000; // 一小時快取過期
 
-// ---- 緩存管理器 ----
+// ---- 快取管理器 ----
 class HybridCacheManager {
   private static instance: HybridCacheManager;
 
@@ -36,7 +36,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 獲取目前使用者名
+   * 取得目前使用者名
    */
   private getCurrentUsername(): string | null {
     const authInfo = getAuthInfoFromBrowserCookie();
@@ -44,14 +44,14 @@ class HybridCacheManager {
   }
 
   /**
-   * 生成使用者专屬的緩存key
+   * 生成使用者专屬的快取key
    */
   private getUserCacheKey(username: string): string {
     return `${CACHE_PREFIX}${username}`;
   }
 
   /**
-   * 獲取使用者緩存數據
+   * 取得使用者快取數據
    */
   private getUserCache(username: string): UserCacheStore {
     if (typeof window === 'undefined') return {};
@@ -61,30 +61,30 @@ class HybridCacheManager {
       const cached = localStorage.getItem(cacheKey);
       return cached ? JSON.parse(cached) : {};
     } catch (error) {
-      console.warn('獲取使用者緩存失敗:', error);
+      console.warn('取得使用者快取失敗:', error);
       return {};
     }
   }
 
   /**
-   * 保存使用者緩存數據
+   * 儲存使用者快取數據
    */
   private saveUserCache(username: string, cache: UserCacheStore): void {
     if (typeof window === 'undefined') return;
 
     try {
-      // 檢查緩存大小，超過15MB時清理旧數據
+      // 檢查快取大小，超過15MB時清理旧數據
       const cacheSize = JSON.stringify(cache).length;
       if (cacheSize > 15 * 1024 * 1024) {
-        console.warn('緩存過大，清理旧數據');
+        console.warn('快取過大，清理旧數據');
         this.cleanOldCache(cache);
       }
 
       const cacheKey = this.getUserCacheKey(username);
       localStorage.setItem(cacheKey, JSON.stringify(cache));
     } catch (error) {
-      console.warn('保存使用者緩存失敗:', error);
-      // 存儲空間不足時清理緩存后重試
+      console.warn('儲存使用者快取失敗:', error);
+      // 存儲空間不足時清理快取后重試
       if (
         error instanceof DOMException &&
         error.name === 'QuotaExceededError'
@@ -94,32 +94,32 @@ class HybridCacheManager {
           const cacheKey = this.getUserCacheKey(username);
           localStorage.setItem(cacheKey, JSON.stringify(cache));
         } catch (retryError) {
-          console.error('重試保存緩存仍然失敗:', retryError);
+          console.error('重試儲存快取仍然失敗:', retryError);
         }
       }
     }
   }
 
   /**
-   * 清理過期緩存數據
+   * 清理過期快取數據
    */
   private cleanOldCache(cache: UserCacheStore): void {
     const now = Date.now();
     const maxAge = 60 * 24 * 60 * 60 * 1000; // 两個月
 
-    // 清理過期的播放記錄緩存
+    // 清理過期的播放記錄快取
     if (cache.playRecords && now - cache.playRecords.timestamp > maxAge) {
       delete cache.playRecords;
     }
 
-    // 清理過期的收藏緩存
+    // 清理過期的收藏快取
     if (cache.favorites && now - cache.favorites.timestamp > maxAge) {
       delete cache.favorites;
     }
   }
 
   /**
-   * 清理所有緩存
+   * 清理所有快取
    */
   private clearAllCache(): void {
     const keys = Object.keys(localStorage);
@@ -131,7 +131,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 檢查緩存是否有效
+   * 檢查快取是否有效
    */
   private isCacheValid<T>(cache: CacheData<T>): boolean {
     const now = Date.now();
@@ -142,7 +142,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 創建緩存數據
+   * 創建快取數據
    */
   private createCacheData<T>(data: T): CacheData<T> {
     return {
@@ -153,7 +153,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 獲取緩存的播放記錄
+   * 取得快取的播放記錄
    */
   getCachedPlayRecords(): Record<string, PlayRecord> | null {
     const username = this.getCurrentUsername();
@@ -170,7 +170,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 緩存播放記錄
+   * 快取播放記錄
    */
   cachePlayRecords(data: Record<string, PlayRecord>): void {
     const username = this.getCurrentUsername();
@@ -182,7 +182,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 獲取緩存的收藏
+   * 取得快取的收藏
    */
   getCachedFavorites(): Record<string, Favorite> | null {
     const username = this.getCurrentUsername();
@@ -199,7 +199,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 緩存收藏
+   * 快取收藏
    */
   cacheFavorites(data: Record<string, Favorite>): void {
     const username = this.getCurrentUsername();
@@ -211,7 +211,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 獲取緩存的搜索歷史
+   * 取得快取的搜索歷史
    */
   getCachedSearchHistory(): string[] | null {
     const username = this.getCurrentUsername();
@@ -228,7 +228,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 緩存搜索歷史
+   * 快取搜索歷史
    */
   cacheSearchHistory(data: string[]): void {
     const username = this.getCurrentUsername();
@@ -240,7 +240,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 獲取緩存的跳過片头片尾配置
+   * 取得快取的跳過片头片尾設定
    */
   getCachedSkipConfigs(): Record<string, SkipConfig> | null {
     const username = this.getCurrentUsername();
@@ -257,7 +257,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 緩存跳過片头片尾配置
+   * 快取跳過片头片尾設定
    */
   cacheSkipConfigs(data: Record<string, SkipConfig>): void {
     const username = this.getCurrentUsername();
@@ -269,7 +269,7 @@ class HybridCacheManager {
   }
 
   /**
-   * 清除指定使用者的所有緩存
+   * 清除指定使用者的所有快取
    */
   clearUserCache(username?: string): void {
     const targetUsername = username || this.getCurrentUsername();
@@ -279,12 +279,12 @@ class HybridCacheManager {
       const cacheKey = this.getUserCacheKey(targetUsername);
       localStorage.removeItem(cacheKey);
     } catch (error) {
-      console.warn('清除使用者緩存失敗:', error);
+      console.warn('清除使用者快取失敗:', error);
     }
   }
 
   /**
-   * 清除所有過期緩存
+   * 清除所有過期快取
    */
   clearExpiredCaches(): void {
     if (typeof window === 'undefined') return;
@@ -297,7 +297,7 @@ class HybridCacheManager {
         if (key?.startsWith(CACHE_PREFIX)) {
           try {
             const cache = JSON.parse(localStorage.getItem(key) || '{}');
-            // 檢查是否有任何緩存數據過期
+            // 檢查是否有任何快取數據過期
             let hasValidData = false;
             for (const [, cacheData] of Object.entries(cache)) {
               if (cacheData && this.isCacheValid(cacheData as CacheData<any>)) {
@@ -309,7 +309,7 @@ class HybridCacheManager {
               keysToRemove.push(key);
             }
           } catch {
-            // 解析失敗的緩存也刪除
+            // 解析失敗的快取也刪除
             keysToRemove.push(key);
           }
         }
@@ -317,15 +317,15 @@ class HybridCacheManager {
 
       keysToRemove.forEach((key) => localStorage.removeItem(key));
     } catch (error) {
-      console.warn('清除過期緩存失敗:', error);
+      console.warn('清除過期快取失敗:', error);
     }
   }
 }
 
-// 獲取緩存管理器實例
+// 取得快取管理器實例
 export const cacheManager = HybridCacheManager.getInstance();
 
-// 頁面加載時清理過期緩存
+// 頁面載入時清理過期快取
 if (typeof window !== 'undefined') {
   setTimeout(() => cacheManager.clearExpiredCaches(), 1000);
 }

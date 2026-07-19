@@ -200,7 +200,7 @@ export function getDoubanProxyConfig(): {
 }
 
 /**
- * 瀏覽器端豆瓣分類數據獲取函數
+ * 瀏覽器端豆瓣分類數據取得函數
  */
 export async function fetchDoubanCategories(
   params: DoubanCategoriesParams,
@@ -258,7 +258,7 @@ export async function fetchDoubanCategories(
 
     return {
       code: 200,
-      message: '獲取成功',
+      message: '取得成功',
       list: list,
     };
   } catch (error) {
@@ -266,16 +266,16 @@ export async function fetchDoubanCategories(
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('globalError', {
-          detail: { message: '獲取豆瓣分類數據失敗' },
+          detail: { message: '取得豆瓣分類數據失敗' },
         })
       );
     }
-    throw new Error(`獲取豆瓣分類數據失敗: ${(error as Error).message}`);
+    throw new Error(`取得豆瓣分類數據失敗: ${(error as Error).message}`);
   }
 }
 
 /**
- * 統一的豆瓣分類數據獲取函數，根據代理設置選擇使用服務端 API 或客戶端代理獲取
+ * 統一的豆瓣分類數據取得函數，根據代理設置選擇使用服務端 API 或客戶端代理取得
  */
 export async function getDoubanCategories(
   params: DoubanCategoriesParams
@@ -421,7 +421,7 @@ export async function fetchDoubanList(
 
     return {
       code: 200,
-      message: '獲取成功',
+      message: '取得成功',
       list: list,
     };
   } catch (error) {
@@ -429,11 +429,11 @@ export async function fetchDoubanList(
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('globalError', {
-          detail: { message: '獲取豆瓣列表數據失敗' },
+          detail: { message: '取得豆瓣列表數據失敗' },
         })
       );
     }
-    throw new Error(`獲取豆瓣分類數據失敗: ${(error as Error).message}`);
+    throw new Error(`取得豆瓣分類數據失敗: ${(error as Error).message}`);
   }
 }
 
@@ -533,7 +533,7 @@ async function fetchDoubanRecommends(
     format = toSimplified(format || '');
   }
   if (label === 'all') {
-    // 保留 'all' 值，不轉換为空字符串，让 API 使用默認行为
+    // 保留 'all' 值，不轉換为空字符串，让 API 使用預設行为
     label = '';
   } else {
     label = toSimplified(label || '');
@@ -625,10 +625,10 @@ async function fetchDoubanRecommends(
 
     return {
       code: 200,
-      message: '獲取成功',
+      message: '取得成功',
       list: list,
     };
   } catch (error) {
-    throw new Error(`獲取豆瓣推薦數據失敗: ${(error as Error).message}`);
+    throw new Error(`取得豆瓣推薦數據失敗: ${(error as Error).message}`);
   }
 }

@@ -29,7 +29,7 @@ export function SkipButton({
   );
 }
 
-/** 換源/初始化加載蒙層 */
+/** 換源/初始化載入蒙層 */
 export function VideoLoadingOverlay({
   stage,
 }: {
@@ -50,7 +50,7 @@ export function VideoLoadingOverlay({
           <p className='text-xl font-semibold text-white animate-pulse'>
             {stage === 'sourceChanging'
               ? '🔄 切換播放源...'
-              : '🔄 影片加載中...'}
+              : '🔄 影片載入中...'}
           </p>
         </div>
       </div>

@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
       const envPassword = process.env.PASSWORD;
       const isProd = process.env.NODE_ENV === 'production';
 
-      // 未配置 PASSWORD 時直接放行
+      // 未設定 PASSWORD 時直接放行
       if (!envPassword) {
         const response = NextResponse.json({ ok: true });
 
@@ -126,7 +126,7 @@ export async function POST(req: NextRequest) {
         response.cookies.set('auth', '', {
           path: '/',
           expires: new Date(0),
-          sameSite: 'lax', // 改為 lax 以支持 PWA
+          sameSite: 'lax', // 改為 lax 以支援 PWA
           httpOnly: true,
           secure: isProd && !process.env.CI,
         });
@@ -269,7 +269,7 @@ export async function POST(req: NextRequest) {
       response.cookies.set('auth', cookieValue, {
         path: '/',
         expires,
-        sameSite: 'lax', // 改為 lax 以支持 PWA
+        sameSite: 'lax', // 改為 lax 以支援 PWA
         httpOnly: true,
         secure: isProd && !process.env.CI,
       });
@@ -328,7 +328,7 @@ export async function POST(req: NextRequest) {
       response.cookies.set('auth', cookieValue, {
         path: '/',
         expires,
-        sameSite: 'lax', // 改為 lax 以支持 PWA
+        sameSite: 'lax', // 改為 lax 以支援 PWA
         httpOnly: true,
         secure: isProd && !process.env.CI,
       });

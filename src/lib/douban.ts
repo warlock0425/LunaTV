@@ -23,7 +23,7 @@ export async function fetchDoubanData<T>(url: string): Promise<T> {
     return cached.data as T;
   }
 
-  // 添加超时控制
+  // 新增超时控制
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超时
 
@@ -134,7 +134,7 @@ const T2S_MAP: Record<string, string> = {
   國外: '国外',
 
   // 平台
-  騰訊視頻: '腾讯视频',
+  騰訊影片: '腾讯视频',
   愛奇藝: '爱奇艺',
   優酷: '优酷',
   湖南衛視: '湖南卫视',

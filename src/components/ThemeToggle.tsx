@@ -39,7 +39,7 @@ export function ThemeToggle() {
   }
 
   const toggleTheme = () => {
-    // 檢查瀏覽器是否支持 View Transitions API
+    // 檢查瀏覽器是否支援 View Transitions API
     const targetTheme = resolvedTheme === 'dark' ? 'light' : 'dark';
     setThemeColor(targetTheme);
     if (!(document as any).startViewTransition) {

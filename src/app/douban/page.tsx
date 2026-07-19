@@ -58,7 +58,7 @@ function DoubanPageClient() {
 
   const type = searchParams.get('type') || 'movie';
 
-  // 獲取 runtimeConfig 中的自定義分類資料
+  // 取得 runtimeConfig 中的自定義分類資料
   const customCategories = useClientValue<
     Array<{ name: string; type: 'movie' | 'tv'; query: string }>
   >(() => {
@@ -301,7 +301,7 @@ function DoubanPageClient() {
     [primarySelection, multiLevelValues]
   );
 
-  // 防抖的資料加載函數
+  // 防抖的資料載入函數
   const loadInitialData = useCallback(async () => {
     // 創建當前參數的快照
     const requestSnapshot = {
@@ -316,7 +316,7 @@ function DoubanPageClient() {
     try {
       setLoading(true);
       setError(null);
-      // 確保在加載初始資料時重置頁面狀態
+      // 確保在載入初始資料時重置頁面狀態
       setDoubanData([]);
       setCurrentPage(0);
       setHasMore(true);
@@ -325,7 +325,7 @@ function DoubanPageClient() {
       let data: DoubanResult;
 
       if (type === 'custom') {
-        // 自定義分類模式：根據選中的一級和二級選項獲取對應的分類
+        // 自定義分類模式：根據選中的一級和二級選項取得對應的分類
         const selectedCategory = customCategories.find(
           (cat) =>
             cat.type === primarySelection && cat.query === secondarySelection
@@ -373,7 +373,7 @@ function DoubanPageClient() {
         data = await getDoubanRecommends({
           kind: type === 'show' ? 'tv' : (type as 'tv' | 'movie'),
           pageLimit: 25,
-          pageStart: 0, // 初始資料加載始終從第一頁開始
+          pageStart: 0, // 初始資料載入始終從第一頁開始
           category: multiLevelValues.type
             ? (multiLevelValues.type as string)
             : '',
@@ -396,7 +396,7 @@ function DoubanPageClient() {
 
       if (data.code === 200) {
         // 檢查參數是否仍然一致，如果一致才設定資料
-        // 使用 ref 獲取最新的當前值
+        // 使用 ref 取得最新的當前值
         const currentSnapshot = { ...currentParamsRef.current };
 
         if (isSnapshotEqual(requestSnapshot, currentSnapshot)) {
@@ -408,13 +408,13 @@ function DoubanPageClient() {
         }
         // 如果參數不一致，不執行任何操作，避免設定過期資料
       } else {
-        throw new Error(data.message || '獲取資料失敗');
+        throw new Error(data.message || '取得資料失敗');
       }
     } catch (err) {
       // 僅在請求參數仍與當前一致時才呈現錯誤，避免過期請求覆蓋新狀態
       const currentSnapshot = { ...currentParamsRef.current };
       if (isSnapshotEqual(requestSnapshot, currentSnapshot)) {
-        setError((err as Error).message || '獲取資料失敗，請稍後重試');
+        setError((err as Error).message || '取得資料失敗，請稍後重試');
         setLoading(false);
       }
     }
@@ -429,9 +429,9 @@ function DoubanPageClient() {
     customCategories,
   ]);
 
-  // 只在選擇器準備好後才加載資料
+  // 只在選擇器準備好後才載入資料
   useEffect(() => {
-    // 只有在選擇器準備好時才開始加載
+    // 只有在選擇器準備好時才開始載入
     if (!selectorsReady) {
       return;
     }
@@ -441,7 +441,7 @@ function DoubanPageClient() {
       clearTimeout(debounceTimeoutRef.current);
     }
 
-    // 使用防抖機製加載資料，避免連續狀態更新觸發多次請求
+    // 使用防抖機製載入資料，避免連續狀態更新觸發多次請求
     debounceTimeoutRef.current = setTimeout(() => {
       loadInitialData();
     }, 100); // 100ms 防抖延遲
@@ -462,7 +462,7 @@ function DoubanPageClient() {
     loadInitialData,
   ]);
 
-  // 單獨處理 currentPage 變化（加載更多）
+  // 單獨處理 currentPage 變化（載入更多）
   useEffect(() => {
     if (currentPage > 0) {
       const fetchMoreData = async () => {
@@ -481,7 +481,7 @@ function DoubanPageClient() {
 
           let data: DoubanResult;
           if (type === 'custom') {
-            // 自定義分類模式：根據選中的一級和二級選項獲取對應的分類
+            // 自定義分類模式：根據選中的一級和二級選項取得對應的分類
             const selectedCategory = customCategories.find(
               (cat) =>
                 cat.type === primarySelection &&
@@ -540,7 +540,7 @@ function DoubanPageClient() {
 
           if (data.code === 200) {
             // 檢查參數是否仍然一致，如果一致才設定資料
-            // 使用 ref 獲取最新的當前值
+            // 使用 ref 取得最新的當前值
             const currentSnapshot = { ...currentParamsRef.current };
 
             if (isSnapshotEqual(requestSnapshot, currentSnapshot)) {
@@ -550,10 +550,10 @@ function DoubanPageClient() {
               // 參數不一致，不執行任何操作，避免設定過期資料
             }
           } else {
-            throw new Error(data.message || '獲取資料失敗');
+            throw new Error(data.message || '取得資料失敗');
           }
         } catch (err) {
-          // 忽略錯誤，加載更多失敗不影響現有資料
+          // 忽略錯誤，載入更多失敗不影響現有資料
         } finally {
           if (
             isSnapshotEqual(requestSnapshot, { ...currentParamsRef.current })
@@ -578,7 +578,7 @@ function DoubanPageClient() {
 
   // 設定滾動監聽
   useEffect(() => {
-    // 如果沒有更多資料或正在加載，則不設定監聽
+    // 如果沒有更多資料或正在載入，則不設定監聽
     if (!hasMore || isLoadingMore || loading) {
       return;
     }
@@ -635,7 +635,7 @@ function DoubanPageClient() {
             (cat) => cat.type === value
           );
           if (firstCategory) {
-            // 批量更新狀態，避免多次觸發資料加載
+            // 批量更新狀態，避免多次觸發資料載入
             setPrimarySelection(value);
             setSecondarySelection(firstCategory.query);
           } else {
@@ -844,7 +844,7 @@ function DoubanPageClient() {
             />
           )}
 
-          {/* 加載更多指示器 */}
+          {/* 載入更多指示器 */}
           {hasMore && !loading && (
             <div
               ref={(el) => {
@@ -860,7 +860,7 @@ function DoubanPageClient() {
                 <div className='flex items-center gap-2'>
                   <div className='animate-spin rounded-full h-6 w-6 border-b-2 border-accent'></div>
                   <span className='text-zinc-500 dark:text-zinc-400'>
-                    加載中...
+                    載入中...
                   </span>
                 </div>
               )}
@@ -870,7 +870,7 @@ function DoubanPageClient() {
           {/* 沒有更多資料提示 */}
           {!hasMore && doubanData.length > 0 && (
             <div className='text-center text-zinc-400 dark:text-zinc-500 py-8'>
-              已加載全部內容
+              已載入全部內容
             </div>
           )}
 

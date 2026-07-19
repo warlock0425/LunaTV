@@ -9,7 +9,7 @@ import { SkipConfig } from '../types';
 // ---- 錯誤處理辅助函數 ----
 /**
  * 數據庫操作失敗時的通用錯誤處理
- * 立即從數據庫刷新對應類型的緩存以保持數據一致性
+ * 立即從數據庫重新整理對應類型的快取以保持數據一致性
  */
 export async function handleDatabaseOperationFailure(
   dataType: 'playRecords' | 'favorites' | 'searchHistory' | 'skipConfigs',
@@ -57,8 +57,8 @@ export async function handleDatabaseOperationFailure(
       })
     );
   } catch (refreshErr) {
-    console.error(`刷新${dataType}快取失敗:`, refreshErr);
-    triggerGlobalError(`刷新${dataType}快取失敗`);
+    console.error(`重新整理${dataType}快取失敗:`, refreshErr);
+    triggerGlobalError(`重新整理${dataType}快取失敗`);
   }
 }
 

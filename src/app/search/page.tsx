@@ -849,65 +849,68 @@ function SearchPageClient() {
                   )}
                 </h2>
               </div>
-              <div className='mb-8 flex items-center justify-between gap-3'>
-                <div className='hidden flex-1 min-w-0 sm:block'>
-                  {viewMode === 'agg' ? (
-                    <SearchResultFilter
-                      categories={filterOptions.categoriesAgg}
-                      values={filterAgg}
-                      onChange={(v) => setFilterAgg(v as any)}
-                    />
-                  ) : (
-                    <SearchResultFilter
-                      categories={filterOptions.categoriesAll}
-                      values={filterAll}
-                      onChange={(v) => setFilterAll(v as any)}
-                    />
-                  )}
-                </div>
-                <SearchFilterSheet
-                  open={showMobileFilters}
-                  activeCount={activeFilterCount}
-                  categories={
-                    viewMode === 'agg'
-                      ? filterOptions.categoriesAgg
-                      : filterOptions.categoriesAll
-                  }
-                  values={viewMode === 'agg' ? filterAgg : filterAll}
-                  onChange={(values) =>
-                    viewMode === 'agg'
-                      ? setFilterAgg({
-                          ...values,
-                          yearOrder: values.yearOrder as
-                            'none' | 'asc' | 'desc',
-                        })
-                      : setFilterAll({
-                          ...values,
-                          yearOrder: values.yearOrder as
-                            'none' | 'asc' | 'desc',
-                        })
-                  }
-                  onOpen={() => setShowMobileFilters(true)}
-                  onClose={() => setShowMobileFilters(false)}
-                />
-                <label className='flex items-center gap-2 cursor-pointer select-none shrink-0'>
-                  <span className='text-xs sm:text-sm text-zinc-700 dark:text-zinc-300'>
-                    聚合
-                  </span>
-                  <div className='relative'>
-                    <input
-                      type='checkbox'
-                      className='sr-only peer'
-                      checked={viewMode === 'agg'}
-                      onChange={() =>
-                        setViewMode(viewMode === 'agg' ? 'all' : 'agg')
-                      }
-                    />
-                    <div className='w-9 h-5 bg-zinc-300 rounded-full peer-checked:bg-accent transition-colors dark:bg-zinc-600'></div>
-                    <div className='absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4'></div>
+              {/* 沒有結果時隱藏篩選列，避免出現無從篩選的控制項 */}
+              {fuzzySearchResults.length > 0 && (
+                <div className='mb-8 flex items-center justify-between gap-3'>
+                  <div className='hidden flex-1 min-w-0 sm:block'>
+                    {viewMode === 'agg' ? (
+                      <SearchResultFilter
+                        categories={filterOptions.categoriesAgg}
+                        values={filterAgg}
+                        onChange={(v) => setFilterAgg(v as any)}
+                      />
+                    ) : (
+                      <SearchResultFilter
+                        categories={filterOptions.categoriesAll}
+                        values={filterAll}
+                        onChange={(v) => setFilterAll(v as any)}
+                      />
+                    )}
                   </div>
-                </label>
-              </div>
+                  <SearchFilterSheet
+                    open={showMobileFilters}
+                    activeCount={activeFilterCount}
+                    categories={
+                      viewMode === 'agg'
+                        ? filterOptions.categoriesAgg
+                        : filterOptions.categoriesAll
+                    }
+                    values={viewMode === 'agg' ? filterAgg : filterAll}
+                    onChange={(values) =>
+                      viewMode === 'agg'
+                        ? setFilterAgg({
+                            ...values,
+                            yearOrder: values.yearOrder as
+                              'none' | 'asc' | 'desc',
+                          })
+                        : setFilterAll({
+                            ...values,
+                            yearOrder: values.yearOrder as
+                              'none' | 'asc' | 'desc',
+                          })
+                    }
+                    onOpen={() => setShowMobileFilters(true)}
+                    onClose={() => setShowMobileFilters(false)}
+                  />
+                  <label className='flex items-center gap-2 cursor-pointer select-none shrink-0'>
+                    <span className='text-xs sm:text-sm text-zinc-700 dark:text-zinc-300'>
+                      聚合
+                    </span>
+                    <div className='relative'>
+                      <input
+                        type='checkbox'
+                        className='sr-only peer'
+                        checked={viewMode === 'agg'}
+                        onChange={() =>
+                          setViewMode(viewMode === 'agg' ? 'all' : 'agg')
+                        }
+                      />
+                      <div className='w-9 h-5 bg-zinc-300 rounded-full peer-checked:bg-accent transition-colors dark:bg-zinc-600'></div>
+                      <div className='absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4'></div>
+                    </div>
+                  </label>
+                </div>
+              )}
               {fuzzySearchResults.length === 0 ? (
                 isLoading ? (
                   <div className='flex justify-center items-center h-40'>

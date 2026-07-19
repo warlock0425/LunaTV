@@ -26,7 +26,7 @@ const MAX_TOP250_RESPONSE_BYTES = 5 * 1024 * 1024;
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
-  // 獲取參數
+  // 取得參數
   const type = searchParams.get('type');
   const tag = searchParams.get('tag');
   const pageSize = Number(searchParams.get('pageSize') ?? '16');
@@ -101,7 +101,7 @@ export async function GET(request: Request) {
 
     const response: DoubanResult = {
       code: 200,
-      message: '獲取成功',
+      message: '取得成功',
       list: list,
     };
 
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: '獲取豆瓣數據失敗', details: (error as Error).message },
+      { error: '取得豆瓣數據失敗', details: (error as Error).message },
       { status: 500 }
     );
   }
@@ -154,7 +154,7 @@ async function handleTop250(pageStart: number, pageSize: number) {
 
   const target = `https://movie.douban.com/top250?start=${pageStart}&filter=`;
 
-  // 直接使用 fetch 獲取 HTML 頁面
+  // 直接使用 fetch 取得 HTML 頁面
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -175,13 +175,13 @@ async function handleTop250(pageStart: number, pageSize: number) {
       throw new Error(`HTTP error! Status: ${fetchResponse.status}`);
     }
 
-    // 獲取 HTML 內容
+    // 取得 HTML 內容
     const html = await readResponseTextWithLimit(
       fetchResponse,
       MAX_TOP250_RESPONSE_BYTES
     );
 
-    // 通過正則同時捕獲影片 id、標題、封面以及評分
+    // 透過正則同時捕獲影片 id、標題、封面以及評分
     const moviePattern =
       /<div class="item">[\s\S]*?<a[^>]+href="https?:\/\/movie\.douban\.com\/subject\/(\d+)\/"[\s\S]*?<img[^>]+alt="([^"]+)"[^>]*src="([^"]+)"[\s\S]*?<span class="rating_num"[^>]*>([^<]*)<\/span>[\s\S]*?<\/div>/g;
     const movies: DoubanItem[] = [];
@@ -207,7 +207,7 @@ async function handleTop250(pageStart: number, pageSize: number) {
 
     const apiResponse: DoubanResult = {
       code: 200,
-      message: '獲取成功',
+      message: '取得成功',
       list: movies.slice(0, limitedPageSize),
     };
 
@@ -233,7 +233,7 @@ async function handleTop250(pageStart: number, pageSize: number) {
   } catch (error) {
     return NextResponse.json(
       {
-        error: '獲取豆瓣 Top250 數據失敗',
+        error: '取得豆瓣 Top250 數據失敗',
         details: (error as Error).message,
       },
       { status: 500 }

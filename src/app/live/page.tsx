@@ -32,7 +32,7 @@ import {
   UnsupportedTypeOverlay,
 } from './live-views';
 
-// 擴展 HTMLVideoElement 類型以支持 hls 屬性
+// 擴展 HTMLVideoElement 類型以支援 hls 屬性
 declare global {
   interface HTMLVideoElement {
     hls?: Hls;
@@ -47,7 +47,7 @@ function LivePageClient() {
   const [loadingStage, setLoadingStage] = useState<
     'loading' | 'fetching' | 'ready'
   >('fetching');
-  const [loadingMessage, setLoadingMessage] = useState('正在獲取直播源...');
+  const [loadingMessage, setLoadingMessage] = useState('正在取得直播源...');
   const [playbackError, setPlaybackError] = useState<string | null>(null);
 
   const searchParams = useSearchParams();
@@ -110,7 +110,7 @@ function LivePageClient() {
     }>;
   } | null>(null);
 
-  // EPG 資料加載狀態
+  // EPG 資料載入狀態
   const [isEpgLoading, setIsEpgLoading] = useState(false);
   const channelsAbortRef = useRef<AbortController | null>(null);
   const channelsRequestIdRef = useRef(0);
@@ -161,7 +161,7 @@ function LivePageClient() {
         signal: controller.signal,
       });
       if (!response.ok) {
-        throw new Error(`獲取節目單資訊失敗: ${response.status}`);
+        throw new Error(`取得節目單資訊失敗: ${response.status}`);
       }
 
       const result = await response.json();
@@ -177,7 +177,7 @@ function LivePageClient() {
       if (controller.signal.aborted || requestId !== epgRequestIdRef.current) {
         return;
       }
-      console.error('獲取節目單資訊失敗:', err);
+      console.error('取得節目單資訊失敗:', err);
     } finally {
       if (requestId === epgRequestIdRef.current) {
         if (epgAbortRef.current === controller) {
@@ -188,19 +188,19 @@ function LivePageClient() {
     }
   };
 
-  // 獲取直播源列表
+  // 取得直播源列表
   const fetchLiveSources = async () => {
     try {
-      // 獲取 AdminConfig 中的直播源資訊（loading 階段/訊息由初始 state 提供，
+      // 取得 AdminConfig 中的直播源資訊（loading 階段/訊息由初始 state 提供，
       // 避免在 effect 內同步 setState）
       const response = await fetch('/api/live/sources');
       if (!response.ok) {
-        throw new Error('獲取直播源失敗');
+        throw new Error('取得直播源失敗');
       }
 
       const result = await response.json();
       if (!result.success) {
-        throw new Error(result.error || '獲取直播源失敗');
+        throw new Error(result.error || '取得直播源失敗');
       }
 
       const sources = result.data;
@@ -230,7 +230,7 @@ function LivePageClient() {
       setLoadingMessage('✨ 準備就緒...');
       setLoading(false);
     } catch (err) {
-      console.error('獲取直播源失敗:', err);
+      console.error('取得直播源失敗:', err);
       // 不設定錯誤，而是顯示空狀態
       setLiveSources([]);
       setLoading(false);
@@ -248,7 +248,7 @@ function LivePageClient() {
     }
   };
 
-  // 獲取頻道列表
+  // 取得頻道列表
   const fetchChannels = async (source: LiveSource) => {
     const requestId = ++channelsRequestIdRef.current;
     channelsAbortRef.current?.abort();
@@ -266,20 +266,20 @@ function LivePageClient() {
     setIsVideoLoading(true);
 
     try {
-      // 從 cachedLiveChannels 獲取頻道資訊
+      // 從 cachedLiveChannels 取得頻道資訊
       const channelParams = new URLSearchParams({ source: source.key });
       const response = await fetch(
         `/api/live/channels?${channelParams.toString()}`,
         { signal: controller.signal }
       );
       if (!response.ok) {
-        throw new Error('獲取頻道列表失敗');
+        throw new Error('取得頻道列表失敗');
       }
 
       const result = await response.json();
       if (requestId !== channelsRequestIdRef.current) return;
       if (!result.success) {
-        throw new Error(result.error || '獲取頻道列表失敗');
+        throw new Error(result.error || '取得頻道列表失敗');
       }
 
       const channelsData = result.data;
@@ -350,7 +350,7 @@ function LivePageClient() {
 
       setGroupedChannels(grouped);
 
-      // 預設選中當前加載的channel所在的分組，如果沒有則選中第一個分組
+      // 預設選中當前載入的channel所在的分組，如果沒有則選中第一個分組
       let targetGroup = '';
       if (needLoadChannel) {
         const foundChannel = channels.find(
@@ -398,7 +398,7 @@ function LivePageClient() {
       ) {
         return;
       }
-      console.error('獲取頻道列表失敗:', err);
+      console.error('取得頻道列表失敗:', err);
       // 不設定錯誤，而是設定空頻道列表
       setCurrentChannels([]);
       setGroupedChannels({});
@@ -430,7 +430,7 @@ function LivePageClient() {
       // 首先銷燬當前播放器
       cleanupPlayer();
 
-      // 重置不支持的類型狀態
+      // 重置不支援的類型狀態
       setUnsupportedType(null);
 
       // 清空節目單資訊
@@ -459,7 +459,7 @@ function LivePageClient() {
     // 首先銷燬當前播放器
     cleanupPlayer();
 
-    // 重置不支持的類型狀態
+    // 重置不支援的類型狀態
     setUnsupportedType(null);
 
     setCurrentChannel(channel);
@@ -472,7 +472,7 @@ function LivePageClient() {
 
     setPlaybackError(null);
 
-    // 獲取節目單資訊
+    // 取得節目單資訊
     const sourceForEpg = currentSourceRef.current;
     if (sourceForEpg) {
       await fetchEpg(channel, sourceForEpg);
@@ -517,7 +517,7 @@ function LivePageClient() {
 
   // 清理播放器資源的統一函數
   const cleanupPlayer = () => {
-    // 重置不支持的類型狀態
+    // 重置不支援的類型狀態
     setUnsupportedType(null);
 
     if (artPlayerRef.current) {
@@ -538,7 +538,7 @@ function LivePageClient() {
         // 銷燬 FLV 實例 - 增強清理邏輯
         if (artPlayerRef.current.video && artPlayerRef.current.video.flv) {
           try {
-            // 先停止加載
+            // 先停止載入
             if (artPlayerRef.current.video.flv.unload) {
               artPlayerRef.current.video.flv.unload();
             }
@@ -828,7 +828,7 @@ function LivePageClient() {
 
   function m3u8Loader(video: HTMLVideoElement, url: string) {
     if (!Hls) {
-      console.error('HLS.js 未加載');
+      console.error('HLS.js 未載入');
       return;
     }
 
@@ -927,14 +927,14 @@ function LivePageClient() {
           type = precheckResult.type;
         }
 
-        // 如果不是 m3u8 類型，設定不支持的類型並返回
+        // 如果不是 m3u8 類型，設定不支援的類型並返回
         if (type !== 'm3u8') {
           setUnsupportedType(type);
           setIsVideoLoading(false);
           return;
         }
 
-        // 重置不支持的類型
+        // 重置不支援的類型
         setUnsupportedType(null);
 
         const customType = { m3u8: m3u8Loader };
@@ -1215,12 +1215,12 @@ function LivePageClient() {
                   className='bg-black w-full h-full rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30'
                 ></div>
 
-                {/* 不支持的直播類型提示 */}
+                {/* 不支援的直播類型提示 */}
                 {unsupportedType && (
                   <UnsupportedTypeOverlay type={unsupportedType} />
                 )}
 
-                {/* 影片加載蒙層 */}
+                {/* 影片載入蒙層 */}
                 {isVideoLoading && <LiveVideoLoadingOverlay />}
 
                 {playbackError && !isVideoLoading && (

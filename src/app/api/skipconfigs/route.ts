@@ -48,18 +48,18 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // 獲取單個配置
+      // 取得單個設定
       const skipConfig = await db.getSkipConfig(authInfo.username, source, id);
       return NextResponse.json(skipConfig);
     } else {
-      // 獲取所有配置
+      // 取得所有設定
       const configs = await db.getAllSkipConfigs(authInfo.username);
       return NextResponse.json(configs);
     }
   } catch (error) {
-    console.error('获取跳过片头片尾配置失敗:', error);
+    console.error('获取跳过片头片尾設定失敗:', error);
     return NextResponse.json(
-      { error: '獲取跳過片頭片尾配置失敗' },
+      { error: '取得跳過片頭片尾設定失敗' },
       { status: 500 }
     );
   }
@@ -133,9 +133,9 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('儲存跳過片頭片尾配置失敗:', error);
+    console.error('儲存跳過片頭片尾設定失敗:', error);
     return NextResponse.json(
-      { error: '儲存跳過片頭片尾配置失敗' },
+      { error: '儲存跳過片頭片尾設定失敗' },
       { status: 500 }
     );
   }
@@ -179,9 +179,9 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('刪除跳過片頭片尾配置失敗:', error);
+    console.error('刪除跳過片頭片尾設定失敗:', error);
     return NextResponse.json(
-      { error: '刪除跳過片頭片尾配置失敗' },
+      { error: '刪除跳過片頭片尾設定失敗' },
       { status: 500 }
     );
   }

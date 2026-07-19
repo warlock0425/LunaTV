@@ -28,6 +28,6 @@ export async function GET(request: NextRequest) {
       data: channelData.channels,
     });
   } catch (error) {
-    return NextResponse.json({ error: '獲取頻道資訊失敗' }, { status: 500 });
+    return NextResponse.json({ error: '取得頻道資訊失敗' }, { status: 500 });
   }
 }

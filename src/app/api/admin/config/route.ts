@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
-        error: '不支持本地儲存進行管理員配置',
+        error: '不支援本地儲存進行管理員設定',
       },
       { status: 400 }
     );
@@ -45,14 +45,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result, {
       headers: {
-        'Cache-Control': 'no-store', // 管理員配置不緩存
+        'Cache-Control': 'no-store', // 管理員設定不快取
       },
     });
   } catch (error) {
-    console.error('獲取管理員配置失敗:', error);
+    console.error('取得管理員設定失敗:', error);
     return NextResponse.json(
       {
-        error: '獲取管理員配置失敗',
+        error: '取得管理員設定失敗',
         details: (error as Error).message,
       },
       { status: 500 }

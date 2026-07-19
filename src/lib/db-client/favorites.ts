@@ -17,8 +17,8 @@ import {
 // ---------------- 收藏相關 API ----------------
 
 /**
- * 獲取全部收藏。
- * 數據庫存儲模式下使用混合緩存策略：优先返回緩存數據，后台異步同步最新數據。
+ * 取得全部收藏。
+ * 數據庫存儲模式下使用混合快取策略：优先返回快取數據，后台異步同步最新數據。
  */
 export async function getAllFavorites(): Promise<Record<string, Favorite>> {
   // 服務器端渲染阶段直接返回空
@@ -26,16 +26,16 @@ export async function getAllFavorites(): Promise<Record<string, Favorite>> {
     return {};
   }
 
-  // 數據庫存儲模式：使用混合緩存策略（包括 redis 和 upstash）
+  // 數據庫存儲模式：使用混合快取策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 优先從緩存獲取數據
+    // 优先從快取取得數據
     const cachedData = cacheManager.getCachedFavorites();
 
     if (cachedData) {
-      // 返回緩存數據，同時后台異步更新
+      // 返回快取數據，同時后台異步更新
       fetchFromApi<Record<string, Favorite>>(`/api/favorites`)
         .then((freshData) => {
-          // 只有數據真正不同時才更新緩存
+          // 只有數據真正不同時才更新快取
           if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
             cacheManager.cacheFavorites(freshData);
             // 触發數據更新事件
@@ -53,15 +53,15 @@ export async function getAllFavorites(): Promise<Record<string, Favorite>> {
 
       return cachedData;
     } else {
-      // 緩存为空，直接從 API 獲取並緩存
+      // 快取为空，直接從 API 取得並快取
       try {
         const freshData =
           await fetchFromApi<Record<string, Favorite>>(`/api/favorites`);
         cacheManager.cacheFavorites(freshData);
         return freshData;
       } catch (err) {
-        console.error('獲取收藏失敗:', err);
-        triggerGlobalError('獲取收藏失敗');
+        console.error('取得收藏失敗:', err);
+        triggerGlobalError('取得收藏失敗');
         return {};
       }
     }
@@ -80,8 +80,8 @@ export async function getAllFavorites(): Promise<Record<string, Favorite>> {
 }
 
 /**
- * 保存收藏。
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 儲存收藏。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */
 export async function saveFavorite(
   source: string,
@@ -92,7 +92,7 @@ export async function saveFavorite(
 
   // 數據庫存儲模式：乐觀更新策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 立即更新緩存
+    // 立即更新快取
     const cachedFavorites = cacheManager.getCachedFavorites() || {};
     const prevFavorites = { ...cachedFavorites };
     cachedFavorites[key] = favorite;
@@ -122,7 +122,7 @@ export async function saveFavorite(
         })
       );
       await handleDatabaseOperationFailure('favorites', err);
-      triggerGlobalError('保存收藏失敗');
+      triggerGlobalError('儲存收藏失敗');
       throw err;
     }
     return;
@@ -130,7 +130,7 @@ export async function saveFavorite(
 
   // localStorage 模式
   if (typeof window === 'undefined') {
-    console.warn('無法在服務端保存收藏到 localStorage');
+    console.warn('無法在服務端儲存收藏到 localStorage');
     return;
   }
 
@@ -144,15 +144,15 @@ export async function saveFavorite(
       })
     );
   } catch (err) {
-    console.error('保存收藏失敗:', err);
-    triggerGlobalError('保存收藏失敗');
+    console.error('儲存收藏失敗:', err);
+    triggerGlobalError('儲存收藏失敗');
     throw err;
   }
 }
 
 /**
  * 刪除收藏。
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */
 export async function deleteFavorite(
   source: string,
@@ -162,7 +162,7 @@ export async function deleteFavorite(
 
   // 數據庫存儲模式：乐觀更新策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 立即更新緩存
+    // 立即更新快取
     const cachedFavorites = cacheManager.getCachedFavorites() || {};
     const prevFavorites = { ...cachedFavorites };
     delete cachedFavorites[key];
@@ -218,7 +218,7 @@ export async function deleteFavorite(
 
 /**
  * 判斷是否已收藏。
- * 數據庫存儲模式下使用混合緩存策略：优先返回緩存數據，后台異步同步最新數據。
+ * 數據庫存儲模式下使用混合快取策略：优先返回快取數據，后台異步同步最新數據。
  */
 export async function isFavorited(
   source: string,
@@ -226,15 +226,15 @@ export async function isFavorited(
 ): Promise<boolean> {
   const key = generateStorageKey(source, id);
 
-  // 數據庫存儲模式：使用混合緩存策略（包括 redis 和 upstash）
+  // 數據庫存儲模式：使用混合快取策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
     const cachedFavorites = cacheManager.getCachedFavorites();
 
     if (cachedFavorites) {
-      // 返回緩存數據，同時后台異步更新
+      // 返回快取數據，同時后台異步更新
       fetchFromApi<Record<string, Favorite>>(`/api/favorites`)
         .then((freshData) => {
-          // 只有數據真正不同時才更新緩存
+          // 只有數據真正不同時才更新快取
           if (JSON.stringify(cachedFavorites) !== JSON.stringify(freshData)) {
             cacheManager.cacheFavorites(freshData);
             // 触發數據更新事件
@@ -252,7 +252,7 @@ export async function isFavorited(
 
       return !!cachedFavorites[key];
     } else {
-      // 緩存为空，直接從 API 獲取並緩存
+      // 快取为空，直接從 API 取得並快取
       try {
         const freshData =
           await fetchFromApi<Record<string, Favorite>>(`/api/favorites`);
@@ -273,14 +273,14 @@ export async function isFavorited(
 
 /**
  * 清空全部播放記錄
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */
 
 export async function clearAllFavorites(): Promise<void> {
   // 數據庫存儲模式：乐觀更新策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
     const prevFavorites = cacheManager.getCachedFavorites() || {};
-    // 立即更新緩存
+    // 立即更新快取
     cacheManager.cacheFavorites({});
 
     // 触發立即更新事件

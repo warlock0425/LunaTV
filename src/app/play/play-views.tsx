@@ -77,7 +77,7 @@ export function PlayLoadingView({
             </div>
           </div>
 
-          {/* 加載消息 */}
+          {/* 載入消息 */}
           <div className='space-y-2'>
             <p className='text-xl font-semibold text-zinc-800 dark:text-zinc-200 animate-pulse'>
               {loadingMessage}

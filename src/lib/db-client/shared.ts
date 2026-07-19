@@ -25,7 +25,7 @@ export interface PlayRecord {
   total_episodes: number; // 總集數
   play_time: number; // 播放進度（秒）
   total_time: number; // 總進度（秒）
-  save_time: number; // 記錄保存時間（時間戳）
+  save_time: number; // 記錄儲存時間（時間戳）
   search_title?: string; // 搜索時使用的標題
   id?: string;
   vod_id?: string;
@@ -84,5 +84,5 @@ export const STORAGE_TYPE = (() => {
 })();
 
 // ---- 搜索歷史相關常量 ----
-// 搜索歷史最大保存條數
+// 搜索歷史最大儲存條數
 export const SEARCH_HISTORY_LIMIT = 20;

@@ -9,7 +9,7 @@ export const cleanEpgData = (
 ) => {
   if (!programs || programs.length === 0) return programs;
 
-  // 獲取今日日期（只考慮年月日，忽略時間）
+  // 取得今日日期（只考慮年月日，忽略時間）
   const today = new Date();
   const todayStart = new Date(
     today.getFullYear(),
@@ -27,7 +27,7 @@ export const cleanEpgData = (
     const programStart = parseCustomTimeFormat(program.start);
     const programEnd = parseCustomTimeFormat(program.end);
 
-    // 獲取節目的日期範圍
+    // 取得節目的日期範圍
     const programStartDate = new Date(
       programStart.getFullYear(),
       programStart.getMonth(),

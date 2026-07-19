@@ -23,7 +23,7 @@ const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
   onWeekdayChange,
   className = '',
 }) => {
-  // 獲取今天的星期數，默認選中今天
+  // 取得今天的星期數，預設選中今天
   const getTodayWeekday = (): string => {
     const today = new Date().getDay();
     // getDay() 返回 0-6，0 是週日，1-6 是週一到週六
@@ -34,7 +34,7 @@ const WeekdaySelector: React.FC<WeekdaySelectorProps> = ({
   const [selectedWeekday, setSelectedWeekday] =
     useState<string>(getTodayWeekday());
 
-  // 組件初始化時通知父組件默認選中的星期
+  // 組件初始化時通知父組件預設選中的星期
   useEffect(() => {
     onWeekdayChange(getTodayWeekday());
   }, []); // 只在組件掛載時執行一次

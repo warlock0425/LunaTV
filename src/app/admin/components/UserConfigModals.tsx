@@ -311,7 +311,7 @@ function ModalActions({
 // 七個業務彈窗
 // ---------------------------------------------------------------------------
 
-/** 配置使用者採集源權限彈窗 */
+/** 設定使用者採集源權限彈窗 */
 export function ConfigureApisModal({
   username,
   sources,
@@ -331,12 +331,12 @@ export function ConfigureApisModal({
 }) {
   return (
     <ModalShell
-      title={`配置使用者採集源權限 - ${username}`}
+      title={`設定使用者採集源權限 - ${username}`}
       onClose={onClose}
       wide
     >
       <div className='mb-6'>
-        <InfoBanner title='配置說明'>
+        <InfoBanner title='設定說明'>
           提示：全不選為無限制，選中的採集源將限制使用者只能存取這些源
         </InfoBanner>
       </div>
@@ -368,8 +368,8 @@ export function ConfigureApisModal({
         onCancel={onClose}
         onConfirm={onSave}
         confirming={saving}
-        confirmText='確認配置'
-        confirmingText='配置中...'
+        confirmText='確認設定'
+        confirmingText='設定中...'
       />
     </ModalShell>
   );
@@ -487,7 +487,7 @@ export function EditUserGroupModal({
   );
 }
 
-/** 配置單一使用者的使用者群組彈窗 */
+/** 設定單一使用者的使用者群組彈窗 */
 export function ConfigureUserGroupModal({
   username,
   userGroups,
@@ -506,9 +506,9 @@ export function ConfigureUserGroupModal({
   saving: boolean;
 }) {
   return (
-    <ModalShell title={`配置使用者群組 - ${username}`} onClose={onClose} wide>
+    <ModalShell title={`設定使用者群組 - ${username}`} onClose={onClose} wide>
       <div className='mb-6'>
-        <InfoBanner title='配置說明'>
+        <InfoBanner title='設定說明'>
           提示：選擇"無使用者群組"為無限制，選擇特定使用者群組將限制使用者只能存取該使用者群組允許的採集源
         </InfoBanner>
       </div>
@@ -528,8 +528,8 @@ export function ConfigureUserGroupModal({
         onCancel={onClose}
         onConfirm={onSave}
         confirming={saving}
-        confirmText='確認配置'
-        confirmingText='配置中...'
+        confirmText='確認設定'
+        confirmingText='設定中...'
       />
     </ModalShell>
   );

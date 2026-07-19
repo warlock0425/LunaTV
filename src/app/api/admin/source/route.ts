@@ -15,7 +15,7 @@ import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
-// 支持的操作類型
+// 支援的操作類型
 type Action =
   | 'add'
   | 'disable'
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
-        error: '不支持本地儲存進行管理員配置',
+        error: '不支援本地儲存進行管理員設定',
       },
       { status: 400 }
     );
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '參數格式錯誤' }, { status: 400 });
     }
 
-    // 获取配置与儲存
+    // 获取設定与儲存
     const adminConfig = await getConfig();
 
     // 權限與身份校驗

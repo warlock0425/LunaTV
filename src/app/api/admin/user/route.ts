@@ -15,7 +15,7 @@ import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 
-// 支持的操作類型
+// 支援的操作類型
 const ACTIONS = [
   'add',
   'ban',
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
-        error: '不支持本地儲存進行管理員配置',
+        error: '不支援本地儲存進行管理員設定',
       },
       { status: 400 }
     );
@@ -104,7 +104,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 獲取配置與儲存
+    // 取得設定與儲存
     const adminConfig = await getConfig();
 
     // 判定操作者角色
@@ -160,10 +160,10 @@ export async function POST(request: NextRequest) {
         }
         await db.registerUser(targetUsername!, targetPassword);
 
-        // 獲取使用者群組資訊
+        // 取得使用者群組資訊
         const { userGroup } = body as { userGroup?: string };
 
-        // 更新配置
+        // 更新設定
         const newUser: any = {
           username: targetUsername!,
           role: 'user',
@@ -320,7 +320,7 @@ export async function POST(request: NextRequest) {
         await db.deleteUser(targetUsername!);
         await revokeUserSessions(targetUsername!);
 
-        // 從配置中移除使用者
+        // 從設定中移除使用者
         const userIndex = adminConfig.UserConfig.Users.findIndex(
           (u) => u.username === targetUsername
         );
@@ -347,14 +347,14 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // 權限檢查：站長可配置所有人的採集源，管理員可配置普通使用者和自己的採集源
+        // 權限檢查：站長可設定所有人的採集源，管理員可設定普通使用者和自己的採集源
         if (
           isTargetAdmin &&
           operatorRole !== 'owner' &&
           username !== targetUsername
         ) {
           return NextResponse.json(
-            { error: '僅站長可配置其他管理員的採集源' },
+            { error: '僅站長可設定其他管理員的採集源' },
             { status: 401 }
           );
         }
@@ -483,14 +483,14 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // 權限檢查：站長可配置所有人的使用者群組，管理員可配置普通使用者和自己的使用者群組
+        // 權限檢查：站長可設定所有人的使用者群組，管理員可設定普通使用者和自己的使用者群組
         if (
           isTargetAdmin &&
           operatorRole !== 'owner' &&
           username !== targetUsername
         ) {
           return NextResponse.json(
-            { error: '僅站長可配置其他管理員的使用者群組' },
+            { error: '僅站長可設定其他管理員的使用者群組' },
             { status: 400 }
           );
         }
@@ -524,7 +524,7 @@ export async function POST(request: NextRequest) {
           );
         }
 
-        // 權限檢查：站長可批量配置所有人的使用者群組，管理員只能批量配置普通使用者
+        // 權限檢查：站長可批量設定所有人的使用者群組，管理員只能批量設定普通使用者
         if (operatorRole !== 'owner') {
           for (const targetUsername of usernames) {
             const targetUser = adminConfig.UserConfig.Users.find(
@@ -564,7 +564,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '未知操作' }, { status: 400 });
     }
 
-    // 將更新後的配置寫入資料庫
+    // 將更新後的設定寫入資料庫
     await db.saveAdminConfig(adminConfig);
     setCachedConfig(adminConfig);
 
@@ -572,7 +572,7 @@ export async function POST(request: NextRequest) {
       { ok: true },
       {
         headers: {
-          'Cache-Control': 'no-store', // 管理員配置不緩存
+          'Cache-Control': 'no-store', // 管理員設定不快取
         },
       }
     );

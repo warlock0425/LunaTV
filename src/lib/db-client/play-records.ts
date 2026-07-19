@@ -19,7 +19,7 @@ import { getPlayRecordKeysToReplace } from '../play-records';
 // ---- API ----
 /**
  * 讀取全部播放記錄。
- * 非本地存儲模式下使用混合緩存策略：优先返回緩存數據，后台異步同步最新數據。
+ * 非本地存儲模式下使用混合快取策略：优先返回快取數據，后台異步同步最新數據。
  * 在服務端渲染阶段 (window === undefined) 時返回空對象，避免報錯。
  */
 export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
@@ -28,16 +28,16 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
     return {};
   }
 
-  // 數據庫存儲模式：使用混合緩存策略（包括 redis 和 upstash）
+  // 數據庫存儲模式：使用混合快取策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 优先從緩存獲取數據
+    // 优先從快取取得數據
     const cachedData = cacheManager.getCachedPlayRecords();
 
     if (cachedData) {
-      // 返回緩存數據，同時后台異步更新
+      // 返回快取數據，同時后台異步更新
       fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`)
         .then((freshData) => {
-          // 只有數據真正不同時才更新緩存
+          // 只有數據真正不同時才更新快取
           if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
             cacheManager.cachePlayRecords(freshData);
             // 触發數據更新事件，供組件監听
@@ -55,15 +55,15 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
 
       return cachedData;
     } else {
-      // 緩存为空，直接從 API 獲取並緩存
+      // 快取为空，直接從 API 取得並快取
       try {
         const freshData =
           await fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`);
         cacheManager.cachePlayRecords(freshData);
         return freshData;
       } catch (err) {
-        console.error('獲取播放記錄失敗:', err);
-        triggerGlobalError('獲取播放記錄失敗');
+        console.error('取得播放記錄失敗:', err);
+        triggerGlobalError('取得播放記錄失敗');
         return {};
       }
     }
@@ -159,8 +159,8 @@ export function savePlayRecordOnPageExit(
 }
 
 /**
- * 保存播放記錄。
- * 數據庫存儲模式下使用乐觀更新：先更新緩存（立即生效），再異步同步到數據庫。
+ * 儲存播放記錄。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取（立即生效），再異步同步到數據庫。
  */
 export async function savePlayRecord(
   source: string,
@@ -175,7 +175,7 @@ export async function savePlayRecord(
   };
   const targetRecord = { ...enrichedRecord, key };
 
-  // 資料庫存儲模式：POST 成功後從 API 拉取最新資料覆蓋快取。
+  // 資料庫存儲模式：POST 成功後從 API 取得最新資料覆蓋快取。
   // 以服務端回傳資料作為最終狀態，避免樂觀快取和遠端資料不同步。
   if (STORAGE_TYPE !== 'localstorage') {
     const cachedRecords = cacheManager.getCachedPlayRecords();
@@ -196,7 +196,7 @@ export async function savePlayRecord(
       );
     }
 
-    // 先同步到資料庫。只有這一步失敗才代表播放紀錄沒有保存成功。
+    // 先同步到資料庫。只有這一步失敗才代表播放紀錄沒有儲存成功。
     try {
       await fetchWithAuth('/api/playrecords', {
         method: 'POST',
@@ -215,16 +215,16 @@ export async function savePlayRecord(
           })
         );
       }
-      console.error('保存播放紀錄失敗:', err);
+      console.error('儲存播放紀錄失敗:', err);
       triggerGlobalError(
         err instanceof Error
-          ? `保存播放紀錄失敗：${err.message}`
-          : '保存播放紀錄失敗'
+          ? `儲存播放紀錄失敗：${err.message}`
+          : '儲存播放紀錄失敗'
       );
       throw err;
     }
 
-    // POST 已成功。刷新列表若暫時失敗，不應回滾或誤報成保存失敗。
+    // POST 已成功。重新整理列表若暫時失敗，不應回滾或誤報成儲存失敗。
     try {
       const freshData =
         await fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`);
@@ -235,14 +235,14 @@ export async function savePlayRecord(
         })
       );
     } catch (refreshError) {
-      console.warn('播放紀錄已保存，但刷新播放紀錄快取失敗:', refreshError);
+      console.warn('播放紀錄已儲存，但重新整理播放紀錄快取失敗:', refreshError);
     }
     return;
   }
 
   // localstorage 模式
   if (typeof window === 'undefined') {
-    console.warn('無法在服務端保存播放記錄到 localStorage');
+    console.warn('無法在服務端儲存播放記錄到 localStorage');
     return;
   }
 
@@ -262,15 +262,15 @@ export async function savePlayRecord(
       })
     );
   } catch (err) {
-    console.error('保存播放記錄失敗:', err);
-    triggerGlobalError('保存播放記錄失敗');
+    console.error('儲存播放記錄失敗:', err);
+    triggerGlobalError('儲存播放記錄失敗');
     throw err;
   }
 }
 
 /**
  * 刪除播放記錄。
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */
 export async function deletePlayRecord(
   source: string,
@@ -359,8 +359,8 @@ export async function deletePlayRecord(
 /* ---------------- 搜索歷史相關 API ---------------- */
 
 /**
- * 獲取搜索歷史。
- * 數據庫存儲模式下使用混合緩存策略：优先返回緩存數據，后台異步同步最新數據。
+ * 取得搜索歷史。
+ * 數據庫存儲模式下使用混合快取策略：优先返回快取數據，后台異步同步最新數據。
  */
 
 export async function clearAllPlayRecords(): Promise<void> {
@@ -373,7 +373,7 @@ export async function clearAllPlayRecords(): Promise<void> {
         headers: { 'Content-Type': 'application/json' },
       });
 
-      // 刪除成功后更新緩存並触發事件，避免竞態導致讀取旧數據
+      // 刪除成功后更新快取並触發事件，避免竞態導致讀取旧數據
       cacheManager.cachePlayRecords({});
       window.dispatchEvent(
         new CustomEvent('playRecordsUpdated', {
@@ -400,5 +400,5 @@ export async function clearAllPlayRecords(): Promise<void> {
 
 /**
  * 清空全部收藏
- * 數據庫存儲模式下使用乐觀更新：先更新緩存，再異步同步到數據庫。
+ * 數據庫存儲模式下使用乐觀更新：先更新快取，再異步同步到數據庫。
  */

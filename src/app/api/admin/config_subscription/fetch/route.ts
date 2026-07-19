@@ -16,7 +16,7 @@ const CONFIG_FETCH_MAX_BYTES = 5 * 1024 * 1024;
 
 export async function POST(request: NextRequest) {
   try {
-    // 權限檢查：僅站長可以拉取配置訂閱
+    // 權限檢查：僅站長可以取得設定訂閱
     const authInfo = getAuthInfoFromCookie(request);
     if (!authInfo || !authInfo.username) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     if (authInfo.username !== process.env.USERNAME) {
       return NextResponse.json(
-        { error: '權限不足，只有站長可以拉取配置訂閱' },
+        { error: '權限不足，只有站長可以取得設定訂閱' },
         { status: 401 }
       );
     }
@@ -85,10 +85,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       configContent: decodedContent,
-      message: '配置拉取成功',
+      message: '設定取得成功',
     });
   } catch (error) {
-    console.error('拉取配置失敗:', error);
-    return NextResponse.json({ error: '拉取配置失敗' }, { status: 500 });
+    console.error('取得設定失敗:', error);
+    return NextResponse.json({ error: '取得設定失敗' }, { status: 500 });
   }
 }

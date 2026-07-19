@@ -7,7 +7,7 @@ const DoubanCardSkeleton = () => {
         {/* 圖片占位符 - 骨架屏效果 */}
         <ImagePlaceholder aspectRatio='aspect-[2/3]' />
 
-        {/* 信息層骨架 */}
+        {/* 資訊層骨架 */}
         <div className='absolute top-[calc(100%+0.5rem)] left-0 right-0'>
           <div className='flex flex-col items-center justify-center'>
             <div className='h-4 w-24 sm:w-32 bg-zinc-200 rounded animate-pulse mb-2'></div>

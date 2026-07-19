@@ -542,7 +542,7 @@ export class DbManager {
     return [];
   }
 
-  // ---------- 管理员配置 ----------
+  // ---------- 管理员設定 ----------
   async getAdminConfig(): Promise<AdminConfig | null> {
     if (typeof (this.storage as any).getAdminConfig === 'function') {
       return (this.storage as any).getAdminConfig();
@@ -556,7 +556,7 @@ export class DbManager {
     }
   }
 
-  // ---------- 跳过片头片尾配置 ----------
+  // ---------- 跳过片头片尾設定 ----------
   async getBangumiAliasCache(
     bangumiId: string
   ): Promise<BangumiAliasCacheEntry | null> {

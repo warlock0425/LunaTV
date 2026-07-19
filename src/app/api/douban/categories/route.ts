@@ -23,18 +23,18 @@ interface DoubanCategoryApiResponse {
 
 export const runtime = 'nodejs';
 
-// 豆瓣分類 API 緩存
+// 豆瓣分類 API 快取
 const CATEGORIES_CACHE = new Map<
   string,
   { expiresAt: number; data: unknown }
 >();
-const CATEGORIES_CACHE_TTL = 60 * 1000; // 1 分鐘緩存
+const CATEGORIES_CACHE_TTL = 60 * 1000; // 1 分鐘快取
 const MAX_CATEGORIES_CACHE_ENTRIES = 200;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
-  // 獲取參數
+  // 取得參數
   const kind = searchParams.get('kind') || 'movie';
   const category = searchParams.get('category');
   const type = searchParams.get('type');
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
 
     const response: DoubanResult = {
       code: 200,
-      message: '獲取成功',
+      message: '取得成功',
       list: list,
     };
 
@@ -134,7 +134,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: '獲取豆瓣數據失敗', details: (error as Error).message },
+      { error: '取得豆瓣數據失敗', details: (error as Error).message },
       { status: 500 }
     );
   }

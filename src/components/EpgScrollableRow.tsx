@@ -29,7 +29,7 @@ export default function EpgScrollableRow({
   // 處理滾輪事件，實現橫向滾動
   const handleWheel = (e: WheelEvent) => {
     if (isHovered && containerRef.current) {
-      e.preventDefault(); // 阻止默認的豎向滾動
+      e.preventDefault(); // 阻止預設的豎向滾動
 
       const container = containerRef.current;
       const scrollAmount = e.deltaY * 4; // 增加滾動速度
@@ -110,7 +110,7 @@ export default function EpgScrollableRow({
     };
   }, [isHovered]);
 
-  // 組件加載後自動滾動到正在播放的節目
+  // 組件載入後自動滾動到正在播放的節目
   useEffect(() => {
     // 延遲執行，確保DOM完全渲染
     const timer = setTimeout(() => {
@@ -125,9 +125,9 @@ export default function EpgScrollableRow({
     return () => clearTimeout(timer);
   }, [programs, currentTime]);
 
-  // 定時刷新正在播放狀態
+  // 定時重新整理正在播放狀態
   useEffect(() => {
-    // 每分鐘刷新一次正在播放狀態
+    // 每分鐘重新整理一次正在播放狀態
     const interval = setInterval(() => {
       const now = new Date();
       // 更新當前正在播放的節目索引
@@ -158,7 +158,7 @@ export default function EpgScrollableRow({
 
   // 判斷節目是否正在播放
 
-  // 加載中狀態
+  // 載入中狀態
   if (isLoading) {
     return (
       <div className='pt-4'>
@@ -172,7 +172,7 @@ export default function EpgScrollableRow({
         <div className='min-h-[100px] sm:min-h-[120px] flex items-center justify-center'>
           <div className='flex items-center gap-3 sm:gap-4 text-zinc-500 dark:text-zinc-400'>
             <div className='w-5 h-5 sm:w-6 sm:h-6 border-2 border-zinc-300 border-t-blue-500 rounded-full animate-spin'></div>
-            <span className='text-sm sm:text-base'>加載節目單...</span>
+            <span className='text-sm sm:text-base'>載入節目單...</span>
           </div>
         </div>
       </div>

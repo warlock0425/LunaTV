@@ -221,7 +221,7 @@ function rewriteM3U8Content(
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i].trim();
 
-    // 處理 TS 片段 URL 和其他媒體文件
+    // 處理 TS 片段 URL 和其他媒體檔案
     if (line && !line.startsWith('#')) {
       const resolvedUrl = resolveUrl(baseUrl, line);
       const proxyUrl = allowCORS
@@ -260,7 +260,7 @@ function rewriteM3U8Content(
       line = rewriteTagUri(line, baseUrl, proxyBase, sourceParam, 'm3u8');
     }
 
-    // 處理嵌套的 M3U8 文件 (EXT-X-STREAM-INF)
+    // 處理嵌套的 M3U8 檔案 (EXT-X-STREAM-INF)
     if (line.startsWith('#EXT-X-STREAM-INF:')) {
       rewrittenLines.push(line);
       // 下一行通常是 M3U8 URL

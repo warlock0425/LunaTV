@@ -17,7 +17,7 @@ interface MobileActionSheetProps {
   title: string;
   actions: ActionItem[];
   poster?: string;
-  sources?: string[]; // 播放源信息
+  sources?: string[]; // 播放源資訊
   isAggregate?: boolean; // 是否為聚合內容
   sourceName?: string; // 播放源名稱
   currentEpisode?: number; // 當前集數
@@ -81,16 +81,16 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
   // 阻止背景滾動
   useEffect(() => {
     if (isVisible) {
-      // 保存當前滾動位置
+      // 儲存當前滾動位置
       const scrollY = window.scrollY;
       const scrollX = window.scrollX;
       const body = document.body;
       const html = document.documentElement;
 
-      // 獲取滾動條寬度
+      // 取得滾動條寬度
       const scrollBarWidth = window.innerWidth - html.clientWidth;
 
-      // 保存原始樣式
+      // 儲存原始樣式
       const originalBodyStyle = {
         position: body.style.position,
         top: body.style.top,
@@ -329,7 +329,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({
           ))}
         </div>
 
-        {/* 播放源信息展示區域 */}
+        {/* 播放源資訊展示區域 */}
         {isAggregate && sources && sources.length > 0 && (
           <div className='px-4 py-3 border-t border-zinc-100 dark:border-zinc-800'>
             {/* 標題區域 */}

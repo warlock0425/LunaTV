@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
-        error: '不支持本地儲存進行管理員配置',
+        error: '不支援本地儲存進行管理員設定',
       },
       { status: 400 }
     );
@@ -121,15 +121,15 @@ export async function POST(request: NextRequest) {
       { ok: true },
       {
         headers: {
-          'Cache-Control': 'no-store', // 不緩存結果
+          'Cache-Control': 'no-store', // 不快取結果
         },
       }
     );
   } catch (error) {
-    console.error('更新站點配置失敗:', error);
+    console.error('更新站點設定失敗:', error);
     return NextResponse.json(
       {
-        error: '更新站點配置失敗',
+        error: '更新站點設定失敗',
         details: (error as Error).message,
       },
       { status: 500 }

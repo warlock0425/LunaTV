@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const config = await getConfig();
 
     if (!config) {
-      return NextResponse.json({ error: '配置未找到' }, { status: 404 });
+      return NextResponse.json({ error: '設定未找到' }, { status: 404 });
     }
 
     // 过滤出所有非 disabled 的直播源
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       data: liveSources,
     });
   } catch (error) {
-    console.error('獲取直播源失敗:', error);
-    return NextResponse.json({ error: '獲取直播源失敗' }, { status: 500 });
+    console.error('取得直播源失敗:', error);
+    return NextResponse.json({ error: '取得直播源失敗' }, { status: 500 });
   }
 }

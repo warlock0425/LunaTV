@@ -26,18 +26,18 @@ interface DoubanRecommendApiResponse {
 
 export const runtime = 'nodejs';
 
-// 豆瓣推薦 API 緩存
+// 豆瓣推薦 API 快取
 const RECOMMENDS_CACHE = new Map<
   string,
   { expiresAt: number; data: unknown }
 >();
-const RECOMMENDS_CACHE_TTL = 60 * 1000; // 1 分鐘緩存
+const RECOMMENDS_CACHE_TTL = 60 * 1000; // 1 分鐘快取
 const MAX_RECOMMENDS_CACHE_ENTRIES = 200;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  // 獲取參數
+  // 取得參數
   const kind = searchParams.get('kind');
   const pageLimit = Number(searchParams.get('limit') ?? '20');
   const pageStart = Number(searchParams.get('start') ?? '0');
@@ -157,7 +157,7 @@ export async function GET(request: NextRequest) {
       }));
     const response: DoubanResult = {
       code: 200,
-      message: '獲取成功',
+      message: '取得成功',
       list: list,
     };
 
@@ -183,7 +183,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     return NextResponse.json(
-      { error: '獲取豆瓣數據失敗', details: (error as Error).message },
+      { error: '取得豆瓣數據失敗', details: (error as Error).message },
       { status: 500 }
     );
   }

@@ -13,11 +13,11 @@ export const runtime = 'nodejs';
 export async function POST(request: NextRequest) {
   const storageType = getServerStorageType();
 
-  // 不支持 localstorage 模式
+  // 不支援 localstorage 模式
   if (storageType === 'localstorage') {
     return NextResponse.json(
       {
-        error: '不支持本地存儲模式修改密碼',
+        error: '不支援本地存儲模式修改密碼',
       },
       { status: 400 }
     );
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     // 不允許站長修改密碼（站長使用者名稱等於 process.env.USERNAME）
     if (username === process.env.USERNAME) {
       return NextResponse.json(
-        { error: '站長不能通過此接口修改密碼' },
+        { error: '站長不能透過此接口修改密碼' },
         { status: 403 }
       );
     }

@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '直播源不存在' }, { status: 404 });
     }
 
-    // 從epgs字段中獲取對應tvgId的節目單資訊
+    // 從epgs字段中取得對應tvgId的節目單資訊
     const epgData = channelData.epgs[tvgId] || [];
 
     return NextResponse.json({
@@ -47,6 +47,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return NextResponse.json({ error: '獲取節目單資訊失敗' }, { status: 500 });
+    return NextResponse.json({ error: '取得節目單資訊失敗' }, { status: 500 });
   }
 }

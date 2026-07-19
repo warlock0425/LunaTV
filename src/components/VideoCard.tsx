@@ -151,7 +151,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
           ? 'movie'
           : 'tv'
         : type;
-    // 獲取收藏狀態（搜尋結果頁面不檢查）
+    // 取得收藏狀態（搜尋結果頁面不檢查）
     useEffect(() => {
       if (!actualSource || !actualId) return;
 
@@ -417,10 +417,10 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
     const handleLongPress = useCallback(() => {
       if (!showMobileActions) {
         // 防止重複觸發
-        // 立即顯示菜單，避免等待資料加載導致動畫卡頓
+        // 立即顯示選單，避免等待資料載入導致動畫卡頓
         setShowMobileActions(true);
 
-        // 異步檢查收藏狀態，不阻塞菜單顯示
+        // 異步檢查收藏狀態，不阻塞選單顯示
         if (
           from === 'search' &&
           !isAggregate &&
@@ -474,9 +474,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
           showSourceName: true,
           showProgress: false,
           showPlayButton: true,
-          showHeart: true, // 移動端菜單中需要顯示收藏選項
+          showHeart: true, // 移動端選單中需要顯示收藏選項
           showCheckCircle: false,
-          showDoubanLink: true, // 移動端菜單中顯示豆瓣鏈接
+          showDoubanLink: true, // 移動端選單中顯示豆瓣鏈接
           showRating: false,
           showYear: true,
         },
@@ -494,7 +494,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
       return configs[from] || configs.search;
     }, [from, isAggregate, douban_id, rate]);
 
-    // 移動端操作菜單配置
+    // 移動端操作選單設定
     const mobileActions = useMemo(() => {
       const actions = [];
 
@@ -518,7 +518,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
         });
       }
 
-      // 聚合源資訊 - 直接在菜單中展示，不需要單獨的操作項
+      // 聚合源資訊 - 直接在選單中展示，不需要單獨的操作項
 
       // 收藏/取消收藏操作
       if (config.showHeart && from !== 'douban' && actualSource && actualId) {
@@ -526,9 +526,9 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
           from === 'search' ? searchFavorited : favorited;
 
         if (from === 'search') {
-          // 搜尋結果：根據加載狀態顯示不同的選項
+          // 搜尋結果：根據載入狀態顯示不同的選項
           if (searchFavorited !== null) {
-            // 已加載完成，顯示實際的收藏狀態
+            // 已載入完成，顯示實際的收藏狀態
             actions.push({
               id: 'favorite',
               label: currentFavorited ? '取消收藏' : '新增收藏',
@@ -549,12 +549,12 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                 : ('default' as const),
             });
           } else {
-            // 正在加載中，顯示占位項
+            // 正在載入中，顯示占位項
             actions.push({
               id: 'favorite-loading',
-              label: '收藏加載中...',
+              label: '收藏載入中...',
               icon: <Heart size={20} />,
-              onClick: () => {}, // 加載中時不響應點擊
+              onClick: () => {}, // 載入中時不響應點擊
               disabled: true,
             });
           }
@@ -654,19 +654,19 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
               WebkitTouchCallout: 'none',
               WebkitTapHighlightColor: 'transparent',
               touchAction: 'manipulation',
-              // 禁用右鍵菜單和長按菜單
+              // 禁用右鍵選單和長按選單
               pointerEvents: 'auto',
             } as React.CSSProperties
           }
           onContextMenu={(e) => {
-            // 阻止預設右鍵菜單
+            // 阻止預設右鍵選單
             e.preventDefault();
             e.stopPropagation();
 
-            // 右鍵彈出操作菜單
+            // 右鍵彈出操作選單
             setShowMobileActions(true);
 
-            // 異步檢查收藏狀態，不阻塞菜單顯示
+            // 異步檢查收藏狀態，不阻塞選單顯示
             if (
               from === 'search' &&
               !isAggregate &&
@@ -954,7 +954,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
           </div>
         </div>
 
-        {/* 操作菜单 - 支持右键和长按触发 */}
+        {/* 操作菜单 - 支援右键和长按触发 */}
         <MobileActionSheet
           isOpen={showMobileActions}
           onClose={() => setShowMobileActions(false)}

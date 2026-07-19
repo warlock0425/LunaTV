@@ -34,7 +34,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 根據內容類型獲取對應的類型選項
+  // 根據內容類型取得對應的類型選項
   const getTypeOptions = (
     contentType: 'movie' | 'tv' | 'show' | 'anime-tv' | 'anime-movie'
   ) => {
@@ -105,7 +105,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
     }
   };
 
-  // 根據內容類型獲取對應的地區選項
+  // 根據內容類型取得對應的地區選項
   const getRegionOptions = (
     contentType: 'movie' | 'tv' | 'show' | 'anime-tv' | 'anime-movie'
   ) => {
@@ -228,7 +228,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
     }
   };
 
-  // 根據內容類型獲取對應的平臺選項
+  // 根據內容類型取得對應的平臺選項
   const getPlatformOptions = (
     contentType: 'movie' | 'tv' | 'show' | 'anime-tv' | 'anime-movie'
   ) => {
@@ -242,7 +242,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
       case 'show':
         return [
           ...baseOptions,
-          { label: '騰訊視頻', value: 'tencent' },
+          { label: '騰訊影片', value: 'tencent' },
           { label: '愛奇藝', value: 'iqiyi' },
           { label: '優酷', value: 'youku' },
           { label: '湖南衛視', value: 'hunan_tv' },
@@ -259,7 +259,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
     }
   };
 
-  // 分類配置
+  // 分類設定
   const categories: MultiLevelCategory[] = [
     ...(contentType !== 'anime-tv' && contentType !== 'anime-movie'
       ? [
@@ -422,7 +422,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
     setActiveCategory(null);
   };
 
-  // 獲取顯示文本
+  // 取得顯示文本
   const getDisplayText = (categoryKey: string) => {
     const category = categories.find((cat) => cat.key === categoryKey);
     if (!category) return '';
@@ -440,7 +440,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
     return option?.label || category.label;
   };
 
-  // 檢查是否為默認值
+  // 檢查是否為預設值
   const isDefaultValue = (categoryKey: string) => {
     const value = values[categoryKey];
     return (

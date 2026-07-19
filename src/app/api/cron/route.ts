@@ -167,8 +167,8 @@ async function cronJob() {
   await refreshConfig();
   if (shouldStopCron(deadline, 'record and favorite refresh')) return;
 
-  // 集數刷新對使用者最有感，優先執行，避免在時間預算內被直播源刷新餓死
-  // （Vercel 上預算僅 50 秒，直播源一多就輪不到集數刷新）
+  // 集數重新整理對使用者最有感，優先執行，避免在時間預算內被直播源重新整理餓死
+  // （Vercel 上預算僅 50 秒，直播源一多就輪不到集數重新整理）
   await refreshRecordAndFavorites(deadline);
   if (shouldStopCron(deadline, 'live channel refresh')) return;
 
@@ -183,21 +183,21 @@ async function refreshAllLiveChannels(deadline: number) {
   );
   await mapWithConcurrency(enabledSources, 3, async (liveInfo) => {
     // 單一來源最多會用掉約 10 秒播放清單 + 12 秒 EPG；預留儲存時間，
-    // 不在期限尾端再啟動一個注定超時的刷新。
+    // 不在期限尾端再啟動一個注定超時的重新整理。
     if (Date.now() + LIVE_REFRESH_START_BUDGET_MS >= deadline) return;
     try {
       const nums = await refreshLiveChannels(liveInfo);
       liveInfo.channelNumber = nums;
     } catch (error) {
       console.error(
-        `刷新直播源失敗 [${liveInfo.name || liveInfo.key}]:`,
+        `重新整理直播源失敗 [${liveInfo.name || liveInfo.key}]:`,
         error
       );
       liveInfo.channelNumber = 0;
     }
   });
 
-  // 保存配置
+  // 儲存設定
   await db.saveAdminConfig(config);
 }
 
@@ -219,10 +219,10 @@ async function refreshConfig() {
       await db.saveAdminConfig(config);
       await setCachedConfig(config);
     } catch (e) {
-      console.error('刷新配置失敗:', e);
+      console.error('重新整理設定失敗:', e);
     }
   } else {
-    console.info('跳過刷新：未配置訂閱地址或自動更新');
+    console.info('跳過重新整理：未設定訂閱地址或自動更新');
   }
 }
 
@@ -235,7 +235,7 @@ async function refreshRecordAndFavorites(deadline: number) {
     // 函數級快取：key 為 `${source}+${id}`，值為 Promise<VideoDetail | null>
     const detailCache = new Map<string, Promise<SearchResult | null>>();
 
-    // 獲取詳情 Promise（帶緩存和錯誤處理）
+    // 取得詳情 Promise（帶快取和錯誤處理）
     const getDetail = async (
       source: string,
       id: string,
@@ -248,7 +248,7 @@ async function refreshRecordAndFavorites(deadline: number) {
           source,
           id,
           fallbackTitle: fallbackTitle.trim(),
-          // 集數刷新需要最新資料，直接打詳情 API、跳過搜尋快取
+          // 集數重新整理需要最新資料，直接打詳情 API、跳過搜尋快取
           preferDetailApi: true,
         })
           .then((detail) => {
@@ -259,7 +259,7 @@ async function refreshRecordAndFavorites(deadline: number) {
           .catch((err) => {
             // 只印訊息不印堆疊：失效記錄每輪都會觸發，完整堆疊只是噪音
             console.error(
-              `獲取影片詳情失敗 (${source}+${id}):`,
+              `取得影片詳情失敗 (${source}+${id}):`,
               err instanceof Error ? err.message : err
             );
             return null;
@@ -318,7 +318,7 @@ async function refreshRecordAndFavorites(deadline: number) {
 
             const detail = await getDetail(source, id, record.title);
             if (!detail) {
-              console.warn(`跳過無法獲取詳情的播放記錄: ${key}`);
+              console.warn(`跳過無法取得詳情的播放記錄: ${key}`);
               return;
             }
 
@@ -350,7 +350,7 @@ async function refreshRecordAndFavorites(deadline: number) {
         await runWithConcurrency(tasks, 2); // 限制並發數為 2，降低 1C1G CPU 負載
         console.info(`播放記錄處理完成: ${processedRecords}/${totalRecords}`);
       } catch (err) {
-        console.error(`獲取使用者播放記錄失敗 (${user}):`, err);
+        console.error(`取得使用者播放記錄失敗 (${user}):`, err);
       }
 
       // 收藏
@@ -376,7 +376,7 @@ async function refreshRecordAndFavorites(deadline: number) {
 
             const favDetail = await getDetail(source, id, fav.title);
             if (!favDetail) {
-              console.warn(`跳過無法獲取詳情的收藏: ${key}`);
+              console.warn(`跳過無法取得詳情的收藏: ${key}`);
               return;
             }
 
@@ -405,7 +405,7 @@ async function refreshRecordAndFavorites(deadline: number) {
         await runWithConcurrency(tasks, 2); // 限制並發數為 2，降低 1C1G CPU 負載
         console.info(`收藏處理完成: ${processedFavorites}/${totalFavorites}`);
       } catch (err) {
-        console.error(`獲取使用者收藏失敗 (${user}):`, err);
+        console.error(`取得使用者收藏失敗 (${user}):`, err);
       }
     };
 
@@ -413,8 +413,8 @@ async function refreshRecordAndFavorites(deadline: number) {
     const userTasks = users.map((user) => () => processUser(user));
     await runWithConcurrency(userTasks, 1);
 
-    console.info('刷新播放紀錄/收藏任務完成');
+    console.info('重新整理播放紀錄/收藏任務完成');
   } catch (err) {
-    console.error('刷新播放紀錄/收藏任務啟動失敗', err);
+    console.error('重新整理播放紀錄/收藏任務啟動失敗', err);
   }
 }

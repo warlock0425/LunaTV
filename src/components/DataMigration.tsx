@@ -219,12 +219,12 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
         throw new Error(errorData.error || `匯出失敗: ${response.status}`);
       }
 
-      // 獲取文件名
+      // 取得檔案名
       const contentDisposition = response.headers.get('content-disposition');
       const filenameMatch = contentDisposition?.match(/filename="(.+)"/);
       const filename = filenameMatch?.[1] || 'moontv-backup.dat';
 
-      // 下載文件
+      // 下載檔案
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -242,7 +242,7 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
       showAlert({
         type: 'success',
         title: '匯出成功',
-        message: '資料已成功匯出，請妥善保管備份文件和密碼',
+        message: '資料已成功匯出，請妥善保管備份檔案和密碼',
         timer: 3000,
       });
 
@@ -258,7 +258,7 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
     }
   };
 
-  // 文件選擇處理
+  // 檔案選擇處理
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -272,7 +272,7 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
       showAlert({
         type: 'error',
         title: '錯誤',
-        message: '請選擇備份文件',
+        message: '請選擇備份檔案',
       });
       return;
     }
@@ -324,7 +324,7 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
             fileInputRef.current.value = '';
           }
 
-          // 重新整理配置
+          // 重新整理設定
           if (onRefreshConfig) {
             await onRefreshConfig();
           }
@@ -368,7 +368,7 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
                   資料匯出
                 </h3>
                 <p className='text-sm text-zinc-600 dark:text-zinc-400'>
-                  創建加密備份文件
+                  創建加密備份檔案
                 </p>
               </div>
             </div>
@@ -385,7 +385,7 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
                     type='password'
                     value={exportPassword}
                     onChange={(e) => setExportPassword(e.target.value)}
-                    placeholder='設定強密碼保護備份文件'
+                    placeholder='設定強密碼保護備份檔案'
                     className='w-full px-3 py-2.5 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors'
                     disabled={isExporting}
                   />
@@ -400,7 +400,7 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
                     備份內容：
                   </p>
                   <div className='grid grid-cols-2 gap-1'>
-                    <div>• 管理配置</div>
+                    <div>• 管理設定</div>
                     <div>• 使用者資料</div>
                     <div>• 播放記錄</div>
                     <div>• 收藏夾</div>
@@ -451,11 +451,11 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
 
             <div className='flex-1 flex flex-col'>
               <div className='space-y-4'>
-                {/* 文件選擇 */}
+                {/* 檔案選擇 */}
                 <div>
                   <label className='flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2'>
                     <FileCheck className='w-4 h-4' />
-                    備份文件
+                    備份檔案
                     {selectedFile && (
                       <span className='ml-auto text-xs text-green-600 dark:text-green-400 font-normal'>
                         {selectedFile.name} (

@@ -1,5 +1,5 @@
 export const buttonStyles = {
-  // 主要操作按鈕（藍色）- 用於配置、設定、確認等
+  // 主要操作按鈕（藍色）- 用於設定、設定、確認等
   primary:
     'px-3 py-1.5 text-sm font-medium bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-lg transition-colors',
   // 成功操作按鈕（綠色）- 用於新增、啟用、儲存等

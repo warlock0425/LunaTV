@@ -48,7 +48,7 @@ export function SiteProvider({
   siteName: string;
   announcement?: string;
 }) {
-  // localstorage 模式下用客戶端配置覆蓋（SSR 首輪回傳 null 不覆蓋）
+  // localstorage 模式下用客戶端設定覆蓋（SSR 首輪回傳 null 不覆蓋）
   const localOverride = useClientValue<{
     siteName?: string;
     announcement?: string;

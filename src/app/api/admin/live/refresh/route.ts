@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     // 等待所有重新整理任務完成
     await Promise.all(refreshPromises);
 
-    // 儲存配置
+    // 儲存設定
     await db.saveAdminConfig(config);
     setCachedConfig(config);
 

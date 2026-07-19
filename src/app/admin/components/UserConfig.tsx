@@ -101,7 +101,7 @@ export const UserConfig = ({
     return selectedUsers.size === selectableUserCount && selectedUsers.size > 0;
   }, [selectedUsers.size, config?.UserConfig?.Users, role, currentUsername]);
 
-  // 獲取使用者群組列表
+  // 取得使用者群組列表
   const userGroups = config?.UserConfig?.Tags || [];
 
   // 處理使用者群組相關操作
@@ -404,7 +404,7 @@ export const UserConfig = ({
           showAlert
         );
 
-        // 重新整理配置
+        // 重新整理設定
         await refreshConfig();
       } catch (err) {
         showError('批量設定使用者群組失敗', showAlert);
@@ -433,7 +433,7 @@ export const UserConfig = ({
           throw new Error(data.error || `操作失敗: ${res.status}`);
         }
 
-        // 成功後重新整理配置
+        // 成功後重新整理設定
         await refreshConfig();
         setShowConfigureApisModal(false);
         setSelectedUser(null);
@@ -476,7 +476,7 @@ export const UserConfig = ({
         throw new Error(data.error || `操作失敗: ${res.status}`);
       }
 
-      // 成功後重新整理配置（無需整頁重新整理）
+      // 成功後重新整理設定（無需整頁重新整理）
       await refreshConfig();
       return true;
     } catch (err) {
@@ -503,7 +503,7 @@ export const UserConfig = ({
   if (!config) {
     return (
       <div className='text-center text-zinc-500 dark:text-zinc-400'>
-        加載中...
+        載入中...
       </div>
     );
   }
@@ -963,7 +963,7 @@ export const UserConfig = ({
                                 ? user.tags.join(', ')
                                 : '無使用者群組'}
                             </span>
-                            {/* 配置使用者群組按鈕 */}
+                            {/* 設定使用者群組按鈕 */}
                             {(role === 'owner' ||
                               (role === 'admin' &&
                                 (user.role === 'user' ||
@@ -972,7 +972,7 @@ export const UserConfig = ({
                                 onClick={() => handleConfigureUserGroup(user)}
                                 className={buttonStyles.roundedPrimary}
                               >
-                                配置
+                                設定
                               </button>
                             )}
                           </div>
@@ -984,7 +984,7 @@ export const UserConfig = ({
                                 ? `${user.enabledApis.length} 個源`
                                 : '無限制'}
                             </span>
-                            {/* 配置採集源權限按鈕 */}
+                            {/* 設定採集源權限按鈕 */}
                             {(role === 'owner' ||
                               (role === 'admin' &&
                                 (user.role === 'user' ||
@@ -993,7 +993,7 @@ export const UserConfig = ({
                                 onClick={() => handleConfigureUserApis(user)}
                                 className={buttonStyles.roundedPrimary}
                               >
-                                配置
+                                設定
                               </button>
                             )}
                           </div>
@@ -1103,7 +1103,7 @@ export const UserConfig = ({
         </div>
       </div>
 
-      {/* 配置使用者採集源權限彈窗 */}
+      {/* 設定使用者採集源權限彈窗 */}
       {showConfigureApisModal && selectedUser && (
         <ConfigureApisModal
           username={selectedUser.username}
@@ -1155,7 +1155,7 @@ export const UserConfig = ({
         />
       )}
 
-      {/* 配置使用者群組彈窗 */}
+      {/* 設定使用者群組彈窗 */}
       {showConfigureUserGroupModal && selectedUserForGroup && (
         <ConfigureUserGroupModal
           username={selectedUserForGroup.username}

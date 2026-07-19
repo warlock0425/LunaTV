@@ -408,7 +408,7 @@ export function usePlaybackSourceSearch({
       const sorted = sortByTitleMatch(deduplicated, matchQueries);
       return sorted;
     } catch (err) {
-      logger.error('獲取播放源失敗:', err);
+      logger.error('取得播放源失敗:', err);
       return [];
     }
   };
