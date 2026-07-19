@@ -5,7 +5,7 @@
   <p><strong>為中文使用者打造的自架影音聚合搜尋與播放平台</strong></p>
   <p>跨來源聚合搜尋・智慧片源優選・無廣告 HLS 播放・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-2.5.7-blue)
+![Version](https://img.shields.io/badge/Version-2.5.8-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -44,6 +44,7 @@ CMS/VOD API 接進來，它負責把「搜尋、挑源、播放、記錄」這�
 
 - **多來源聚合搜尋**——同時查詢所有已設定的 CMS/VOD API，串流回傳結果並即時去重，支援聚合檢視與逐源檢視兩種模式
 - **繁簡智慧匹配**——內建繁簡轉換、長標題拆分、副標題解析與 Bangumi 別名匹配，台灣譯名也能精準命中大陸片源
+- **台灣片名自動反查**——大陸片源常用完全不同的譯名（魔戒／指环王、星際大戰／星球大战），字元轉換無解；搜尋落空時自動經豆瓣反查大陸片名再搜一輪，並在畫面標示實際採用的片名
 - **豆瓣 / Bangumi 探索頁**——電影、劇集、動漫（含每日放送）、綜藝分類瀏覽，支援自訂分類；中繼資料經由 CDN 代理分流，不對來源站造成集中壓力
 - **來源熔斷保護**——連續失敗的片源自動進入冷卻期，避免壞源拖慢整體搜尋
 

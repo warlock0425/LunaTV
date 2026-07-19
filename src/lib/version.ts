@@ -6,7 +6,7 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
-    version: 'v2.5.7',
+    version: 'v2.5.8',
     date: '2026-07-15',
     content: `
 - 換源時背景重新整理集數變少時自動校正當前集，並加換源 race 守衛。
