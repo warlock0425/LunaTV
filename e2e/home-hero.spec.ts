@@ -12,7 +12,8 @@ const RECORDS = {
     title: '世界最強の後衛～迷宮國的新手攻略者～',
     source_name: '艾旦影視',
     cover: '',
-    year: '2026',
+    // downstream 抓不到年份時填的哨兵值，不該顯示在畫面上
+    year: 'unknown',
     index: 2,
     total_episodes: 3,
     play_time: 640,
@@ -62,6 +63,8 @@ test('接著看區塊鎖定最後觀看的一部，且不與下方列表重複',
   await expect(page.getByRole('heading', { name: /世界最強/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /繼續播放/ })).toBeVisible();
   await expect(page.getByText(/另外還有 2 部在追/)).toBeVisible();
+  // 年份是 'unknown' 時整段不顯示，不能把哨兵值印給使用者看
+  await expect(page.getByText('unknown')).toHaveCount(0);
 
   // hero 那部不再出現在下方列表（列卡片標題用 h3，hero 用 h2），其餘仍在
   await expect(page.locator('h3', { hasText: '世界最強' })).toHaveCount(0);

@@ -5,8 +5,31 @@ import {
   AutoNextCountdownOverlay,
   ShortcutsHelpPanel,
   SkipButton,
+  VideoDetailsPanel,
   VideoLoadingOverlay,
 } from './player-ui';
+
+describe('VideoDetailsPanel 年份顯示', () => {
+  const baseProps = {
+    detail: null,
+    videoTitle: '轉學後班上的清純可愛美少女',
+    videoCover: '',
+    videoDoubanId: 0,
+    favorited: false,
+    onToggleFavorite: jest.fn(),
+  };
+
+  // downstream 抓不到年份時填的是字串 'unknown'，非空字串會通過 truthy 檢查
+  it('不把 unknown 哨兵值顯示給使用者', () => {
+    render(<VideoDetailsPanel {...baseProps} videoYear='unknown' />);
+    expect(screen.queryByText('unknown')).not.toBeInTheDocument();
+  });
+
+  it('正常年份仍然顯示', () => {
+    render(<VideoDetailsPanel {...baseProps} videoYear='2026' />);
+    expect(screen.getByText('2026')).toBeInTheDocument();
+  });
+});
 
 describe('SkipButton', () => {
   it('顯示標籤並可點擊', () => {

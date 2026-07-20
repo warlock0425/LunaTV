@@ -1,10 +1,34 @@
 import {
   cleanHtmlTags,
+  formatYear,
   getBestM3u8VariantQuality,
   getProxiedImageUrl,
   getQualityFromWidth,
   processImageUrl,
 } from './utils';
+
+describe('formatYear', () => {
+  // downstream 抓不到年份時會填字串 'unknown'，是內部哨兵值不該顯示給使用者
+  it('把 unknown 哨兵值視為沒有年份', () => {
+    expect(formatYear('unknown')).toBe('');
+  });
+
+  it('把舊紀錄殘留的 undefined / null 字串視為沒有年份', () => {
+    expect(formatYear('undefined')).toBe('');
+    expect(formatYear('null')).toBe('');
+  });
+
+  it('沒有值時回傳空字串', () => {
+    expect(formatYear('')).toBe('');
+    expect(formatYear(undefined)).toBe('');
+    expect(formatYear('   ')).toBe('');
+  });
+
+  it('保留正常年份', () => {
+    expect(formatYear('2026')).toBe('2026');
+    expect(formatYear(' 2025 ')).toBe('2025');
+  });
+});
 
 describe('utils m3u8 quality helpers', () => {
   it('maps video width to quality labels', () => {

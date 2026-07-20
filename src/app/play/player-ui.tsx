@@ -4,7 +4,7 @@
 import { useState } from 'react';
 
 import { SearchResult } from '@/lib/types';
-import { getProxiedImageUrl, processImageUrl } from '@/lib/utils';
+import { formatYear, getProxiedImageUrl, processImageUrl } from '@/lib/utils';
 
 import { FavoriteIcon } from './FavoriteIcon';
 
@@ -226,8 +226,8 @@ export function VideoDetailsPanel({
             {detail?.class && (
               <span className='text-accent font-semibold'>{detail.class}</span>
             )}
-            {(detail?.year || videoYear) && (
-              <span>{detail?.year || videoYear}</span>
+            {formatYear(detail?.year || videoYear) && (
+              <span>{formatYear(detail?.year || videoYear)}</span>
             )}
             {detail?.source_name && (
               <span

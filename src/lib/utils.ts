@@ -131,6 +131,26 @@ export function processImageUrl(originalUrl: string): string {
 }
 
 /**
+ * 年份顯示值；沒有可用年份時回傳空字串。
+ *
+ * 上游抓不到年份時 downstream 會填入字串 'unknown'（見 lib/downstream.ts），
+ * 舊紀錄也可能留有 'undefined' / 'null'。這些是內部哨兵值，不該顯示給使用者，
+ * 但因為都是非空字串，用 `year && ...` 這種判斷是擋不住的。
+ */
+export function formatYear(year?: string): string {
+  const value = (year || '').trim();
+  if (
+    !value ||
+    value === 'unknown' ||
+    value === 'undefined' ||
+    value === 'null'
+  ) {
+    return '';
+  }
+  return value;
+}
+
+/**
  * 從 m3u8 地址取得影片質量等級和網路資訊
  * @param m3u8Url m3u8 播放列表的 URL
  * @returns Promise<{quality: string, loadSpeed: string, pingTime: number}> 影片質量等級和網路資訊
@@ -313,14 +333,20 @@ export async function getVideoResolutionFromM3u8(
       hls.on(
         Hls.Events.FRAG_LOADED,
         (event: Events.FRAG_LOADED, data: FragLoadedData) => {
-          if (
-            fragmentStartTime > 0 &&
-            data &&
-            data.payload &&
-            !hasSpeedCalculated
-          ) {
-            const loadTime = performance.now() - fragmentStartTime;
-            const size = data.payload.byteLength || 0;
+          if (data && data.payload && !hasSpeedCalculated) {
+            // 優先採用 hls.js 自己記錄的該分片載入時間。
+            // fragmentStartTime 是所有分片共用的變數，只要下一個分片的
+            // FRAG_LOADING 先於這個分片的 FRAG_LOADED 觸發（預抓、init
+            // segment、並行載入都會造成），算出來的耗時就會遠小於實際值，
+            // 速度因而被灌成好幾百 MB/s。stats 是逐分片的，不受事件順序影響。
+            const stats = data.frag?.stats;
+            const loadTime =
+              stats && stats.loading.end > stats.loading.start
+                ? stats.loading.end - stats.loading.start
+                : fragmentStartTime > 0
+                  ? performance.now() - fragmentStartTime
+                  : 0;
+            const size = stats?.loaded || data.payload.byteLength || 0;
 
             if (loadTime > 0 && size > 0) {
               const speedKBps = size / 1024 / (loadTime / 1000);

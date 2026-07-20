@@ -4,6 +4,7 @@ import { CirclePlay, ListVideo, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { buildPlayUrl } from '@/lib/play-url';
+import { formatYear } from '@/lib/utils';
 
 import { ContinueWatchingCover } from './ContinueWatchingCover';
 import { PosterImage } from './PosterImage';
@@ -77,6 +78,7 @@ export function HeroResume({
   const progress = getWatchProgress(item);
   const episodeLabel = formatEpisodeLabel(item);
   const sourceLabel = formatSourceLabel(item, source);
+  const yearLabel = formatYear(item.year);
 
   return (
     <section className='mb-10'>
@@ -120,12 +122,12 @@ export function HeroResume({
 
             <div className='mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-zinc-300'>
               <span className='font-semibold tabular-nums'>{episodeLabel}</span>
-              {item.year && (
+              {yearLabel && (
                 <>
                   <span aria-hidden='true' className='text-zinc-600'>
                     ·
                   </span>
-                  <span className='tabular-nums'>{item.year}</span>
+                  <span className='tabular-nums'>{yearLabel}</span>
                 </>
               )}
               {sourceLabel && (
