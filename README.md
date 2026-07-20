@@ -5,7 +5,7 @@
   <p><strong>為中文使用者打造的自架影音聚合搜尋與播放平台</strong></p>
   <p>跨來源聚合搜尋・智慧片源優選・無廣告 HLS 播放・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-2.5.8-blue)
+![Version](https://img.shields.io/badge/Version-2.6.0-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)

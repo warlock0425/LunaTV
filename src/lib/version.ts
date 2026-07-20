@@ -6,6 +6,17 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.6.0',
+    date: '2026-07-20',
+    content: `
+- 首頁改版：新增「接著看」大圖區塊，直接鎖定最後觀看的一部，一鍵接續播放。
+- 接著看區塊沿用既有補圖機制，缺封面時會自動從詳情補回並寫入紀錄。
+- 匯出備份改用 scrypt 導出金鑰與 AES-256-GCM，並加上完整性驗證；舊備份仍可還原。
+- 管理端點改為自行驗證 session 簽章，不再單獨依賴 proxy 中介層。
+- 修正自動連播倒數把副作用放在 state updater 內的問題。
+    `.trim(),
+  },
+  {
     version: 'v2.5.8',
     date: '2026-07-15',
     content: `
