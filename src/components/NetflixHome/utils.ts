@@ -2,6 +2,7 @@
 
 import type { PlayRecord } from '@/lib/db.client';
 import { deduplicatePlayRecordList } from '@/lib/play-records';
+import { parseStorageKey } from '@/lib/storage-key';
 
 export function deduplicatePlayRecords(
   records: Record<string, PlayRecord>
@@ -9,6 +10,64 @@ export function deduplicatePlayRecords(
   return deduplicatePlayRecordList(
     Object.entries(records || {}).map(([key, record]) => ({ ...record, key }))
   );
+}
+
+/**
+ * 從播放紀錄解析出可直接播放的來源與 ID。
+ *
+ * 紀錄的 key 才是當初寫入快取時的原始來源／ID，優先採用；欄位本身可能是
+ * 舊資料留下的字串 'undefined' / 'null'，這類值視同缺漏。兩者只要缺一，
+ * 就得改走 prefer 模式讓播放頁重新搜尋片源。
+ */
+export function resolveRecordPlayTarget(record: {
+  key?: string;
+  id?: string;
+  vod_id?: string;
+  source?: string;
+}): { source: string; id: string; isPrefer: boolean } {
+  const parsedKey = parseStorageKey(record.key);
+  const isBlank = (value?: string) =>
+    !value || value === 'undefined' || value === 'null';
+
+  const rawId = parsedKey?.id || record.id || record.vod_id;
+  const rawSource = parsedKey?.source || record.source;
+  const id = isBlank(rawId) ? '' : (rawId as string);
+  const source = isBlank(rawSource) ? '' : (rawSource as string);
+
+  return { source, id, isPrefer: !id || !source };
+}
+
+/** 「第 2 / 12 集」；來源沒回報總集數時只顯示當前集。 */
+export function formatEpisodeLabel(record: {
+  index?: number;
+  total_episodes?: number;
+}): string {
+  return record.total_episodes && record.total_episodes > 0
+    ? `第 ${record.index} / ${record.total_episodes} 集`
+    : `第 ${record.index} 集`;
+}
+
+/** 來源標籤：部分設定會在名稱前掛上 🎬，顯示時去掉。 */
+export function formatSourceLabel(
+  record: { source_name?: string; source?: string },
+  fallbackSource = ''
+): string {
+  const name = record.source_name || fallbackSource || record.source || '';
+  return name.replace(/^🎬\s*/, '');
+}
+
+/**
+ * 觀看進度百分比。total_time 缺漏時（極少數來源不回報時長）回傳 0，
+ * 由呼叫端決定是否隱藏進度條，而不是硬湊一個假的比例。
+ */
+export function getWatchProgress(record: {
+  play_time?: number;
+  total_time?: number;
+}): number {
+  const total = Number(record.total_time) || 0;
+  if (total <= 0) return 0;
+  const played = Number(record.play_time) || 0;
+  return Math.min(100, Math.max(0, (played / total) * 100));
 }
 
 export const DETAIL_CACHE_KEYS = [

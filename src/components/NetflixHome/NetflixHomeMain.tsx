@@ -38,10 +38,17 @@ import { UserMenu } from '@/components/UserMenu';
 
 import { ContinueWatchingCover } from './ContinueWatchingCover';
 import { FavoritesView } from './FavoritesView';
+import { HeroResume } from './HeroResume';
 import { NetflixBangumiRow } from './NetflixBangumiRow';
 import { NetflixGridCard } from './NetflixGridCard';
 import { NetflixSectionRow } from './NetflixSectionRow';
 import { SectionTitle } from './SectionTitle';
+import {
+  formatEpisodeLabel,
+  formatSourceLabel,
+  getWatchProgress,
+  resolveRecordPlayTarget,
+} from './utils';
 
 export default function NetflixHome({
   hotMovies = [],
@@ -92,6 +99,41 @@ export default function NetflixHome({
     setPrevPlayRecords(playRecords);
     setContinueWatching(playRecords.map((r) => hydratePlayRecord(r)));
   }
+
+  // 依 save_time 由新到舊排序後，第一筆即「最後看的那部」，交給頂部的接著看區塊；
+  // 其餘留給下方的繼續觀看列，避免同一部在畫面上出現兩次。
+  const orderedContinueWatching = useMemo(
+    () => deduplicatePlayRecordList(continueWatching),
+    [continueWatching]
+  );
+  const heroRecord = orderedContinueWatching[0];
+  const remainingContinueWatching = orderedContinueWatching.slice(1);
+
+  // 補圖成功後寫回紀錄，hero 與下方列表共用；下次渲染就直接有封面。
+  const applyResolvedCover = useCallback((item: any, poster: string) => {
+    if (!poster || poster === item.cover) return;
+    const { source, id } = resolveRecordPlayTarget(item);
+    const itemKey = item.key || generateStorageKey(source, id);
+
+    setContinueWatching((prev) =>
+      prev.map((record) =>
+        (record.key ||
+          generateStorageKey(record.source, record.id || record.vod_id)) ===
+        itemKey
+          ? { ...record, cover: poster }
+          : record
+      )
+    );
+  }, []);
+
+  const handleClearAllRecords = useCallback(async () => {
+    if (!window.confirm('確定要清除所有繼續觀看紀錄嗎？此動作無法復原。')) {
+      return;
+    }
+    await clearAllPlayRecords();
+    setContinueWatching([]);
+    toast('已清空觀看紀錄', 'info');
+  }, [toast]);
 
   const handleDelete = async (e: React.MouseEvent, item: any) => {
     e.stopPropagation();
@@ -260,7 +302,24 @@ export default function NetflixHome({
         >
           {activeNav === 'home' ? (
             <>
-              {continueWatching.length > 0 && (
+              {heroRecord && (
+                <HeroResume
+                  item={heroRecord}
+                  othersCount={remainingContinueWatching.length}
+                  // 只剩這一筆時下方不會有繼續觀看列，清空紀錄改掛在 hero 上，
+                  // 否則使用者就沒有任何入口可以清除歷史。
+                  onClearHistory={
+                    remainingContinueWatching.length === 0
+                      ? handleClearAllRecords
+                      : undefined
+                  }
+                  onResolvedCover={(poster) =>
+                    applyResolvedCover(heroRecord, poster)
+                  }
+                />
+              )}
+
+              {remainingContinueWatching.length > 0 && (
                 <section className='mb-10'>
                   <div className='flex items-center gap-3 mb-6 px-1'>
                     <div className='flex items-center gap-2'>
@@ -269,25 +328,13 @@ export default function NetflixHome({
                         繼續觀看
                       </h3>
                     </div>
-                    {continueWatching.length > 0 && (
-                      <button
-                        className='ml-auto flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 transition-colors bg-zinc-100 dark:bg-zinc-800/50 hover:bg-red-50 dark:hover:bg-red-500/10 px-3 py-1.5 rounded-full'
-                        onClick={async () => {
-                          if (
-                            window.confirm(
-                              '確定要清除所有繼續觀看紀錄嗎？此動作無法復原。'
-                            )
-                          ) {
-                            await clearAllPlayRecords();
-                            setContinueWatching([]);
-                            toast('已清空觀看紀錄', 'info');
-                          }
-                        }}
-                      >
-                        <Trash2 className='w-3.5 h-3.5' />
-                        清空紀錄
-                      </button>
-                    )}
+                    <button
+                      className='ml-auto flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 transition-colors bg-zinc-100 dark:bg-zinc-800/50 hover:bg-red-50 dark:hover:bg-red-500/10 px-3 py-1.5 rounded-full'
+                      onClick={handleClearAllRecords}
+                    >
+                      <Trash2 className='w-3.5 h-3.5' />
+                      清空紀錄
+                    </button>
                   </div>
                   <div className='relative group/carousel [mask-image:linear-gradient(to_right,transparent,black_2%,black_98%,transparent)] md:[mask-image:linear-gradient(to_right,transparent,black_4%,black_96%,transparent)] -mx-2 px-2'>
                     <div
@@ -316,141 +363,96 @@ export default function NetflixHome({
                       ref={continueRef}
                       className='flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth flex-nowrap no-scrollbar py-6 px-2 relative scroll-px-2'
                     >
-                      {(() => {
-                        return deduplicatePlayRecordList(continueWatching).map(
-                          (item) => {
-                            const progress =
-                              item.total_time > 0
-                                ? (item.play_time / item.total_time) * 100
-                                : 0;
+                      {remainingContinueWatching.map((item) => {
+                        const progress = getWatchProgress(item);
 
-                            // 核心修復：精確切出當初 IndexedDB 快取的原始唯一辨識數位 ID 與片源
-                            const parsedKey = parseStorageKey(item.key);
-                            const rawId =
-                              parsedKey?.id || item.id || item.vod_id;
-                            const rawSource = parsedKey?.source || item.source;
-
-                            const targetPlayId =
-                              !rawId ||
-                              rawId === 'undefined' ||
-                              rawId === 'null'
-                                ? ''
-                                : rawId;
-                            const targetPlaySource =
-                              !rawSource ||
-                              rawSource === 'undefined' ||
-                              rawSource === 'null'
-                                ? ''
-                                : rawSource;
-                            const isPrefer = !targetPlayId || !targetPlaySource;
-                            const displaySourceName =
-                              item.source_name ||
-                              targetPlaySource ||
-                              item.source ||
-                              '';
-                            const displaySourceLabel =
-                              displaySourceName.replace(/^🎬\s*/, '');
-
-                            return (
-                              <div
-                                key={item.key || `${item.source}+${item.id}`}
-                                className='relative group vertical-card-container w-48 shrink-0 cursor-pointer'
-                              >
-                                <button
-                                  onClick={() =>
-                                    router.push(
-                                      buildPlayUrl({
-                                        id: targetPlayId,
-                                        source: targetPlaySource,
-                                        title: item.title || item.vod_name,
-                                        prefer: isPrefer,
-                                        url: item.url,
-                                        stitle: item.search_title,
-                                        episode:
-                                          item.index && item.index > 0
-                                            ? item.index
-                                            : undefined,
-                                      })
-                                    )
-                                  }
-                                  onFocus={(e) =>
-                                    e.currentTarget.scrollIntoView({
-                                      behavior: 'smooth',
-                                      block: 'nearest',
-                                      inline: 'center',
-                                    })
-                                  }
-                                  className='w-full h-full text-left'
-                                >
-                                  <div className='visual-box flex flex-col w-full h-full'>
-                                    <div className='relative aspect-[2/3] w-full rounded-md overflow-hidden bg-zinc-800 transition-all border border-transparent group-hover:border-accent/80'>
-                                      <ContinueWatchingCover
-                                        cover={item.cover}
-                                        title={item.title || item.vod_name}
-                                        source={targetPlaySource}
-                                        id={targetPlayId}
-                                        onResolvedCover={async (poster) => {
-                                          if (!poster || poster === item.cover)
-                                            return;
-                                          const itemKey =
-                                            item.key ||
-                                            generateStorageKey(
-                                              targetPlaySource,
-                                              targetPlayId
-                                            );
-                                          setContinueWatching((prev) =>
-                                            prev.map((record) =>
-                                              (record.key ||
-                                                generateStorageKey(
-                                                  record.source,
-                                                  record.id || record.vod_id
-                                                )) === itemKey
-                                                ? { ...record, cover: poster }
-                                                : record
-                                            )
-                                          );
-                                        }}
-                                      />
-                                      <div className='absolute bottom-0 left-0 h-1.5 bg-black/40 w-full z-10'>
-                                        <div
-                                          className='h-full bg-accent'
-                                          style={{ width: `${progress}%` }}
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <h3 className='text-white text-[14px] font-medium line-clamp-1 group-hover:text-accent transition-colors mt-2 tracking-wide w-full'>
-                                      {item.title || item.vod_name}
-                                    </h3>
-
-                                    <div className='flex items-center justify-between w-full mt-1 gap-2'>
-                                      <span className='text-zinc-300 text-[12px] font-bold tracking-wide truncate'>
-                                        {item.total_episodes &&
-                                        item.total_episodes > 0
-                                          ? `第 ${item.index} / ${item.total_episodes} 集`
-                                          : `第 ${item.index} 集`}
-                                      </span>
-                                      <span
-                                        title={displaySourceLabel}
-                                        className='truncate px-2 py-0.5 bg-accent/15 text-accent border border-accent/20 text-[11px] font-bold rounded-sm shrink-0'
-                                      >
-                                        {displaySourceLabel}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </button>
-                                {/* 右上角 Hover 精緻手動刪除鈕 */}
-                                <button
-                                  onClick={(e) => handleDelete(e, item)}
-                                  className='absolute top-3 right-3 w-6 h-6 rounded-full bg-black/80 text-zinc-200 flex items-center justify-center text-xs opacity-80 md:opacity-0 md:group-hover:opacity-100 hover:bg-red-600 hover:text-white transition-all duration-200 z-50 cursor-pointer shadow-md'
-                                >
-                                  <X className='w-3 h-3' />
-                                </button>
-                              </div>
-                            );
-                          }
+                        const {
+                          source: targetPlaySource,
+                          id: targetPlayId,
+                          isPrefer,
+                        } = resolveRecordPlayTarget(item);
+                        const displaySourceLabel = formatSourceLabel(
+                          item,
+                          targetPlaySource
                         );
-                      })()}
+
+                        return (
+                          <div
+                            key={item.key || `${item.source}+${item.id}`}
+                            className='relative group vertical-card-container w-48 shrink-0 cursor-pointer'
+                          >
+                            <button
+                              onClick={() =>
+                                router.push(
+                                  buildPlayUrl({
+                                    id: targetPlayId,
+                                    source: targetPlaySource,
+                                    title: item.title || item.vod_name,
+                                    prefer: isPrefer,
+                                    url: item.url,
+                                    stitle: item.search_title,
+                                    episode:
+                                      item.index && item.index > 0
+                                        ? item.index
+                                        : undefined,
+                                  })
+                                )
+                              }
+                              onFocus={(e) =>
+                                e.currentTarget.scrollIntoView({
+                                  behavior: 'smooth',
+                                  block: 'nearest',
+                                  inline: 'center',
+                                })
+                              }
+                              className='w-full h-full text-left'
+                            >
+                              <div className='visual-box flex flex-col w-full h-full'>
+                                <div className='relative aspect-[2/3] w-full rounded-md overflow-hidden bg-zinc-800 transition-all border border-transparent group-hover:border-accent/80'>
+                                  <ContinueWatchingCover
+                                    cover={item.cover}
+                                    title={item.title || item.vod_name}
+                                    source={targetPlaySource}
+                                    id={targetPlayId}
+                                    onResolvedCover={(poster) =>
+                                      applyResolvedCover(item, poster)
+                                    }
+                                  />
+                                  <div className='absolute bottom-0 left-0 h-1.5 bg-black/40 w-full z-10'>
+                                    <div
+                                      className='h-full bg-accent'
+                                      style={{ width: `${progress}%` }}
+                                    />
+                                  </div>
+                                </div>
+
+                                <h3 className='text-white text-[14px] font-medium line-clamp-1 group-hover:text-accent transition-colors mt-2 tracking-wide w-full'>
+                                  {item.title || item.vod_name}
+                                </h3>
+
+                                <div className='flex items-center justify-between w-full mt-1 gap-2'>
+                                  <span className='text-zinc-300 text-[12px] font-bold tracking-wide truncate'>
+                                    {formatEpisodeLabel(item)}
+                                  </span>
+                                  <span
+                                    title={displaySourceLabel}
+                                    className='truncate px-2 py-0.5 bg-accent/15 text-accent border border-accent/20 text-[11px] font-bold rounded-sm shrink-0'
+                                  >
+                                    {displaySourceLabel}
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                            {/* 右上角 Hover 精緻手動刪除鈕 */}
+                            <button
+                              onClick={(e) => handleDelete(e, item)}
+                              className='absolute top-3 right-3 w-6 h-6 rounded-full bg-black/80 text-zinc-200 flex items-center justify-center text-xs opacity-80 md:opacity-0 md:group-hover:opacity-100 hover:bg-red-600 hover:text-white transition-all duration-200 z-50 cursor-pointer shadow-md'
+                            >
+                              <X className='w-3 h-3' />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </section>
