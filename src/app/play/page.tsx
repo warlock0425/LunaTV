@@ -5,7 +5,7 @@
 import Artplayer from 'artplayer';
 import Hls, { ErrorData, Events } from 'hls.js';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import {
   getCachedBangumiAliases,
@@ -262,16 +262,9 @@ function PlayPageClient() {
   }, [bangumiSubjectId]);
 
   // 影片地址由 detail + 集數索引推導（越界時為空字串）
-  const videoUrl = useMemo(() => {
-    if (
-      !detail ||
-      !detail.episodes ||
-      currentEpisodeIndex >= detail.episodes.length
-    ) {
-      return '';
-    }
-    return detail.episodes[currentEpisodeIndex] || '';
-  }, [detail, currentEpisodeIndex]);
+  // 只依賴「目前集的 URL 字串」，避免 detail 物件被背景刷新置換時
+  // 觸發多餘重算；字串相同則播放器 effect 不會重建 HLS。
+  const videoUrl = detail?.episodes?.[currentEpisodeIndex] || '';
   const totalEpisodes = detail?.episodes?.length || 0;
   const resumeTimeRef = useRef<number | null>(null);
   const lastVolumeRef = useRef<number>(0.7);
@@ -337,6 +330,7 @@ function PlayPageClient() {
 
   const artPlayerRef = useRef<any>(null);
   const artRef = useRef<HTMLDivElement | null>(null);
+  const lastLoadedVideoUrlRef = useRef<string>('');
 
   // Wake Lock（螢幕常亮）
   const { requestWakeLock, releaseWakeLock } = useWakeLock();
@@ -385,6 +379,7 @@ function PlayPageClient() {
 
   // 清理播放器資源的統一函數
   const cleanupPlayer = (resetCountdownUi = true) => {
+    lastLoadedVideoUrlRef.current = '';
     if (countdownTimerRef.current) {
       clearInterval(countdownTimerRef.current);
       countdownTimerRef.current = null;
@@ -828,13 +823,32 @@ function PlayPageClient() {
             if (!active) return base;
 
             setCachedDetail(base.source, base.id, merged.detail);
+
+            // 正在播放時：若集數沒增加，不要 setDetail（避免整頁重渲與潛在播放器擾動）
+            const video = artPlayerRef.current?.video as
+              HTMLVideoElement | undefined;
+            const isActivelyPlaying = Boolean(
+              video && !video.paused && video.currentTime > 0.25
+            );
+            if (isActivelyPlaying && !merged.episodeCountIncreased) {
+              return detailRef.current || base;
+            }
+
             setDetail((prevDetail) => {
               const again = mergeDetailPreservingPlayback(
                 prevDetail || base,
                 freshDetail,
                 currentEpisodeIndexRef.current
               );
-              return again.applied && again.detail ? again.detail : prevDetail;
+              if (!again.applied || !again.detail) return prevDetail;
+              // 雙重保險：播放 URL 變了就不套用
+              const idx = currentEpisodeIndexRef.current;
+              const prevUrl = prevDetail?.episodes?.[idx] || '';
+              const nextUrl = again.detail.episodes?.[idx] || '';
+              if (prevUrl && nextUrl && prevUrl !== nextUrl) {
+                return prevDetail;
+              }
+              return again.detail;
             });
             // 背景路徑刻意不 setCurrentEpisodeIndex
             if (merged.episodeCountIncreased) {
@@ -1196,7 +1210,14 @@ function PlayPageClient() {
               freshDetail,
               currentEpisodeIndexRef.current
             );
-            return again.applied && again.detail ? again.detail : prevDetail;
+            if (!again.applied || !again.detail) return prevDetail;
+            const idx = currentEpisodeIndexRef.current;
+            const prevUrl = prevDetail?.episodes?.[idx] || '';
+            const nextUrl = again.detail.episodes?.[idx] || '';
+            if (prevUrl && nextUrl && prevUrl !== nextUrl) {
+              return prevDetail;
+            }
+            return again.detail;
           });
           // 換源後背景刷新同樣不強制改集數索引；僅在確實越界時校正
           if (
@@ -1383,6 +1404,13 @@ function PlayPageClient() {
       setError('影片地址無效');
       return;
     }
+
+    // 同一個 URL：不要拆掉重建（背景 setDetail 等不應重啟 HLS）
+    if (artPlayerRef.current && lastLoadedVideoUrlRef.current === videoUrl) {
+      logger.debug('播放 URL 未變，略過播放器重建');
+      return;
+    }
+
     logger.debug('影片地址已解析');
 
     // 檢測是否為WebKit瀏覽器
@@ -1423,6 +1451,7 @@ function PlayPageClient() {
 
       const skipSettings = buildSkipSettingsForPlayer();
 
+      lastLoadedVideoUrlRef.current = videoUrl;
       artPlayerRef.current = new Artplayer({
         container: artRef.current,
         url: videoUrl,
@@ -1471,12 +1500,15 @@ function PlayPageClient() {
             const hls = new Hls({
               debug: false, // 關閉日誌
               enableWorker: true, // WebWorker 解碼，降低主線程壓力
-              lowLatencyMode: true, // 開啟低延遲 LL-HLS
+              // 點播不要開 LL-HLS：低延遲模式容易造成音畫/字幕時間軸錯位
+              lowLatencyMode: false,
+              // 允許小幅緩衝空洞由播放器填補，減少 seek/去廣告後的 A/V drift
+              maxBufferHole: 0.5,
 
               /* 緩衝/內存相關 */
-              maxBufferLength: 30, // 前向緩衝最大 30s，過大容易導致高延遲
-              backBufferLength: 30, // 僅保留 30s 已播放內容，避免內存佔用
-              maxBufferSize: 60 * 1000 * 1000, // 約 60MB，超出後觸發清理
+              maxBufferLength: 60,
+              backBufferLength: 30,
+              maxBufferSize: 80 * 1000 * 1000,
 
               /* 自定義loader */
               loader: blockAdEnabledRef.current
