@@ -2,24 +2,25 @@
 
 import { NextRequest } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getAdminUser, getConfig } from '@/lib/config';
-import { fetchSafeRemoteUrl } from '@/lib/url-safety';
+import { validateSourceSite } from '@/lib/source-validation';
 
 import { GET } from './route';
 
-jest.mock('@/lib/auth', () => ({ getAuthInfoFromCookie: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({
-  API_CONFIG: { search: { headers: {} } },
   getAdminUser: jest.fn(),
   getConfig: jest.fn(),
 }));
-jest.mock('@/lib/url-safety', () => ({ fetchSafeRemoteUrl: jest.fn() }));
+jest.mock('@/lib/source-validation', () => ({
+  validateSourceSite: jest.fn(),
+}));
 
-const mockedGetAuth = jest.mocked(getAuthInfoFromCookie);
+const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedGetAdminUser = jest.mocked(getAdminUser);
 const mockedGetConfig = jest.mocked(getConfig);
-const mockedFetch = jest.mocked(fetchSafeRemoteUrl);
+const mockedValidate = jest.mocked(validateSourceSite);
 
 function createRequest() {
   return new NextRequest(
@@ -36,7 +37,7 @@ function createSites(count: number) {
 }
 
 async function waitFor(predicate: () => boolean) {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  for (let attempt = 0; attempt < 200; attempt++) {
     if (predicate()) return;
     await new Promise<void>((resolve) => setImmediate(resolve));
   }
@@ -46,7 +47,7 @@ async function waitFor(predicate: () => boolean) {
 describe('/api/admin/source/validate', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedGetAuth.mockReturnValue({
+    mockedGetAuth.mockResolvedValue({
       username: 'owner',
       signature: 'signed',
       timestamp: Date.now(),
@@ -55,11 +56,9 @@ describe('/api/admin/source/validate', () => {
       username: 'owner',
     } as Awaited<ReturnType<typeof getAdminUser>>);
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    jest.spyOn(console, 'log').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
-    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -75,29 +74,38 @@ describe('/api/admin/source/validate', () => {
       releaseRequests = resolve;
     });
 
-    mockedFetch.mockImplementation(async () => {
+    mockedValidate.mockImplementation(async (site) => {
       activeRequests++;
       maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
       await gate;
       activeRequests--;
-      return new Response(JSON.stringify({ list: [] }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return {
+        source: site.key,
+        status: 'no_results',
+        levels: { search: 'pass', detail: 'skip', playable: 'skip' },
+        message: 'API 可達，但無搜尋結果',
+        resultCount: 0,
+        episodeCount: 0,
+        latencyMs: 1,
+        checkedAt: Date.now(),
+      };
     });
 
     const response = await GET(createRequest());
-    await waitFor(() => mockedFetch.mock.calls.length === 6);
+    // 目前 concurrency = 4
+    await waitFor(() => mockedValidate.mock.calls.length === 4);
 
-    expect(maxActiveRequests).toBe(6);
-    expect(mockedFetch).toHaveBeenCalledTimes(6);
+    expect(maxActiveRequests).toBe(4);
+    expect(mockedValidate).toHaveBeenCalledTimes(4);
 
     releaseRequests();
     const body = await response.text();
 
-    expect(mockedFetch).toHaveBeenCalledTimes(14);
-    expect(maxActiveRequests).toBe(6);
+    expect(mockedValidate).toHaveBeenCalledTimes(14);
+    expect(maxActiveRequests).toBe(4);
     expect(body).toContain('"type":"complete"');
     expect(body).toContain('"completedSources":14');
+    expect(body).toContain('"type":"source_result"');
   });
 
   it('aborts active requests and does not start queued requests after cancellation', async () => {
@@ -106,10 +114,10 @@ describe('/api/admin/source/validate', () => {
     } as Awaited<ReturnType<typeof getConfig>>);
 
     const signals: AbortSignal[] = [];
-    mockedFetch.mockImplementation((_url, init) => {
-      const signal = init?.signal as AbortSignal;
+    mockedValidate.mockImplementation((_site, options) => {
+      const signal = options?.signal as AbortSignal;
       signals.push(signal);
-      return new Promise<Response>((_resolve, reject) => {
+      return new Promise((_resolve, reject) => {
         const rejectWithAbort = () =>
           reject(new DOMException('Aborted', 'AbortError'));
         if (signal.aborted) {
@@ -121,52 +129,29 @@ describe('/api/admin/source/validate', () => {
     });
 
     const response = await GET(createRequest());
-    await waitFor(() => signals.length === 6);
+    await waitFor(() => signals.length === 4);
 
     const reader = response.body!.getReader();
     await reader.read();
     await reader.cancel();
     await waitFor(() => signals.every((signal) => signal.aborted));
 
-    expect(mockedFetch).toHaveBeenCalledTimes(6);
-    expect(signals).toHaveLength(6);
+    expect(mockedValidate).toHaveBeenCalledTimes(4);
+    expect(signals).toHaveLength(4);
     expect(signals.every((signal) => signal.aborted)).toBe(true);
   });
 
-  it('keeps the timeout active while parsing the response body', async () => {
-    jest.useFakeTimers();
+  it('returns invalid when validation throws', async () => {
     mockedGetConfig.mockResolvedValue({
       SourceConfig: createSites(1),
     } as Awaited<ReturnType<typeof getConfig>>);
-
-    let requestSignal: AbortSignal | undefined;
-    mockedFetch.mockImplementation(async (_url, init) => {
-      requestSignal = init?.signal as AbortSignal;
-      return {
-        ok: true,
-        status: 200,
-        json: () =>
-          new Promise((_resolve, reject) => {
-            const rejectWithAbort = () =>
-              reject(new DOMException('Aborted', 'AbortError'));
-            if (requestSignal!.aborted) {
-              rejectWithAbort();
-            } else {
-              requestSignal!.addEventListener('abort', rejectWithAbort, {
-                once: true,
-              });
-            }
-          }),
-      } as Response;
-    });
+    mockedValidate.mockRejectedValue(new Error('boom'));
 
     const response = await GET(createRequest());
-    await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(10_000);
     const body = await response.text();
 
-    expect(requestSignal?.aborted).toBe(true);
     expect(body).toContain('"type":"source_error"');
+    expect(body).toContain('"status":"invalid"');
     expect(body).toContain('"type":"complete"');
   });
 
@@ -178,9 +163,16 @@ describe('/api/admin/source/validate', () => {
     const response = await GET(createRequest());
     const body = await response.text();
 
-    expect(mockedFetch).not.toHaveBeenCalled();
+    expect(mockedValidate).not.toHaveBeenCalled();
     expect(body).toContain('"type":"start"');
     expect(body).toContain('"type":"complete"');
     expect(body).toContain('"completedSources":0');
+  });
+
+  it('rejects unauthorized callers', async () => {
+    mockedGetAuth.mockResolvedValue(null);
+    mockedGetAdminUser.mockResolvedValue(null);
+    const response = await GET(createRequest());
+    expect(response.status).toBe(401);
   });
 });

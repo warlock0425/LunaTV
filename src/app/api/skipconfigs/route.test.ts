@@ -2,18 +2,15 @@
 
 import { NextRequest } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
+import { requireActiveUser } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 
 import { POST } from './route';
 
-jest.mock('@/lib/auth', () => ({ getAuthInfoFromCookie: jest.fn() }));
-jest.mock('@/lib/config', () => ({ getConfig: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ requireActiveUser: jest.fn() }));
 jest.mock('@/lib/db', () => ({ db: { setSkipConfig: jest.fn() } }));
 
-const mockedAuth = jest.mocked(getAuthInfoFromCookie);
-const mockedConfig = jest.mocked(getConfig);
+const mockedAuth = jest.mocked(requireActiveUser);
 const mockedDb = db as unknown as { setSkipConfig: jest.Mock };
 
 function requestFor(outroTime: number) {
@@ -30,9 +27,10 @@ function requestFor(outroTime: number) {
 describe('skip config API', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env.USERNAME = 'owner';
-    mockedAuth.mockReturnValue({ username: 'owner' });
-    mockedConfig.mockResolvedValue({ UserConfig: { Users: [] } } as never);
+    mockedAuth.mockResolvedValue({
+      username: 'owner',
+      auth: { username: 'owner' },
+    } as Awaited<ReturnType<typeof requireActiveUser>>);
   });
 
   it('accepts the negative end-relative time produced by the player', async () => {
@@ -64,6 +62,13 @@ describe('skip config API', () => {
     const response = await POST(request);
 
     expect(response.status).toBe(400);
+    expect(mockedDb.setSkipConfig).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when the session is not verified', async () => {
+    mockedAuth.mockResolvedValue(null);
+    const response = await POST(requestFor(-100));
+    expect(response.status).toBe(401);
     expect(mockedDb.setSkipConfig).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,9 @@
+import { requireActiveUser } from '@/lib/api-auth';
 import { storage } from '@/lib/storage';
 
 import { POST } from './route';
 
+jest.mock('@/lib/api-auth', () => ({ requireActiveUser: jest.fn() }));
 jest.mock('@/lib/storage', () => ({
   storage: { hgetall: jest.fn(), hdel: jest.fn() },
 }));
@@ -14,6 +16,7 @@ jest.mock('next/server', () => ({
 }));
 
 const mockedStorage = storage as jest.Mocked<typeof storage>;
+const mockedAuth = jest.mocked(requireActiveUser);
 
 function requestFor(body: Record<string, unknown>) {
   return {
@@ -28,7 +31,13 @@ function requestFor(body: Record<string, unknown>) {
 }
 
 describe('/api/history/delete', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedAuth.mockResolvedValue({
+      username: 'alice',
+      auth: { username: 'alice' },
+    } as Awaited<ReturnType<typeof requireActiveUser>>);
+  });
 
   it('rejects a title that becomes empty after normalization', async () => {
     const response = await POST(requestFor({ vod_name: '!!!' }));
