@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.6.3',
+    date: '2026-07-22',
+    content: `
+- 可選「搜尋時優先使用三級檢測較佳的源」（預設關，只排序不禁用）。
+- 播放頁最後一集新增「檢查更新」；檢測結果對無效源標示建議關注／停用。
+- 直播 proxy 與健康頁統一 getVerifiedAuthInfo；session 簽章支援 SESSION_SECRET（可回退 PASSWORD）。
+    `.trim(),
+  },
+  {
     version: 'v2.6.2',
     date: '2026-07-22',
     content: `

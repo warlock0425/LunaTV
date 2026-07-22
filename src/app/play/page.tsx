@@ -127,6 +127,7 @@ function PlayPageClient() {
   // 自動連播倒數計時
   const [autoNextCountdown, setAutoNextCountdown] = useState(0);
   const [showCountdownOverlay, setShowCountdownOverlay] = useState(false);
+  const [isCheckingEpisodes, setIsCheckingEpisodes] = useState(false);
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 跳過片頭片尾按鈕狀態
@@ -1293,13 +1294,21 @@ function PlayPageClient() {
     }
 
     // 已在最後一集：強制向詳情 API 確認是否有更新
+    void handleCheckEpisodeUpdates();
+  };
+
+  const handleCheckEpisodeUpdates = () => {
+    if (isCheckingEpisodes || episodeRefreshInFlightRef.current) return;
     if (artPlayerRef.current) {
       saveCurrentPlayProgress();
     }
+    setIsCheckingEpisodes(true);
     void refreshEpisodesIfNeeded({
       preferAdvanceOnGrowth: true,
       notifyWhenUnchanged: true,
       notifyOnGrowth: true,
+    }).finally(() => {
+      setIsCheckingEpisodes(false);
     });
   };
 
@@ -2101,6 +2110,18 @@ function PlayPageClient() {
               />
               {/* 自動連播 + 快捷鍵幫助 */}
               <div className='flex items-center justify-between px-3 py-2 mt-2 bg-black/40 dark:bg-white/5 rounded-lg border border-white/5'>
+                {totalEpisodes > 0 &&
+                  currentEpisodeIndex >= totalEpisodes - 1 && (
+                    <button
+                      type='button'
+                      disabled={isCheckingEpisodes}
+                      onClick={handleCheckEpisodeUpdates}
+                      className='text-xs px-2 py-1 rounded bg-zinc-700/80 text-zinc-200 hover:bg-zinc-600 disabled:opacity-50'
+                      title='向片源重新抓取最新集數'
+                    >
+                      {isCheckingEpisodes ? '檢查中…' : '檢查更新'}
+                    </button>
+                  )}
                 <label className='flex items-center gap-2 cursor-pointer select-none'>
                   <span className='text-xs text-zinc-400'>自動連播</span>
                   <div

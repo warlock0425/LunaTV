@@ -1,14 +1,13 @@
 /** @jest-environment node */
 
-import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import { fetchSafeRemoteUrl } from '@/lib/url-safety';
 
 import { GET } from './route';
 
-jest.mock('@/lib/auth', () => ({
-  getAuthInfoFromCookie: jest.fn(),
-  verifyAuthSession: jest.fn(),
+jest.mock('@/lib/api-auth', () => ({
+  getVerifiedAuthInfo: jest.fn(),
 }));
 jest.mock('@/lib/config', () => ({ getConfig: jest.fn() }));
 jest.mock('@/lib/url-safety', () => ({
@@ -17,28 +16,20 @@ jest.mock('@/lib/url-safety', () => ({
   UnsafeRemoteUrlError: class extends Error {},
 }));
 
-const mockedGetAuthInfo = getAuthInfoFromCookie as jest.MockedFunction<
-  typeof getAuthInfoFromCookie
->;
-const mockedVerifyAuth = verifyAuthSession as jest.MockedFunction<
-  typeof verifyAuthSession
->;
-const mockedGetConfig = getConfig as jest.MockedFunction<typeof getConfig>;
-const mockedFetch = fetchSafeRemoteUrl as jest.MockedFunction<
-  typeof fetchSafeRemoteUrl
->;
+const mockedGetVerifiedAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedGetConfig = jest.mocked(getConfig);
+const mockedFetch = jest.mocked(fetchSafeRemoteUrl);
 
 describe('/api/proxy/segment', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.STORAGE_TYPE = 'localstorage';
     process.env.PASSWORD = 'secret';
-    mockedGetAuthInfo.mockReturnValue({
+    mockedGetVerifiedAuth.mockResolvedValue({
       username: 'localstorage',
       signature: 'signed',
       timestamp: Date.now(),
     });
-    mockedVerifyAuth.mockResolvedValue(true);
     mockedGetConfig.mockResolvedValue({
       LiveConfig: [{ key: 'live', ua: 'Custom UA' }],
     } as Awaited<ReturnType<typeof getConfig>>);

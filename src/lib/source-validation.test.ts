@@ -28,8 +28,11 @@ import { getDetailFromApi } from './downstream';
 import {
   clearValidationResult,
   getLastValidationResults,
+  getSourceDisableSuggestion,
   isM3u8Link,
+  orderSourcesByValidation,
   parseEpisodesFromVodPlayUrl,
+  rememberValidationResult,
   validateSourceSite,
 } from './source-validation';
 import {
@@ -143,5 +146,55 @@ describe('source-validation helpers', () => {
     expect(mockedDetail).toHaveBeenCalled();
     expect(result.status).toBe('valid');
     expect(result.episodeCount).toBe(1);
+  });
+});
+
+describe('validation ordering and suggestions', () => {
+  beforeEach(() => {
+    clearValidationResult();
+  });
+
+  it('orders valid sources ahead of invalid without dropping unknowns', () => {
+    rememberValidationResult({
+      source: 'bad',
+      status: 'invalid',
+      levels: { search: 'fail', detail: 'skip', playable: 'skip' },
+      message: 'x',
+      resultCount: 0,
+      episodeCount: 0,
+      latencyMs: 1,
+      checkedAt: Date.now(),
+    });
+    rememberValidationResult({
+      source: 'good',
+      status: 'valid',
+      levels: { search: 'pass', detail: 'pass', playable: 'pass' },
+      message: 'ok',
+      resultCount: 1,
+      episodeCount: 2,
+      latencyMs: 1,
+      checkedAt: Date.now(),
+    });
+    const ordered = orderSourcesByValidation([
+      { key: 'unknown' },
+      { key: 'bad' },
+      { key: 'good' },
+    ]);
+    expect(ordered.map((s) => s.key)).toEqual(['good', 'unknown', 'bad']);
+  });
+
+  it('suggests manual disable only for failed validation', () => {
+    rememberValidationResult({
+      source: 'bad',
+      status: 'invalid',
+      levels: { search: 'fail', detail: 'skip', playable: 'skip' },
+      message: 'x',
+      resultCount: 0,
+      episodeCount: 0,
+      latencyMs: 1,
+      checkedAt: Date.now(),
+    });
+    expect(getSourceDisableSuggestion('bad')?.suggest).toBe(true);
+    expect(getSourceDisableSuggestion('missing')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import { getCronHealthStatus } from '@/lib/cron-health';
 import { db } from '@/lib/db';
@@ -14,15 +14,9 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
+  const authInfo = await getVerifiedAuthInfo(request);
   const owner = process.env.USERNAME;
-  const ownerSecret = process.env.PASSWORD;
-  if (
-    !authInfo?.username ||
-    authInfo.username !== owner ||
-    !ownerSecret ||
-    !(await verifyAuthSession(authInfo, owner, ownerSecret))
-  ) {
+  if (!authInfo?.username || !owner || authInfo.username !== owner) {
     return NextResponse.json({ error: '未授權' }, { status: 401 });
   }
 

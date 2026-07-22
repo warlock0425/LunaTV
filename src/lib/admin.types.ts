@@ -17,14 +17,16 @@ export interface AdminConfig {
     DisableYellowFilter: boolean;
     FluidSearch: boolean;
     EnableWebLive: boolean;
+    /** 搜尋時依三級檢測結果排序（預設關，不自動禁用源） */
+    PreferValidatedSourceOrder: boolean;
   };
   UserConfig: {
     Users: {
       username: string;
       role: 'user' | 'admin' | 'owner';
       banned?: boolean;
-      enabledApis?: string[]; // 优先级高于tags限制
-      tags?: string[]; // 多 tags 取并集限制
+      enabledApis?: string[]; // 優先級高於 tags 限制
+      tags?: string[]; // 多 tags 取聯集限制
     }[];
     Tags?: {
       name: string;
@@ -51,7 +53,7 @@ export interface AdminConfig {
     name: string;
     url: string; // m3u 地址
     ua?: string;
-    epg?: string; // 节目单
+    epg?: string; // 節目單
     from: 'config' | 'custom';
     channelNumber?: number;
     disabled?: boolean;

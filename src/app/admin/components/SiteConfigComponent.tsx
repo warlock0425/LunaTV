@@ -26,6 +26,7 @@ const mapSiteConfig = (sc: AdminConfig['SiteConfig']): SiteConfig => ({
   DisableYellowFilter: sc.DisableYellowFilter || false,
   FluidSearch: sc.FluidSearch ?? true,
   EnableWebLive: sc.EnableWebLive ?? false,
+  PreferValidatedSourceOrder: sc.PreferValidatedSourceOrder ?? false,
 });
 
 export const SiteConfigComponent = ({
@@ -52,6 +53,7 @@ export const SiteConfigComponent = ({
           DisableYellowFilter: false,
           FluidSearch: true,
           EnableWebLive: false,
+          PreferValidatedSourceOrder: false,
         }
   );
 
@@ -588,6 +590,42 @@ export const SiteConfigComponent = ({
         </div>
         <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
           網頁直播性能較差，會導致伺服器內存洩露。
+        </p>
+      </div>
+
+      {/* 依三級檢測排序搜尋來源（預設關） */}
+      <div>
+        <div className='flex items-center justify-between'>
+          <label className='block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2'>
+            搜尋時優先使用檢測較佳的源
+          </label>
+          <button
+            type='button'
+            onClick={() =>
+              setSiteSettings((prev) => ({
+                ...prev,
+                PreferValidatedSourceOrder: !prev.PreferValidatedSourceOrder,
+              }))
+            }
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+              siteSettings.PreferValidatedSourceOrder
+                ? buttonStyles.toggleOn
+                : buttonStyles.toggleOff
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full ${
+                buttonStyles.toggleThumb
+              } transition-transform ${
+                siteSettings.PreferValidatedSourceOrder
+                  ? buttonStyles.toggleThumbOn
+                  : buttonStyles.toggleThumbOff
+              }`}
+            />
+          </button>
+        </div>
+        <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+          開啟後會依最近「三級有效性檢測」結果調整搜尋順序；不自動停用任何來源。未檢測過的源維持中等優先。
         </p>
       </div>
 

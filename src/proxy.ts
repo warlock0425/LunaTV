@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
+import {
+  getAuthInfoFromCookie,
+  getAuthSessionSecret,
+  verifyAuthSession,
+} from '@/lib/auth';
 import { getFreshAdminUser } from '@/lib/config';
 import { getSessionVersion } from '@/lib/security-store';
 import { getServerStorageType } from '@/lib/storage-runtime';
@@ -36,7 +40,7 @@ export async function proxy(request: NextRequest) {
     const isValidSignature = await verifyAuthSession(
       authInfo,
       'localstorage',
-      process.env.PASSWORD || ''
+      getAuthSessionSecret() || ''
     );
     if (isValidSignature) {
       const currentVersion = await getSessionVersion('localstorage');
@@ -58,7 +62,7 @@ export async function proxy(request: NextRequest) {
     const isValidSignature = await verifyAuthSession(
       authInfo,
       authInfo.username,
-      process.env.PASSWORD || ''
+      getAuthSessionSecret() || ''
     );
 
     // 簽名驗證通過即可

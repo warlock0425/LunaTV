@@ -1,5 +1,9 @@
 import type { AuthInfo } from './auth';
-import { getAuthInfoFromCookie, verifyAuthSession } from './auth';
+import {
+  getAuthInfoFromCookie,
+  getAuthSessionSecret,
+  verifyAuthSession,
+} from './auth';
 import { getConfig } from './config';
 import { getServerStorageType } from './storage-runtime';
 
@@ -21,7 +25,7 @@ export async function getVerifiedAuthInfo(
   const authInfo = getAuthInfoFromCookie(request);
   if (!authInfo?.signature) return null;
 
-  const secret = process.env.PASSWORD;
+  const secret = getAuthSessionSecret();
   if (!secret) return null;
 
   // localstorage 模式登入時是以固定主體 'localstorage' 簽名的（見 api/login），

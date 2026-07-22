@@ -13,6 +13,7 @@ import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
+import { orderSourcesByValidation } from '@/lib/source-validation';
 import { SearchResult } from '@/lib/types';
 import { yellowWords } from '@/lib/yellow';
 
@@ -57,7 +58,10 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = orderSourcesByHealth(await getAvailableApiSites(username));
+  let apiSites = orderSourcesByHealth(await getAvailableApiSites(username));
+  if (config.SiteConfig.PreferValidatedSourceOrder) {
+    apiSites = orderSourcesByValidation(apiSites);
+  }
   const searchVariants = getMainlandSearchQueries(query);
   const cleanedOriginal = searchVariants[0] || cleanQueryForApi(query);
   let streamClosed = false;

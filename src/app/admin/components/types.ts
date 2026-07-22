@@ -10,6 +10,7 @@ export interface SiteConfig {
   DisableYellowFilter: boolean;
   FluidSearch: boolean;
   EnableWebLive: boolean;
+  PreferValidatedSourceOrder: boolean;
 }
 
 // 影片源資料類型

@@ -365,6 +365,7 @@ async function getInitConfig(
         process.env.NEXT_PUBLIC_DISABLE_YELLOW_FILTER === 'true',
       FluidSearch: process.env.NEXT_PUBLIC_FLUID_SEARCH !== 'false',
       EnableWebLive: false,
+      PreferValidatedSourceOrder: false,
     },
     UserConfig: {
       Users: [],
@@ -523,6 +524,7 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
       DisableYellowFilter: false,
       FluidSearch: true,
       EnableWebLive: false,
+      PreferValidatedSourceOrder: false,
     };
   }
   if (
@@ -556,6 +558,9 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   }
   if (typeof adminConfig.SiteConfig.EnableWebLive !== 'boolean') {
     adminConfig.SiteConfig.EnableWebLive = false;
+  }
+  if (typeof adminConfig.SiteConfig.PreferValidatedSourceOrder !== 'boolean') {
+    adminConfig.SiteConfig.PreferValidatedSourceOrder = false;
   }
   if (typeof adminConfig.SiteConfig.DoubanProxyType !== 'string') {
     adminConfig.SiteConfig.DoubanProxyType = 'cmliussss-cdn-tencent';

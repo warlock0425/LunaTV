@@ -1,6 +1,17 @@
 /* eslint-disable no-console */
 import { NextRequest } from 'next/server';
 
+/**
+ * Session HMAC 密鑰：優先 SESSION_SECRET，否則回退 PASSWORD（相容舊部署）。
+ * 登入密碼校驗仍只用 PASSWORD。
+ */
+export function getAuthSessionSecret(): string | null {
+  const sessionSecret = process.env.SESSION_SECRET?.trim();
+  if (sessionSecret) return sessionSecret;
+  const password = process.env.PASSWORD?.trim();
+  return password || null;
+}
+
 export const AUTH_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTH_SESSION_CLOCK_SKEW_MS = 5 * 60 * 1000;
 

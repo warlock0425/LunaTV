@@ -1,7 +1,7 @@
 /* eslint-disable no-console,@typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthSignaturePayload } from '@/lib/auth';
+import { getAuthSessionSecret, getAuthSignaturePayload } from '@/lib/auth';
 import { getFreshConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import {
@@ -89,13 +89,14 @@ async function generateAuthCookie(
     authData.password = password;
   }
 
-  if (username && process.env.PASSWORD) {
+  const sessionSecret = getAuthSessionSecret();
+  if (username && sessionSecret) {
     authData.username = username;
     authData.sessionVersion = await getSessionVersion(username);
     const timestamp = Date.now();
     const signature = await generateSignature(
       getAuthSignaturePayload(username, timestamp, authData.sessionVersion),
-      process.env.PASSWORD
+      sessionSecret
     );
     authData.signature = signature;
     authData.timestamp = timestamp;
@@ -178,7 +179,7 @@ export async function POST(req: NextRequest) {
       const sessionVersion = await getSessionVersion('localstorage');
       const signature = await generateSignature(
         getAuthSignaturePayload('localstorage', timestamp, sessionVersion),
-        password
+        getAuthSessionSecret() || password
       );
       const authCookieValue = encodeURIComponent(
         JSON.stringify({

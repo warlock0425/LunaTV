@@ -322,3 +322,60 @@ export async function validateSourceSite(
     latencyMs: Date.now() - startedAt,
   });
 }
+
+/** 數值越小越優先；未知來源排中間，不直接沉底以免誤殺未檢測源 */
+export function getSourceValidationRank(sourceKey: string): number {
+  const result = getLastValidation(sourceKey);
+  if (!result) return 30;
+  switch (result.status) {
+    case 'valid':
+      return 0;
+    case 'partial':
+      return 15;
+    case 'no_results':
+      return 40;
+    case 'invalid':
+      return 80;
+    default:
+      return 30;
+  }
+}
+
+/**
+ * 依最近三級檢測結果排序（穩定排序）。
+ * 僅改變順序，不移除、不禁用任何來源。
+ */
+export function orderSourcesByValidation<T extends { key: string }>(
+  sites: T[]
+): T[] {
+  return sites
+    .map((site, index) => ({
+      site,
+      index,
+      rank: getSourceValidationRank(site.key),
+    }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.site);
+}
+
+/** 給後台展示：是否建議人工檢查／停用（不自動執行） */
+export function getSourceDisableSuggestion(sourceKey: string): {
+  suggest: boolean;
+  reason: string;
+} | null {
+  const result = getLastValidation(sourceKey);
+  if (!result) return null;
+  if (result.status === 'invalid') {
+    return { suggest: true, reason: '連線失敗，建議檢查 API 或暫時停用' };
+  }
+  if (result.status === 'partial' && result.levels.detail === 'fail') {
+    return { suggest: true, reason: '可搜但無法解析集數，建議檢查詳情接口' };
+  }
+  if (result.status === 'partial' && result.levels.playable === 'fail') {
+    return {
+      suggest: true,
+      reason: '可搜可解但播放抽樣失敗，建議換關鍵詞重測或作備援',
+    };
+  }
+  return null;
+}

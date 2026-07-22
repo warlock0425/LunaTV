@@ -13,6 +13,7 @@ import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
+import { orderSourcesByValidation } from '@/lib/source-validation';
 import { yellowWords } from '@/lib/yellow';
 
 export const runtime = 'nodejs';
@@ -52,7 +53,10 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = orderSourcesByHealth(await getAvailableApiSites(username));
+  let apiSites = orderSourcesByHealth(await getAvailableApiSites(username));
+  if (config.SiteConfig.PreferValidatedSourceOrder) {
+    apiSites = orderSourcesByValidation(apiSites);
+  }
 
   const directMode = mode === 'direct';
   const searchVariants = directMode

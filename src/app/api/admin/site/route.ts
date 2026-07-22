@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
       DisableYellowFilter,
       FluidSearch,
       EnableWebLive,
+      PreferValidatedSourceOrder,
     } = body as {
       SiteName: string;
       Announcement: string;
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       DisableYellowFilter: boolean;
       FluidSearch: boolean;
       EnableWebLive: boolean;
+      PreferValidatedSourceOrder: boolean;
     };
 
     // 參數校驗
@@ -78,7 +80,8 @@ export async function POST(request: NextRequest) {
       typeof DoubanImageProxy !== 'string' ||
       typeof DisableYellowFilter !== 'boolean' ||
       typeof FluidSearch !== 'boolean' ||
-      typeof EnableWebLive !== 'boolean'
+      typeof EnableWebLive !== 'boolean' ||
+      typeof PreferValidatedSourceOrder !== 'boolean'
     ) {
       return NextResponse.json({ error: '參數格式錯誤' }, { status: 400 });
     }
@@ -109,6 +112,7 @@ export async function POST(request: NextRequest) {
       DisableYellowFilter,
       FluidSearch,
       EnableWebLive: EnableWebLive ?? false,
+      PreferValidatedSourceOrder: PreferValidatedSourceOrder ?? false,
     };
 
     // 寫入資料庫

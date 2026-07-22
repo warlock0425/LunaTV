@@ -2,14 +2,13 @@
 
 import { NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import {
   isValidApiRemoteUrl,
   isValidApiSource,
 } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie, verifyAuthSession } from '@/lib/auth';
 import { getConfig } from '@/lib/config';
 import { logger } from '@/lib/logger';
-import { getServerStorageType } from '@/lib/storage-runtime';
 import {
   fetchSafeRemoteUrl,
   isSafeRemoteUrl,
@@ -23,33 +22,8 @@ const MAX_KEY_BYTES = 1024 * 1024;
 
 export async function GET(request: Request) {
   // 1. 身份與權限驗證
-  const authInfo = getAuthInfoFromCookie(request);
+  const authInfo = await getVerifiedAuthInfo(request);
   if (!authInfo) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const storageType = getServerStorageType();
-  let isAuthorized = false;
-
-  if (storageType === 'localstorage') {
-    if (authInfo.signature) {
-      isAuthorized = await verifyAuthSession(
-        authInfo,
-        'localstorage',
-        process.env.PASSWORD || ''
-      );
-    }
-  } else {
-    if (authInfo.signature && authInfo.username) {
-      isAuthorized = await verifyAuthSession(
-        authInfo,
-        authInfo.username,
-        process.env.PASSWORD || ''
-      );
-    }
-  }
-
-  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

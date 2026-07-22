@@ -497,11 +497,14 @@ export const VideoSourceConfig = ({
         };
       case 'partial':
         return {
-          text: '部分通過',
+          text: '建議關注',
           className:
             'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300',
           icon: '◐',
-          message: detailMsg || result.message,
+          message:
+            detailMsg ||
+            result.message ||
+            '部分級別未通過，建議重測或作備援（不會自動停用）',
         };
       case 'no_results':
         return {
@@ -513,11 +516,12 @@ export const VideoSourceConfig = ({
         };
       case 'invalid':
         return {
-          text: '無效',
+          text: '建議停用',
           className:
             'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300',
           icon: '✗',
-          message: detailMsg || result.message,
+          message:
+            detailMsg || result.message || '連線失敗，建議檢查或暫時停用',
         };
       default:
         return null;
