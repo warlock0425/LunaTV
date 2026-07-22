@@ -1,5 +1,6 @@
 import type { AuthInfo } from './auth';
 import { getAuthInfoFromCookie, verifyAuthSession } from './auth';
+import { getConfig } from './config';
 import { getServerStorageType } from './storage-runtime';
 
 /**
@@ -63,11 +64,9 @@ export async function requireActiveUser(
     return { username: auth.username, auth };
   }
 
-  const { getConfig } = await import('./config.js');
   const config = await getConfig();
   const user = config.UserConfig.Users.find(
-    (entry: { username: string; banned?: boolean }) =>
-      entry.username === auth.username
+    (entry) => entry.username === auth.username
   );
   if (!user || user.banned) return null;
 

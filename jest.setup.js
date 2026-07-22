@@ -42,6 +42,13 @@ Object.defineProperty(globalThis, 'MessageChannel', {
   configurable: true,
   value: TestMessageChannel,
 });
+// undici (via url-safety) expects MessagePort in jsdom environments.
+if (typeof globalThis.MessagePort === 'undefined') {
+  Object.defineProperty(globalThis, 'MessagePort', {
+    configurable: true,
+    value: function MessagePort() {},
+  });
+}
 
 // Allow router mocks.
 // eslint-disable-next-line no-undef
