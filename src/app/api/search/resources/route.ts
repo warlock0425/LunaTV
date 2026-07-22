@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getAvailableApiSites, getValidUser } from '@/lib/config';
+import { requireActiveUser } from '@/lib/api-auth';
+import { getAvailableApiSites } from '@/lib/config';
 
 export const runtime = 'nodejs';
 const PRIVATE_NO_STORE_HEADERS = {
@@ -10,16 +10,16 @@ const PRIVATE_NO_STORE_HEADERS = {
 
 // OrionTV 兼容接口
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
-  const user = await getValidUser(authInfo?.username);
-  if (!user) {
+  const activeUser = await requireActiveUser(request);
+  if (!activeUser) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  const username = activeUser.username;
   try {
-    const apiSites = await getAvailableApiSites(user.username);
+    const apiSites = await getAvailableApiSites(username);
 
     return NextResponse.json(apiSites, {
       headers: PRIVATE_NO_STORE_HEADERS,

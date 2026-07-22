@@ -2,8 +2,8 @@
 
 import { NextRequest } from 'next/server';
 
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getAvailableApiSites, getValidUser } from '@/lib/config';
+import { requireActiveUser } from '@/lib/api-auth';
+import { getAvailableApiSites } from '@/lib/config';
 import {
   DownstreamNotFoundError,
   DownstreamTimeoutError,
@@ -13,10 +13,9 @@ import {
 
 import { GET } from './route';
 
-jest.mock('@/lib/auth', () => ({ getAuthInfoFromCookie: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ requireActiveUser: jest.fn() }));
 jest.mock('@/lib/config', () => ({
   getAvailableApiSites: jest.fn(),
-  getValidUser: jest.fn(),
 }));
 jest.mock('@/lib/downstream', () => {
   const actual =
@@ -24,16 +23,17 @@ jest.mock('@/lib/downstream', () => {
   return { ...actual, getDetailFromApi: jest.fn() };
 });
 
-const mockedGetAuthInfo = jest.mocked(getAuthInfoFromCookie);
-const mockedGetValidUser = jest.mocked(getValidUser);
+const mockedRequireActiveUser = jest.mocked(requireActiveUser);
 const mockedGetAvailableApiSites = jest.mocked(getAvailableApiSites);
 const mockedGetDetail = jest.mocked(getDetailFromApi);
 
 describe('detail API downstream error mapping', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedGetAuthInfo.mockReturnValue({ username: 'alice' } as never);
-    mockedGetValidUser.mockResolvedValue({ username: 'alice' } as never);
+    mockedRequireActiveUser.mockResolvedValue({
+      username: 'alice',
+      auth: { username: 'alice' },
+    } as Awaited<ReturnType<typeof requireActiveUser>>);
     mockedGetAvailableApiSites.mockResolvedValue([
       {
         key: 'test',
@@ -70,5 +70,14 @@ describe('detail API downstream error mapping', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'Internal server error',
     });
+  });
+
+  it('rejects unverified sessions', async () => {
+    mockedRequireActiveUser.mockResolvedValue(null);
+    const response = await GET(
+      new NextRequest('http://localhost/api/detail?source=test&id=123')
+    );
+    expect(response.status).toBe(401);
+    expect(mockedGetDetail).not.toHaveBeenCalled();
   });
 });

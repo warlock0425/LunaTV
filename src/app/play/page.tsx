@@ -33,6 +33,7 @@ import { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 import { useFavorite } from '@/hooks/useFavorite';
 import { usePlaybackSourceSearch } from '@/hooks/usePlaybackSourceSearch';
+import { usePlayDetailRefresh } from '@/hooks/usePlayDetailRefresh';
 import { usePlayerKeyboardShortcuts } from '@/hooks/usePlayerKeyboardShortcuts';
 import { usePlayRecordPersistence } from '@/hooks/usePlayRecordPersistence';
 import { useWakeLock } from '@/hooks/useWakeLock';
@@ -53,7 +54,6 @@ import {
   getClientStorageType,
   mergeFreshDetail,
   migrateDetailCache,
-  resolveEpisodeIndexAfterRefresh,
   setCachedDetail,
 } from './play-page-helpers';
 import { PlayErrorView, PlayLoadingView } from './play-views';
@@ -1226,199 +1226,23 @@ function PlayPageClient() {
   };
 
   // ---------------------------------------------------------------------------
-  // 詳情刷新 / 集數追更
-  // ---------------------------------------------------------------------------
-  const fetchFreshDetail = async (
-    source: string,
-    id: string
-  ): Promise<SearchResult | null> => {
-    try {
-      const params = new URLSearchParams({ source, id });
-      const response = await fetch(`/api/detail?${params.toString()}`, {
-        cache: 'no-store',
-      });
-      if (!response.ok) return null;
-      const data = (await response.json()) as SearchResult;
-      if (!data?.episodes?.length) return null;
-      return data;
-    } catch (err) {
-      logger.error('取得最新詳情失敗:', err);
-      return null;
-    }
-  };
-
-  /**
-   * 套用最新詳情。回傳是否成功套用，以及集數是否增加。
-   * preferAdvanceOnGrowth：使用者在最後一集要求下一集時，若有新集則前進。
-   */
-  const applyFreshDetail = (
-    fresh: SearchResult,
-    options?: {
-      preserveCurrentEpisodeUrl?: boolean;
-      preferAdvanceOnGrowth?: boolean;
-      syncAvailableSources?: boolean;
-      notifyOnGrowth?: boolean;
-    }
-  ) => {
-    const preserveCurrentEpisodeUrl =
-      options?.preserveCurrentEpisodeUrl !== false;
-    const preferAdvanceOnGrowth = options?.preferAdvanceOnGrowth === true;
-    const syncAvailableSources = options?.syncAvailableSources !== false;
-    const notifyOnGrowth = options?.notifyOnGrowth === true;
-
-    const prev = detailRef.current;
-    const previousIndex = currentEpisodeIndexRef.current;
-    const merged = mergeFreshDetail(prev, fresh, previousIndex, {
-      preserveCurrentEpisodeUrl,
-    });
-
-    if (!merged.applied || !merged.detail) {
-      return {
-        applied: false as const,
-        episodeCountIncreased: false,
-        nextEpisodeCount: merged.nextEpisodeCount,
-        episodeIndex: previousIndex,
-      };
-    }
-
-    const nextIndex = resolveEpisodeIndexAfterRefresh({
-      previousIndex,
-      previousEpisodeCount: merged.previousEpisodeCount,
-      nextEpisodeCount: merged.nextEpisodeCount,
-      clampedIndex: merged.episodeIndex,
-      preferAdvanceOnGrowth,
-    });
-
-    setCachedDetail(merged.detail.source, merged.detail.id, merged.detail);
-    setDetail(merged.detail);
-    setVideoYear(merged.detail.year);
-    setVideoTitle(getStableTitle(merged.detail.title, videoTitleRef.current));
-    setVideoCover(merged.detail.poster);
-    setVideoDoubanId(merged.detail.douban_id || 0);
-
-    if (nextIndex !== previousIndex) {
-      setCurrentEpisodeIndex(nextIndex);
-    }
-
-    if (syncAvailableSources) {
-      setAvailableSources((sources) =>
-        sources.map((item) =>
-          item.source === merged.detail!.source && item.id === merged.detail!.id
-            ? {
-                ...item,
-                ...merged.detail!,
-                episodes: merged.detail!.episodes,
-                episodes_titles: merged.detail!.episodes_titles,
-              }
-            : item
-        )
-      );
-    }
-
-    if (notifyOnGrowth && merged.episodeCountIncreased) {
-      const message = formatEpisodeUpdateMessage(
-        merged.previousEpisodeCount,
-        merged.nextEpisodeCount
-      );
-      if (message) toast(message, 'success');
-    }
-
-    return {
-      applied: true as const,
-      episodeCountIncreased: merged.episodeCountIncreased,
-      nextEpisodeCount: merged.nextEpisodeCount,
-      previousEpisodeCount: merged.previousEpisodeCount,
-      episodeIndex: nextIndex,
-      detail: merged.detail,
-    };
-  };
-
-  /** 最後一集時檢查是否有新集；可選擇在有新集時自動前進 */
-  const refreshEpisodesIfNeeded = async (options?: {
-    preferAdvanceOnGrowth?: boolean;
-    notifyWhenUnchanged?: boolean;
-    notifyOnGrowth?: boolean;
-  }): Promise<{
-    updated: boolean;
-    advanced: boolean;
-    nextEpisodeCount: number;
-  }> => {
-    const source = currentSourceRef.current;
-    const id = currentIdRef.current;
-    if (!source || !id) {
-      if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
-      return { updated: false, advanced: false, nextEpisodeCount: 0 };
-    }
-    if (episodeRefreshInFlightRef.current) {
-      return {
-        updated: false,
-        advanced: false,
-        nextEpisodeCount: detailRef.current?.episodes?.length || 0,
-      };
-    }
-
-    episodeRefreshInFlightRef.current = true;
-    try {
-      const fresh = await fetchFreshDetail(source, id);
-      if (
-        !fresh ||
-        currentSourceRef.current !== source ||
-        currentIdRef.current !== id
-      ) {
-        if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
-        return {
-          updated: false,
-          advanced: false,
-          nextEpisodeCount: detailRef.current?.episodes?.length || 0,
-        };
-      }
-
-      const beforeIndex = currentEpisodeIndexRef.current;
-      const result = applyFreshDetail(fresh, {
-        preserveCurrentEpisodeUrl: true,
-        preferAdvanceOnGrowth: options?.preferAdvanceOnGrowth === true,
-        notifyOnGrowth: options?.notifyOnGrowth !== false,
-      });
-
-      if (!result.applied) {
-        if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
-        return {
-          updated: false,
-          advanced: false,
-          nextEpisodeCount: detailRef.current?.episodes?.length || 0,
-        };
-      }
-
-      if (!result.episodeCountIncreased) {
-        if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
-        return {
-          updated: false,
-          advanced: false,
-          nextEpisodeCount: result.nextEpisodeCount,
-        };
-      }
-
-      return {
-        updated: true,
-        advanced: result.episodeIndex > beforeIndex,
-        nextEpisodeCount: result.nextEpisodeCount,
-      };
-    } catch (err) {
-      logger.error('檢查新集數失敗:', err);
-      if (options?.notifyWhenUnchanged) {
-        toast('檢查新集數失敗，請稍後再試', 'error');
-      }
-      return {
-        updated: false,
-        advanced: false,
-        nextEpisodeCount: detailRef.current?.episodes?.length || 0,
-      };
-    } finally {
-      episodeRefreshInFlightRef.current = false;
-    }
-  };
-  useEffect(() => {
-    refreshEpisodesIfNeededRef.current = refreshEpisodesIfNeeded;
+  // 詳情刷新 / 集數追更（核心邏輯在 detail-refresh + usePlayDetailRefresh）
+  const { refreshEpisodesIfNeeded } = usePlayDetailRefresh({
+    detailRef,
+    currentSourceRef,
+    currentIdRef,
+    currentEpisodeIndexRef,
+    videoTitleRef,
+    episodeRefreshInFlightRef,
+    refreshEpisodesIfNeededRef,
+    setDetail,
+    setCurrentEpisodeIndex,
+    setVideoYear,
+    setVideoTitle,
+    setVideoCover,
+    setVideoDoubanId,
+    setAvailableSources,
+    toast,
   });
 
   // ---------------------------------------------------------------------------

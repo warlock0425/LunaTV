@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireActiveUser } from '@/lib/api-auth';
 import {
   isValidApiSearchQuery,
   isValidApiSource,
 } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { toSearchSimplified } from '@/lib/chinese';
 import { createLinkedAbortController } from '@/lib/concurrency';
-import { getAvailableApiSites, getConfig, getValidUser } from '@/lib/config';
+import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
 
@@ -28,14 +28,14 @@ function normalizeSearchOneTitle(value: string): string {
 
 // OrionTV 兼容接口
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
-  const user = await getValidUser(authInfo?.username);
-  if (!user) {
+  const activeUser = await requireActiveUser(request);
+  if (!activeUser) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  const username = activeUser.username;
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = await getAvailableApiSites(user.username);
+  const apiSites = await getAvailableApiSites(username);
 
   try {
     // 根據 resourceId 查找對應的 API 站點

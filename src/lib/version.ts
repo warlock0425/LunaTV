@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.6.2',
+    date: '2026-07-22',
+    content: `
+- 讀取型 API（detail / search*）統一 requireActiveUser：HMAC 驗簽後再取可用片源。
+- 播放頁集數追更核心抽成 detail-refresh + usePlayDetailRefresh，降低 page.tsx 耦合並補單元測試。
+    `.trim(),
+  },
+  {
     version: 'v2.6.1',
     date: '2026-07-22',
     content: `

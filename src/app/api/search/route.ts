@@ -2,14 +2,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { cleanQueryForApi } from '@/lib/chinese';
 import {
   createLinkedAbortController,
   mapWithConcurrency,
 } from '@/lib/concurrency';
-import { getAvailableApiSites, getConfig, getValidUser } from '@/lib/config';
+import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
@@ -22,14 +22,14 @@ const PRIVATE_NO_STORE_HEADERS = {
 const SOURCE_SEARCH_CONCURRENCY = 6;
 
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
-  const user = await getValidUser(authInfo?.username);
-  if (!user) {
+  const activeUser = await requireActiveUser(request);
+  if (!activeUser) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  const username = activeUser.username;
 
   const { searchParams } = new URL(request.url);
   const query = searchParams.get('q');
@@ -52,9 +52,7 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
-  const apiSites = orderSourcesByHealth(
-    await getAvailableApiSites(user.username)
-  );
+  const apiSites = orderSourcesByHealth(await getAvailableApiSites(username));
 
   const directMode = mode === 'direct';
   const searchVariants = directMode

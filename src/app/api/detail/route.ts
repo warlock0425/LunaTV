@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireActiveUser } from '@/lib/api-auth';
 import {
   isValidApiMediaId,
   isValidApiSource,
 } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getAvailableApiSites, getValidUser } from '@/lib/config';
+import { getAvailableApiSites } from '@/lib/config';
 import {
   DownstreamNotFoundError,
   DownstreamTimeoutError,
@@ -16,11 +16,11 @@ import {
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
-  const authInfo = getAuthInfoFromCookie(request);
-  const user = await getValidUser(authInfo?.username);
-  if (!user) {
+  const activeUser = await requireActiveUser(request);
+  if (!activeUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const username = activeUser.username;
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const apiSites = await getAvailableApiSites(user.username);
+    const apiSites = await getAvailableApiSites(username);
     const apiSite = apiSites.find((site) => site.key === sourceCode);
 
     if (!apiSite) {

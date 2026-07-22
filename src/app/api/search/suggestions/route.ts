@@ -3,9 +3,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { AdminConfig } from '@/lib/admin.types';
+import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getAvailableApiSites, getConfig, getValidUser } from '@/lib/config';
+import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { yellowWords } from '@/lib/yellow';
 
@@ -17,15 +17,14 @@ const PRIVATE_NO_STORE_HEADERS = {
 
 export async function GET(request: NextRequest) {
   try {
-    // 從 cookie 取得使用者資訊
-    const authInfo = getAuthInfoFromCookie(request);
-    const user = await getValidUser(authInfo?.username);
-    if (!user) {
+    const activeUser = await requireActiveUser(request);
+    if (!activeUser) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    const username = activeUser.username;
 
     const config = await getConfig();
     const { searchParams } = new URL(request.url);
@@ -46,7 +45,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 生成建議
-    const suggestions = await generateSuggestions(config, query, user.username);
+    const suggestions = await generateSuggestions(config, query, username);
 
     return NextResponse.json(
       { suggestions },
