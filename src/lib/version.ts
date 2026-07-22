@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.6.4',
+    date: '2026-07-22',
+    content: `
+- 修正播放中音畫字幕逐漸錯位：背景刷新詳情時鎖定正在播放的集數 URL，避免簽章輪替觸發 HLS 重建。
+- 播放中集數未增加時不再套用背景詳情；相同播放 URL 一律跳過播放器重建。
+- 點播關閉 lowLatencyMode 並調整緩衝參數，減少 seek 與去廣告後的時間軸漂移。
+    `.trim(),
+  },
+  {
     version: 'v2.6.3',
     date: '2026-07-22',
     content: `
