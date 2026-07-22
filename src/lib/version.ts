@@ -6,6 +6,18 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.6.1',
+    date: '2026-07-22',
+    content: `
+- 播放頁集數追更收口：最後一集按下一集或自動連播結束時，會強制向詳情 API 確認是否有新集；有更新時提示「已更新至第 N 集」。
+- 新增詳情合併 helpers（mergeFreshDetail）：來源不一致不覆蓋、集數變少會校正索引，並可保留目前集 URL 避免簽章輪替打斷播放。
+- 片源有效性檢測升級為三級：可搜尋 / 可解析集數 / 可抽樣播放（只讀 m3u8 檔頭，不自動禁用來源）。
+- 管理後台與健康頁展示三級結果、搜尋延遲與熔斷狀態，並支援一鍵重置健康/熔斷（不改源啟停）。
+- 寫入型使用者 API（收藏、播放紀錄、跳過設定、搜尋歷史、改密等）統一 requireActiveUser：HMAC 驗簽 + 使用者有效性。
+- 背景刷新、換源刷新、播放錯誤重抓詳情走同一套合併規則，並補上單元測試。
+    `.trim(),
+  },
+  {
     version: 'v2.6.0',
     date: '2026-07-20',
     content: `

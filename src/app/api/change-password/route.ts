@@ -2,8 +2,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireActiveUser } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { db } from '@/lib/db';
 import { revokeUserSessions } from '@/lib/security-store';
 import { getServerStorageType } from '@/lib/storage-runtime';
@@ -34,10 +34,11 @@ export async function POST(request: NextRequest) {
     const { currentPassword, newPassword } = body;
 
     // 取得認證資訊
-    const authInfo = getAuthInfoFromCookie(request);
-    if (!authInfo || !authInfo.username) {
+    const activeUser = await requireActiveUser(request);
+    if (!activeUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const username = activeUser.username;
 
     // 驗證新密碼
     if (!currentPassword || typeof currentPassword !== 'string') {
@@ -50,8 +51,6 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json({ error: '新密碼不得為空' }, { status: 400 });
     }
-
-    const username = authInfo.username;
 
     // 不允許站長修改密碼（站長使用者名稱等於 process.env.USERNAME）
     if (username === process.env.USERNAME) {

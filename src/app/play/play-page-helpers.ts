@@ -129,3 +129,194 @@ export function clearCachedDetail(source: string, id: string): void {
     logger.error('Failed to clear cached detail:', e);
   }
 }
+
+// ---------------------------------------------------------------------------
+// 詳情合併 / 集數追更（pure helpers）
+// ---------------------------------------------------------------------------
+
+export function getEpisodeCount(
+  detail?: Pick<SearchResult, 'episodes'> | null
+): number {
+  return detail?.episodes?.length || 0;
+}
+
+export function clampEpisodeIndex(index: number, episodeCount: number): number {
+  if (episodeCount <= 0) return 0;
+  if (!Number.isFinite(index) || index < 0) return 0;
+  if (index >= episodeCount) return episodeCount - 1;
+  return Math.floor(index);
+}
+
+export function getEpisodeUrl(
+  detail: Pick<SearchResult, 'episodes'> | null | undefined,
+  index: number
+): string {
+  if (!detail?.episodes?.length) return '';
+  if (index < 0 || index >= detail.episodes.length) return '';
+  return detail.episodes[index] || '';
+}
+
+export interface MergeFreshDetailOptions {
+  /**
+   * 預設 true：背景刷新時若目前這一集只是簽章 URL 輪替，保留舊 URL，
+   * 避免正在播放時因 videoUrl 變化而重建播放器。
+   * 播放錯誤重試時應設為 false，強制採用最新 URL。
+   */
+  preserveCurrentEpisodeUrl?: boolean;
+}
+
+export interface MergeFreshDetailResult {
+  applied: boolean;
+  detail: SearchResult | null;
+  episodeIndex: number;
+  previousEpisodeCount: number;
+  nextEpisodeCount: number;
+  episodeCountIncreased: boolean;
+  episodeCountChanged: boolean;
+  /** 套用後，目前集的播放 URL 是否相對 prev 改變（preserve 後應為 false） */
+  currentEpisodeUrlChanged: boolean;
+  reason: 'empty_fresh' | 'source_mismatch' | 'applied';
+}
+
+/**
+ * 將最新詳情合併進目前播放上下文。
+ * - source/id 不一致時不覆蓋
+ * - fresh 無集數時不覆蓋
+ * - 集數變少時 clamp index，避免 videoUrl 被清空
+ * - 可選擇保留目前集 URL，避免簽章輪替打斷播放
+ */
+export function mergeFreshDetail(
+  prev: SearchResult | null | undefined,
+  fresh: SearchResult | null | undefined,
+  currentEpisodeIndex: number,
+  options: MergeFreshDetailOptions = {}
+): MergeFreshDetailResult {
+  const preserveCurrentEpisodeUrl = options.preserveCurrentEpisodeUrl !== false;
+  const previousEpisodeCount = getEpisodeCount(prev);
+
+  if (!fresh?.episodes?.length) {
+    return {
+      applied: false,
+      detail: null,
+      episodeIndex: clampEpisodeIndex(
+        currentEpisodeIndex,
+        previousEpisodeCount
+      ),
+      previousEpisodeCount,
+      nextEpisodeCount: previousEpisodeCount,
+      episodeCountIncreased: false,
+      episodeCountChanged: false,
+      currentEpisodeUrlChanged: false,
+      reason: 'empty_fresh',
+    };
+  }
+
+  if (prev && (prev.source !== fresh.source || prev.id !== fresh.id)) {
+    return {
+      applied: false,
+      detail: null,
+      episodeIndex: clampEpisodeIndex(
+        currentEpisodeIndex,
+        previousEpisodeCount
+      ),
+      previousEpisodeCount,
+      nextEpisodeCount: previousEpisodeCount,
+      episodeCountIncreased: false,
+      episodeCountChanged: false,
+      currentEpisodeUrlChanged: false,
+      reason: 'source_mismatch',
+    };
+  }
+
+  const nextEpisodeCount = fresh.episodes.length;
+  const episodeIndex = clampEpisodeIndex(currentEpisodeIndex, nextEpisodeCount);
+  const episodes = fresh.episodes.slice();
+  const episodesTitles = Array.isArray(fresh.episodes_titles)
+    ? fresh.episodes_titles.slice()
+    : [];
+
+  let currentEpisodeUrlChanged = false;
+  if (prev && previousEpisodeCount > 0) {
+    const oldIndex = clampEpisodeIndex(
+      currentEpisodeIndex,
+      previousEpisodeCount
+    );
+    if (oldIndex < episodes.length) {
+      const oldUrl = prev.episodes[oldIndex] || '';
+      const newUrl = episodes[oldIndex] || '';
+      if (oldUrl && newUrl && oldUrl !== newUrl) {
+        if (preserveCurrentEpisodeUrl) {
+          episodes[oldIndex] = oldUrl;
+          if (Array.isArray(prev.episodes_titles)) {
+            while (episodesTitles.length <= oldIndex) {
+              episodesTitles.push('');
+            }
+            if (prev.episodes_titles[oldIndex]) {
+              episodesTitles[oldIndex] = prev.episodes_titles[oldIndex];
+            }
+          }
+          currentEpisodeUrlChanged = false;
+        } else {
+          currentEpisodeUrlChanged = true;
+        }
+      }
+    }
+  }
+
+  const detail: SearchResult = {
+    ...fresh,
+    episodes,
+    episodes_titles: episodesTitles,
+  };
+
+  return {
+    applied: true,
+    detail,
+    episodeIndex,
+    previousEpisodeCount,
+    nextEpisodeCount,
+    episodeCountIncreased: nextEpisodeCount > previousEpisodeCount,
+    episodeCountChanged: nextEpisodeCount !== previousEpisodeCount,
+    currentEpisodeUrlChanged,
+    reason: 'applied',
+  };
+}
+
+/** 在「已是最後一集」時，若集數增加，應前進到下一集的 index */
+export function resolveEpisodeIndexAfterRefresh(options: {
+  previousIndex: number;
+  previousEpisodeCount: number;
+  nextEpisodeCount: number;
+  clampedIndex: number;
+  preferAdvanceOnGrowth?: boolean;
+}): number {
+  const {
+    previousIndex,
+    previousEpisodeCount,
+    nextEpisodeCount,
+    clampedIndex,
+    preferAdvanceOnGrowth = false,
+  } = options;
+
+  if (
+    preferAdvanceOnGrowth &&
+    previousEpisodeCount > 0 &&
+    nextEpisodeCount > previousEpisodeCount &&
+    previousIndex >= previousEpisodeCount - 1
+  ) {
+    const advanced = previousIndex + 1;
+    if (advanced < nextEpisodeCount) return advanced;
+  }
+
+  return clampedIndex;
+}
+
+export function formatEpisodeUpdateMessage(
+  previousCount: number,
+  nextCount: number
+): string | null {
+  if (nextCount > previousCount) {
+    return `已更新至第 ${nextCount} 集`;
+  }
+  return null;
+}

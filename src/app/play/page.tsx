@@ -42,14 +42,18 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import PageLayout from '@/components/PageLayout';
 import PageLoading from '@/components/PageLoading';
 import PlayerGestureLayer from '@/components/PlayerGestureLayer';
+import { useToast } from '@/components/ToastProvider';
 
 import { CustomHlsJsLoader } from './custom-hls-loader';
 import {
   clearCachedDetail,
   DEFAULT_SKIP_CONFIG,
+  formatEpisodeUpdateMessage,
   getCachedDetail,
   getClientStorageType,
+  mergeFreshDetail,
   migrateDetailCache,
+  resolveEpisodeIndexAfterRefresh,
   setCachedDetail,
 } from './play-page-helpers';
 import { PlayErrorView, PlayLoadingView } from './play-views';
@@ -218,9 +222,23 @@ function PlayPageClient() {
   const pipKeyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   const skipHistoryRestoreRef = useRef(false);
   const autoNextBusyRef = useRef(false);
+  const episodeRefreshInFlightRef = useRef(false);
+  const refreshEpisodesIfNeededRef = useRef<
+    | ((options?: {
+        preferAdvanceOnGrowth?: boolean;
+        notifyWhenUnchanged?: boolean;
+        notifyOnGrowth?: boolean;
+      }) => Promise<{
+        updated: boolean;
+        advanced: boolean;
+        nextEpisodeCount: number;
+      }>)
+    | null
+  >(null);
   const bangumiSearchAliasesRef = useRef<string[]>([]);
   const detailRetryKeyRef = useRef<string | null>(null);
   const sourceChangeRequestRef = useRef(0);
+  const { toast } = useToast();
 
   // 收藏邏輯（useFavorite hook）
   const { favorited, handleToggleFavorite } = useFavorite({
@@ -490,7 +508,9 @@ function PlayPageClient() {
     ): Promise<SearchResult[]> => {
       try {
         const params = new URLSearchParams({ source, id });
-        const detailResponse = await fetch(`/api/detail?${params.toString()}`);
+        const detailResponse = await fetch(`/api/detail?${params.toString()}`, {
+          cache: 'no-store',
+        });
         if (!detailResponse.ok) {
           throw new Error('取得影片詳情失敗');
         }
@@ -794,19 +814,38 @@ function PlayPageClient() {
             );
             if (!active || freshDetailList.length === 0) return base;
             const freshDetail = freshDetailList[0];
-            setCachedDetail(base.source, base.id, freshDetail);
-            // 更新狀態以供 UI (如選集列表、描述) 重新渲染
+            // 以 pure merge 套用，保留目前集 URL，避免簽章輪替打斷播放
+            const previousIndex = currentEpisodeIndexRef.current;
+            const merged = mergeFreshDetail(
+              detailRef.current || base,
+              freshDetail,
+              previousIndex,
+              { preserveCurrentEpisodeUrl: true }
+            );
+            if (!merged.applied || !merged.detail) return base;
+            if (!active) return base;
+
+            setCachedDetail(base.source, base.id, merged.detail);
             setDetail((prevDetail) => {
-              if (
-                prevDetail &&
-                prevDetail.source === freshDetail.source &&
-                prevDetail.id === freshDetail.id
-              ) {
-                return freshDetail;
-              }
-              return prevDetail;
+              const again = mergeFreshDetail(
+                prevDetail || base,
+                freshDetail,
+                currentEpisodeIndexRef.current,
+                { preserveCurrentEpisodeUrl: true }
+              );
+              return again.applied && again.detail ? again.detail : prevDetail;
             });
-            return freshDetail;
+            if (merged.episodeIndex !== previousIndex) {
+              setCurrentEpisodeIndex(merged.episodeIndex);
+            }
+            if (merged.episodeCountIncreased) {
+              const message = formatEpisodeUpdateMessage(
+                merged.previousEpisodeCount,
+                merged.nextEpisodeCount
+              );
+              if (message) toast(message, 'success');
+            }
+            return merged.detail;
           } catch (detailErr) {
             logger.error('背景重新整理詳情失敗:', detailErr);
             return base;
@@ -1144,21 +1183,35 @@ function PlayPageClient() {
           ) {
             return;
           }
-          setCachedDetail(newSource, newId, freshDetail);
+          const previousIndex = currentEpisodeIndexRef.current;
+          const merged = mergeFreshDetail(
+            detailRef.current,
+            freshDetail,
+            previousIndex,
+            { preserveCurrentEpisodeUrl: true }
+          );
+          if (!merged.applied || !merged.detail) return;
+          setCachedDetail(newSource, newId, merged.detail);
           setDetail((prevDetail) => {
-            if (
-              prevDetail &&
-              prevDetail.source === freshDetail.source &&
-              prevDetail.id === freshDetail.id
-            ) {
-              return freshDetail;
-            }
-            return prevDetail;
+            const again = mergeFreshDetail(
+              prevDetail,
+              freshDetail,
+              currentEpisodeIndexRef.current,
+              { preserveCurrentEpisodeUrl: true }
+            );
+            return again.applied && again.detail ? again.detail : prevDetail;
           });
           // 若新詳情集數比搜尋結果少導致當前集越界，校正到最後一集，
           // 避免 updateVideoUrl 因越界而清空播放源、造成播放中斷
-          if (currentEpisodeIndexRef.current >= freshDetail.episodes.length) {
-            setCurrentEpisodeIndex(freshDetail.episodes.length - 1);
+          if (merged.episodeIndex !== previousIndex) {
+            setCurrentEpisodeIndex(merged.episodeIndex);
+          }
+          if (merged.episodeCountIncreased) {
+            const message = formatEpisodeUpdateMessage(
+              merged.previousEpisodeCount,
+              merged.nextEpisodeCount
+            );
+            if (message) toast(message, 'success');
           }
         } catch (refreshErr) {
           logger.error('換源後背景重新整理詳情失敗:', refreshErr);
@@ -1171,6 +1224,202 @@ function PlayPageClient() {
       setError(err instanceof Error ? err.message : '換源失敗');
     }
   };
+
+  // ---------------------------------------------------------------------------
+  // 詳情刷新 / 集數追更
+  // ---------------------------------------------------------------------------
+  const fetchFreshDetail = async (
+    source: string,
+    id: string
+  ): Promise<SearchResult | null> => {
+    try {
+      const params = new URLSearchParams({ source, id });
+      const response = await fetch(`/api/detail?${params.toString()}`, {
+        cache: 'no-store',
+      });
+      if (!response.ok) return null;
+      const data = (await response.json()) as SearchResult;
+      if (!data?.episodes?.length) return null;
+      return data;
+    } catch (err) {
+      logger.error('取得最新詳情失敗:', err);
+      return null;
+    }
+  };
+
+  /**
+   * 套用最新詳情。回傳是否成功套用，以及集數是否增加。
+   * preferAdvanceOnGrowth：使用者在最後一集要求下一集時，若有新集則前進。
+   */
+  const applyFreshDetail = (
+    fresh: SearchResult,
+    options?: {
+      preserveCurrentEpisodeUrl?: boolean;
+      preferAdvanceOnGrowth?: boolean;
+      syncAvailableSources?: boolean;
+      notifyOnGrowth?: boolean;
+    }
+  ) => {
+    const preserveCurrentEpisodeUrl =
+      options?.preserveCurrentEpisodeUrl !== false;
+    const preferAdvanceOnGrowth = options?.preferAdvanceOnGrowth === true;
+    const syncAvailableSources = options?.syncAvailableSources !== false;
+    const notifyOnGrowth = options?.notifyOnGrowth === true;
+
+    const prev = detailRef.current;
+    const previousIndex = currentEpisodeIndexRef.current;
+    const merged = mergeFreshDetail(prev, fresh, previousIndex, {
+      preserveCurrentEpisodeUrl,
+    });
+
+    if (!merged.applied || !merged.detail) {
+      return {
+        applied: false as const,
+        episodeCountIncreased: false,
+        nextEpisodeCount: merged.nextEpisodeCount,
+        episodeIndex: previousIndex,
+      };
+    }
+
+    const nextIndex = resolveEpisodeIndexAfterRefresh({
+      previousIndex,
+      previousEpisodeCount: merged.previousEpisodeCount,
+      nextEpisodeCount: merged.nextEpisodeCount,
+      clampedIndex: merged.episodeIndex,
+      preferAdvanceOnGrowth,
+    });
+
+    setCachedDetail(merged.detail.source, merged.detail.id, merged.detail);
+    setDetail(merged.detail);
+    setVideoYear(merged.detail.year);
+    setVideoTitle(getStableTitle(merged.detail.title, videoTitleRef.current));
+    setVideoCover(merged.detail.poster);
+    setVideoDoubanId(merged.detail.douban_id || 0);
+
+    if (nextIndex !== previousIndex) {
+      setCurrentEpisodeIndex(nextIndex);
+    }
+
+    if (syncAvailableSources) {
+      setAvailableSources((sources) =>
+        sources.map((item) =>
+          item.source === merged.detail!.source && item.id === merged.detail!.id
+            ? {
+                ...item,
+                ...merged.detail!,
+                episodes: merged.detail!.episodes,
+                episodes_titles: merged.detail!.episodes_titles,
+              }
+            : item
+        )
+      );
+    }
+
+    if (notifyOnGrowth && merged.episodeCountIncreased) {
+      const message = formatEpisodeUpdateMessage(
+        merged.previousEpisodeCount,
+        merged.nextEpisodeCount
+      );
+      if (message) toast(message, 'success');
+    }
+
+    return {
+      applied: true as const,
+      episodeCountIncreased: merged.episodeCountIncreased,
+      nextEpisodeCount: merged.nextEpisodeCount,
+      previousEpisodeCount: merged.previousEpisodeCount,
+      episodeIndex: nextIndex,
+      detail: merged.detail,
+    };
+  };
+
+  /** 最後一集時檢查是否有新集；可選擇在有新集時自動前進 */
+  const refreshEpisodesIfNeeded = async (options?: {
+    preferAdvanceOnGrowth?: boolean;
+    notifyWhenUnchanged?: boolean;
+    notifyOnGrowth?: boolean;
+  }): Promise<{
+    updated: boolean;
+    advanced: boolean;
+    nextEpisodeCount: number;
+  }> => {
+    const source = currentSourceRef.current;
+    const id = currentIdRef.current;
+    if (!source || !id) {
+      if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
+      return { updated: false, advanced: false, nextEpisodeCount: 0 };
+    }
+    if (episodeRefreshInFlightRef.current) {
+      return {
+        updated: false,
+        advanced: false,
+        nextEpisodeCount: detailRef.current?.episodes?.length || 0,
+      };
+    }
+
+    episodeRefreshInFlightRef.current = true;
+    try {
+      const fresh = await fetchFreshDetail(source, id);
+      if (
+        !fresh ||
+        currentSourceRef.current !== source ||
+        currentIdRef.current !== id
+      ) {
+        if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
+        return {
+          updated: false,
+          advanced: false,
+          nextEpisodeCount: detailRef.current?.episodes?.length || 0,
+        };
+      }
+
+      const beforeIndex = currentEpisodeIndexRef.current;
+      const result = applyFreshDetail(fresh, {
+        preserveCurrentEpisodeUrl: true,
+        preferAdvanceOnGrowth: options?.preferAdvanceOnGrowth === true,
+        notifyOnGrowth: options?.notifyOnGrowth !== false,
+      });
+
+      if (!result.applied) {
+        if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
+        return {
+          updated: false,
+          advanced: false,
+          nextEpisodeCount: detailRef.current?.episodes?.length || 0,
+        };
+      }
+
+      if (!result.episodeCountIncreased) {
+        if (options?.notifyWhenUnchanged) toast('目前仍是最新一集', 'info');
+        return {
+          updated: false,
+          advanced: false,
+          nextEpisodeCount: result.nextEpisodeCount,
+        };
+      }
+
+      return {
+        updated: true,
+        advanced: result.episodeIndex > beforeIndex,
+        nextEpisodeCount: result.nextEpisodeCount,
+      };
+    } catch (err) {
+      logger.error('檢查新集數失敗:', err);
+      if (options?.notifyWhenUnchanged) {
+        toast('檢查新集數失敗，請稍後再試', 'error');
+      }
+      return {
+        updated: false,
+        advanced: false,
+        nextEpisodeCount: detailRef.current?.episodes?.length || 0,
+      };
+    } finally {
+      episodeRefreshInFlightRef.current = false;
+    }
+  };
+  useEffect(() => {
+    refreshEpisodesIfNeededRef.current = refreshEpisodesIfNeeded;
+  });
 
   // ---------------------------------------------------------------------------
   // 集數切換
@@ -1208,12 +1457,26 @@ function PlayPageClient() {
   const handleNextEpisode = () => {
     const d = detailRef.current;
     const idx = currentEpisodeIndexRef.current;
-    if (d && d.episodes && idx < d.episodes.length - 1) {
+    if (!d?.episodes?.length) return;
+
+    // 尚有下一集：直接切換
+    if (idx < d.episodes.length - 1) {
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
       setCurrentEpisodeIndex(idx + 1);
+      return;
     }
+
+    // 已在最後一集：強制向詳情 API 確認是否有更新
+    if (artPlayerRef.current) {
+      saveCurrentPlayProgress();
+    }
+    void refreshEpisodesIfNeeded({
+      preferAdvanceOnGrowth: true,
+      notifyWhenUnchanged: true,
+      notifyOnGrowth: true,
+    });
   };
 
   // ---------------------------------------------------------------------------
@@ -1683,16 +1946,23 @@ function PlayPageClient() {
             ) {
               return;
             }
-            setCachedDetail(source, id, freshDetail);
-            setDetail(freshDetail);
-            setVideoYear(freshDetail.year);
-            setVideoTitle(
-              getStableTitle(freshDetail.title, videoTitleRef.current)
+            const merged = mergeFreshDetail(
+              detailRef.current,
+              freshDetail,
+              episodeIndex,
+              { preserveCurrentEpisodeUrl: false }
             );
-            setVideoCover(freshDetail.poster);
-            setVideoDoubanId(freshDetail.douban_id || 0);
-            if (episodeIndex >= freshDetail.episodes.length) {
-              setCurrentEpisodeIndex(0);
+            if (!merged.applied || !merged.detail) return;
+            setCachedDetail(source, id, merged.detail);
+            setDetail(merged.detail);
+            setVideoYear(merged.detail.year);
+            setVideoTitle(
+              getStableTitle(merged.detail.title, videoTitleRef.current)
+            );
+            setVideoCover(merged.detail.poster);
+            setVideoDoubanId(merged.detail.douban_id || 0);
+            if (merged.episodeIndex !== episodeIndex) {
+              setCurrentEpisodeIndex(merged.episodeIndex);
             }
             // videoUrl 為推導值，隨 setDetail / setCurrentEpisodeIndex 自動更新
             logger.info('播放錯誤後已清除詳情快取並重新抓取');
@@ -1737,6 +2007,53 @@ function PlayPageClient() {
             autoNextBusyRef.current = false;
             setCurrentEpisodeIndex(idx + 1);
           }, 1000);
+          return;
+        }
+
+        // 已在最後一集且開啟自動連播：再查一次是否有新集
+        if (
+          d &&
+          d.episodes &&
+          idx >= d.episodes.length - 1 &&
+          autoNextRef.current
+        ) {
+          void (async () => {
+            // 先只更新集數列表，不立刻切集，避免播放器閃爍
+            const result = await refreshEpisodesIfNeededRef.current?.({
+              preferAdvanceOnGrowth: false,
+              notifyWhenUnchanged: false,
+              notifyOnGrowth: true,
+            });
+            if (!result) return;
+            if (!result.updated) return;
+            if (autoNextBusyRef.current) return;
+
+            const latest = detailRef.current;
+            const currentIdx = currentEpisodeIndexRef.current;
+            if (!latest?.episodes || currentIdx >= latest.episodes.length - 1) {
+              return;
+            }
+
+            autoNextBusyRef.current = true;
+            let remaining = 5;
+            setAutoNextCountdown(remaining);
+            setShowCountdownOverlay(true);
+            countdownTimerRef.current = setInterval(() => {
+              remaining -= 1;
+              if (remaining > 0) {
+                setAutoNextCountdown(remaining);
+                return;
+              }
+              if (countdownTimerRef.current) {
+                clearInterval(countdownTimerRef.current);
+                countdownTimerRef.current = null;
+              }
+              setAutoNextCountdown(0);
+              setShowCountdownOverlay(false);
+              autoNextBusyRef.current = false;
+              setCurrentEpisodeIndex(currentIdx + 1);
+            }, 1000);
+          })();
         }
       });
 

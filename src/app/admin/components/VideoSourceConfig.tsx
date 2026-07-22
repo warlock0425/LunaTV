@@ -91,9 +91,16 @@ export const VideoSourceConfig = ({
     Array<{
       key: string;
       name: string;
-      status: 'valid' | 'no_results' | 'invalid' | 'validating';
+      status: 'valid' | 'partial' | 'no_results' | 'invalid' | 'validating';
       message: string;
       resultCount: number;
+      episodeCount?: number;
+      latencyMs?: number;
+      levels?: {
+        search: 'pass' | 'fail' | 'skip';
+        detail: 'pass' | 'fail' | 'skip';
+        playable: 'pass' | 'fail' | 'skip';
+      };
     }>
   >([]);
 
@@ -255,8 +262,14 @@ export const VideoSourceConfig = ({
         key: source.key,
         name: source.name,
         status: 'validating' as const,
-        message: '檢測中...',
+        message: '三級檢測中（搜尋 / 集數 / 播放）...',
         resultCount: 0,
+        episodeCount: 0,
+        levels: {
+          search: 'skip' as const,
+          detail: 'skip' as const,
+          playable: 'skip' as const,
+        },
       }));
       setValidationResults(initialResults);
 
@@ -303,12 +316,29 @@ export const VideoSourceConfig = ({
                                 ?.name || data.source,
                             status: data.status,
                             message:
-                              data.status === 'valid'
-                                ? '搜尋正常'
-                                : data.status === 'no_results'
-                                  ? '無法搜尋到結果'
-                                  : '連接失敗',
-                            resultCount: data.status === 'valid' ? 1 : 0,
+                              data.message ||
+                              (data.status === 'valid'
+                                ? '可搜、可解、可播'
+                                : data.status === 'partial'
+                                  ? '部分通過'
+                                  : data.status === 'no_results'
+                                    ? '無法搜尋到結果'
+                                    : '連接失敗'),
+                            resultCount:
+                              typeof data.resultCount === 'number'
+                                ? data.resultCount
+                                : data.status === 'valid'
+                                  ? 1
+                                  : 0,
+                            episodeCount:
+                              typeof data.episodeCount === 'number'
+                                ? data.episodeCount
+                                : 0,
+                            latencyMs:
+                              typeof data.latencyMs === 'number'
+                                ? data.latencyMs
+                                : undefined,
+                            levels: data.levels,
                           }
                         : r
                     );
@@ -322,12 +352,29 @@ export const VideoSourceConfig = ({
                           data.source,
                         status: data.status,
                         message:
-                          data.status === 'valid'
-                            ? '搜尋正常'
-                            : data.status === 'no_results'
-                              ? '無法搜尋到結果'
-                              : '連接失敗',
-                        resultCount: data.status === 'valid' ? 1 : 0,
+                          data.message ||
+                          (data.status === 'valid'
+                            ? '可搜、可解、可播'
+                            : data.status === 'partial'
+                              ? '部分通過'
+                              : data.status === 'no_results'
+                                ? '無法搜尋到結果'
+                                : '連接失敗'),
+                        resultCount:
+                          typeof data.resultCount === 'number'
+                            ? data.resultCount
+                            : data.status === 'valid'
+                              ? 1
+                              : 0,
+                        episodeCount:
+                          typeof data.episodeCount === 'number'
+                            ? data.episodeCount
+                            : 0,
+                        latencyMs:
+                          typeof data.latencyMs === 'number'
+                            ? data.latencyMs
+                            : undefined,
+                        levels: data.levels,
                       },
                     ];
                   }
@@ -407,6 +454,30 @@ export const VideoSourceConfig = ({
     const result = validationResults.find((r) => r.key === sourceKey);
     if (!result) return null;
 
+    const levelLabel = result.levels
+      ? `搜${result.levels.search === 'pass' ? '✓' : result.levels.search === 'fail' ? '✗' : '·'} 解${
+          result.levels.detail === 'pass'
+            ? '✓'
+            : result.levels.detail === 'fail'
+              ? '✗'
+              : '·'
+        } 播${
+          result.levels.playable === 'pass'
+            ? '✓'
+            : result.levels.playable === 'fail'
+              ? '✗'
+              : '·'
+        }`
+      : '';
+    const detailMsg = [
+      result.message,
+      levelLabel,
+      result.episodeCount ? `${result.episodeCount}集` : '',
+      result.latencyMs != null ? `${result.latencyMs}ms` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
+
     switch (result.status) {
       case 'validating':
         return {
@@ -414,23 +485,31 @@ export const VideoSourceConfig = ({
           className:
             'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300',
           icon: '⟳',
-          message: result.message,
+          message: detailMsg || result.message,
         };
       case 'valid':
         return {
-          text: '有效',
+          text: '可播',
           className:
             'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300',
           icon: '✓',
-          message: result.message,
+          message: detailMsg || result.message,
+        };
+      case 'partial':
+        return {
+          text: '部分通過',
+          className:
+            'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300',
+          icon: '◐',
+          message: detailMsg || result.message,
         };
       case 'no_results':
         return {
-          text: '無法搜尋',
+          text: '無結果',
           className:
             'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300',
           icon: '⚠',
-          message: result.message,
+          message: detailMsg || result.message,
         };
       case 'invalid':
         return {
@@ -438,7 +517,7 @@ export const VideoSourceConfig = ({
           className:
             'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300',
           icon: '✗',
-          message: result.message,
+          message: detailMsg || result.message,
         };
       default:
         return null;
@@ -746,8 +825,38 @@ export const VideoSourceConfig = ({
                   <span>檢測中...</span>
                 </>
               ) : (
-                '有效性檢測'
+                '三級有效性檢測'
               )}
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch('/api/admin/source/health-reset', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                  });
+                  if (!res.ok) throw new Error('reset failed');
+                  setValidationResults([]);
+                  showAlert({
+                    type: 'success',
+                    title: '已重置',
+                    message: '已重置全部源健康/熔斷/最近檢測（不改啟停）',
+                  });
+                } catch {
+                  showAlert({
+                    type: 'error',
+                    title: '重置失敗',
+                    message: '重置健康狀態失敗',
+                  });
+                }
+              }}
+              disabled={isValidating}
+              className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                isValidating ? buttonStyles.disabled : buttonStyles.secondary
+              }`}
+            >
+              重置健康狀態
             </button>
             <button
               onClick={() => setShowAddForm(!showAddForm)}

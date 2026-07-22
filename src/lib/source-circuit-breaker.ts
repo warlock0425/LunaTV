@@ -113,6 +113,11 @@ export function getTrippedSources(): Array<{
   return result;
 }
 
+/** 重置單一來源熔斷狀態 */
+export function resetSourceBreaker(sourceKey: string): void {
+  breakerStates.delete(sourceKey);
+}
+
 /** 測試用：清空全部熔斷狀態 */
 export function resetAllBreakers(): void {
   breakerStates.clear();

@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,no-console */
-
+/* eslint-disable no-console */
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
@@ -7,13 +6,18 @@ import {
   createLinkedAbortController,
   mapWithConcurrency,
 } from '@/lib/concurrency';
-import { API_CONFIG, getAdminUser, getConfig } from '@/lib/config';
-import { fetchSafeRemoteUrl } from '@/lib/url-safety';
+import { getAdminUser, getConfig } from '@/lib/config';
+import { validateSourceSite } from '@/lib/source-validation';
 
 export const runtime = 'nodejs';
 
-const SOURCE_VALIDATION_CONCURRENCY = 6;
-const SOURCE_VALIDATION_TIMEOUT_MS = 10_000;
+const SOURCE_VALIDATION_CONCURRENCY = 4;
+// 三級檢測含 detail + m3u8 抽樣，較單純搜尋需要更長預算
+const SOURCE_VALIDATION_TIMEOUT_MS = 15_000;
+
+function sseData(payload: unknown): string {
+  return 'data: ' + JSON.stringify(payload) + '\n\n';
+}
 
 export async function GET(request: NextRequest) {
   const authInfo = await getVerifiedAuthInfo(request);
@@ -25,12 +29,12 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const searchKeyword = searchParams.get('q');
 
-  if (!searchKeyword) {
+  if (!searchKeyword || !searchKeyword.trim()) {
     return NextResponse.json({ error: '搜尋關鍵詞不能為空' }, { status: 400 });
   }
 
   const config = await getConfig();
-  const apiSites = config.SourceConfig;
+  const apiSites = config.SourceConfig || [];
   let streamClosed = false;
   const validationAbortController = new AbortController();
   const abortValidation = () => {
@@ -67,12 +71,16 @@ export async function GET(request: NextRequest) {
         }
 
         completeSent = true;
-        const completeEvent = `data: ${JSON.stringify({
-          type: 'complete',
-          completedSources,
-        })}\n\n`;
-
-        if (safeEnqueue(encoder.encode(completeEvent))) {
+        if (
+          safeEnqueue(
+            encoder.encode(
+              sseData({
+                type: 'complete',
+                completedSources,
+              })
+            )
+          )
+        ) {
           try {
             streamController.close();
           } catch (error) {
@@ -81,12 +89,16 @@ export async function GET(request: NextRequest) {
         }
       };
 
-      const startEvent = `data: ${JSON.stringify({
-        type: 'start',
-        totalSources: apiSites.length,
-      })}\n\n`;
-
-      if (!safeEnqueue(encoder.encode(startEvent))) {
+      if (
+        !safeEnqueue(
+          encoder.encode(
+            sseData({
+              type: 'start',
+              totalSources: apiSites.length,
+            })
+          )
+        )
+      ) {
         request.signal.removeEventListener('abort', abortValidation);
         return;
       }
@@ -109,79 +121,75 @@ export async function GET(request: NextRequest) {
           );
 
           try {
-            const searchUrl = `${site.api}?ac=videolist&wd=${encodeURIComponent(
-              searchKeyword
-            )}`;
-            const response = await fetchSafeRemoteUrl(searchUrl, {
-              headers: API_CONFIG.search.headers,
+            const result = await validateSourceSite(site, {
+              keyword: searchKeyword.trim(),
               signal: linked.controller.signal,
+              probePlayback: true,
             });
 
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}`);
-            }
-
-            // Keep the timeout active until the response body has been read and
-            // parsed. A server can send headers immediately and then stall.
-            const data = (await response.json()) as any;
-            let status: 'valid' | 'no_results';
-            if (data && Array.isArray(data.list) && data.list.length > 0) {
-              const normalizedKeyword = searchKeyword.toLowerCase();
-              const hasMatchingResult = data.list.some((item: any) =>
-                String(item?.vod_name || '')
-                  .toLowerCase()
-                  .includes(normalizedKeyword)
-              );
-              status = hasMatchingResult ? 'valid' : 'no_results';
-            } else {
-              status = 'no_results';
-            }
-
             if (!streamClosed) {
-              const sourceEvent = `data: ${JSON.stringify({
-                type: 'source_result',
-                source: site.key,
-                status,
-              })}\n\n`;
-              safeEnqueue(encoder.encode(sourceEvent));
+              safeEnqueue(
+                encoder.encode(
+                  sseData({
+                    type:
+                      result.status === 'invalid'
+                        ? 'source_error'
+                        : 'source_result',
+                    source: result.source,
+                    status: result.status,
+                    levels: result.levels,
+                    message: result.message,
+                    resultCount: result.resultCount,
+                    episodeCount: result.episodeCount,
+                    latencyMs: result.latencyMs,
+                  })
+                )
+              );
             }
           } catch (error) {
             if (!validationAbortController.signal.aborted) {
               console.warn(`Source validation failed for ${site.name}:`, error);
-              const errorEvent = `data: ${JSON.stringify({
-                type: 'source_error',
-                source: site.key,
-                status: 'invalid',
-              })}\n\n`;
-              safeEnqueue(encoder.encode(errorEvent));
+            }
+            if (!streamClosed) {
+              safeEnqueue(
+                encoder.encode(
+                  sseData({
+                    type: 'source_error',
+                    source: site.key,
+                    status: 'invalid',
+                    levels: {
+                      search: 'fail',
+                      detail: 'skip',
+                      playable: 'skip',
+                    },
+                    message: '檢測過程發生錯誤',
+                    resultCount: 0,
+                    episodeCount: 0,
+                    latencyMs: 0,
+                  })
+                )
+              );
             }
           } finally {
             linked.cleanup();
-            completedSources++;
+            completedSources += 1;
             sendCompleteIfReady();
           }
         }
       );
 
       request.signal.removeEventListener('abort', abortValidation);
-      sendCompleteIfReady();
     },
-
     cancel() {
       abortValidation();
-      request.signal.removeEventListener('abort', abortValidation);
-      console.log('Client disconnected, cancelling validation stream');
     },
   });
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Content-Type': 'text/event-stream; charset=utf-8',
+      'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Content-Type',
     },
   });
 }

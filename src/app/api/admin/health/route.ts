@@ -5,6 +5,8 @@ import { getConfig } from '@/lib/config';
 import { getCronHealthStatus } from '@/lib/cron-health';
 import { db } from '@/lib/db';
 import { getTrippedSources } from '@/lib/source-circuit-breaker';
+import { getSourceHealthSnapshots } from '@/lib/source-health';
+import { getLastValidationResults } from '@/lib/source-validation';
 import { getStorageRuntimeStatus } from '@/lib/storage-runtime';
 import { CURRENT_VERSION } from '@/lib/version';
 
@@ -67,6 +69,8 @@ export async function GET(request: NextRequest) {
         total: sourceCount,
         enabled: enabledSourceCount,
         liveEnabled: liveSourceCount,
+        health: getSourceHealthSnapshots().slice(0, 50),
+        validations: getLastValidationResults().slice(0, 50),
         // 熔斷中的來源（連續逾時被暫時跳過）
         tripped: getTrippedSources().map((entry) => ({
           key: entry.sourceKey,

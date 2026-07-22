@@ -2,10 +2,10 @@
   <img src="public/logo.png" alt="LunaTV Logo" width="120">
 
   <h1>LunaTV</h1>
-  <p><strong>為中文使用者打造的自架影音聚合搜尋與播放平台</strong></p>
-  <p>跨來源聚合搜尋・智慧片源優選・無廣告 HLS 播放・IPTV 直播・雲端進度同步</p>
+  <p><strong>為繁體中文使用者優化的自架影音聚合平台</strong></p>
+  <p>多源搜尋・陸源譯名橋接・集數追更・無廣告 HLS・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-2.6.0-blue)
+![Version](https://img.shields.io/badge/Version-2.6.1-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -17,100 +17,164 @@
 
 </div>
 
-LunaTV 是一個現代化的自架影音聚合平台。它本身**不提供任何影音內容**——你把自己合法可用的
-CMS/VOD API 接進來，它負責把「搜尋、挑源、播放、記錄」這整條體驗做到極致：一次搜尋打遍所有來源、
-自動測速挑出最快最清晰的片源、無廣告播放、跨裝置同步觀看進度。
+LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託管、不儲存任何影片內容**。  
+你把自己合法可用的 CMS/VOD API（與可選的 IPTV 直播源）接進來後，它負責把整條體驗串起來——
+
+**搜得到 → 跟得上集 → 播得穩 → 進度不丟 → 源可管**
+
+本倉庫是 [MoonTechLab/LunaTV](https://github.com/MoonTechLab/LunaTV) 的二次開發版本，在保留上游「空殼聚合器」定位的同時，針對**繁體中文使用者**與**長期自架可靠度**做了加深：
+
+| 方向     | 本 fork 強化重點                                                     |
+| -------- | -------------------------------------------------------------------- |
+| 在地化   | 繁中介面、繁簡搜尋、台灣／區域片名 → 陸源標題橋接、Bangumi 別名      |
+| 追劇     | 播放中背景刷新詳情、最後一集強制確認新集、集數更新提示               |
+| 片源治理 | 三級檢測（可搜／可解／可播）、熔斷與健康頁、一鍵重置（不自動亂關源） |
+| 安全     | 寫入 API HMAC 驗簽、SSRF 防護、備份加密、管理端點獨立驗簽            |
+| 工程     | Next.js 16 / React 19、Jest + Playwright、multi-arch Docker CI       |
 
 > [!IMPORTANT]
-> 本專案不內建播放源，也不託管、上傳或儲存任何影片。部署後為空殼狀態，
-> 必須由部署者自行設定合法可用的 CMS/VOD API 才會有內容。
-> 來源的合法性、安全性與可用性由部署者自行負責。
+> **部署後預設為空殼。** 沒有內建播放源／直播源，也不會憑空出現片庫。  
+> 必須由部署者自行設定合法可用的來源；來源的合法性、安全性與可用性由部署者負責。  
+> 請設定強密碼，僅供個人／小範圍使用，不要公開分享實例連結。
+
+<details>
+  <summary>點此查看專案截圖</summary>
+  <img src="public/screenshot1.png" alt="專案截圖 1" style="max-width:600px">
+  <img src="public/screenshot2.png" alt="專案截圖 2" style="max-width:600px">
+  <img src="public/screenshot3.png" alt="專案截圖 3" style="max-width:600px">
+</details>
 
 ## 目錄
 
 - [功能特色](#功能特色)
+- [與上游的差異（為什麼用這份）](#與上游的差異為什麼用這份)
 - [系統架構](#系統架構)
-- [快速開始](#快速開始)
-- [播放源設定](#播放源設定)
+- [部署](#部署)
+  - [方式選哪一種](#方式選哪一種)
+  - [Docker Compose + Kvrocks（推薦）](#docker-compose--kvrocks推薦)
+  - [Docker Compose + Redis](#docker-compose--redis)
+  - [Vercel + Upstash](#vercel--upstash)
+  - [更新映像](#更新映像)
+- [第一次使用](#第一次使用)
+- [播放源與設定檔](#播放源與設定檔)
 - [環境變數](#環境變數)
 - [本機開發](#本機開發)
+- [管理與維運](#管理與維運)
 - [工程品質](#工程品質)
-- [安全與合規聲明](#安全與合規聲明)
+- [安全與合規](#安全與合規)
+- [常見問題](#常見問題)
 - [致謝](#致謝)
+- [License](#license)
 
 ## 功能特色
 
 ### 搜尋與探索
 
-- **多來源聚合搜尋**——同時查詢所有已設定的 CMS/VOD API，串流回傳結果並即時去重，支援聚合檢視與逐源檢視兩種模式
-- **繁簡智慧匹配**——內建繁簡轉換、長標題拆分、副標題解析與 Bangumi 別名匹配，台灣譯名也能精準命中大陸片源
-- **台灣片名自動反查**——大陸片源常用完全不同的譯名（魔戒／指环王、星際大戰／星球大战），字元轉換無解；搜尋落空時自動經豆瓣反查大陸片名再搜一輪，並在畫面標示實際採用的片名
-- **豆瓣 / Bangumi 探索頁**——電影、劇集、動漫（含每日放送）、綜藝分類瀏覽，支援自訂分類；中繼資料經由 CDN 代理分流，不對來源站造成集中壓力
-- **來源熔斷保護**——連續失敗的片源自動進入冷卻期，避免壞源拖慢整體搜尋
+- **多源聚合搜尋**：一次查詢所有已啟用 CMS/VOD 來源，支援串流輸出、去重與來源排序
+- **繁簡／陸源智慧匹配**：繁簡轉換、長標題拆分、季數／Part 解析、hybrid 模糊匹配
+- **台灣片名橋接**：搜尋落空時可走豆瓣／區域別名／Bangumi 等路徑，提高「台譯 → 陸源」命中率
+- **豆瓣／Bangumi 探索**：電影、劇集、動漫（含每日放送）、綜藝分類瀏覽
+- **來源熔斷**：連續逾時的來源暫時降權，避免壞源拖垮整次搜尋（可重置，不永久封殺）
 
-### 播放體驗
+### 播放與追劇
 
-- **無廣告 HLS 播放**——ArtPlayer + hls.js，自訂 Loader 在 M3U8 層精準過濾廣告切片
-- **片源優選**——對候選片源並行測速（畫質、載入速度、延遲）自動排序，一鍵換源並無縫接續進度
-- **追劇利器**——跳過片頭片尾（可逐劇記憶設定）、自動連播倒數、集數記憶、斷點續播
-- **完整快捷鍵**——空白鍵播放暫停、方向鍵快進音量、`[` `]` 倍速、`F` 全螢幕、`P` 子母畫面、`?` 查看全部
-- **行動端最佳化**——觸控手勢（滑動快進、音量、亮度）、長按選單、PWA 可安裝到主畫面
+- **無廣告 HLS 播放**：ArtPlayer + hls.js；可在 M3U8 層過濾廣告切片
+- **VOD 瀏覽器直連**：點播串流預設由瀏覽器直連 CDN（降低自架頻寬壓力，也較不易被源站依機房 IP 擋）
+- **片源測速優選**：對候選源並行測速後排序，換源可接續進度
+- **集數追更**：
+  - 進播放頁會背景刷新最新詳情
+  - 已在最後一集時按「下一集」，或開啟自動連播播完最後一集，會再向詳情 API 確認是否有新集
+  - 有新集提示「已更新至第 N 集」；沒有則提示「目前仍是最新一集」
+  - 刷新時可保留目前這一集的播放 URL，降低簽章 URL 輪替造成的中斷
+- **追劇輔助**：跳過片頭片尾（可記憶）、自動連播倒數、斷點續播、快捷鍵與行動手勢
+- **接著看**：首頁大圖區塊快速接續上次觀看
 
 ### IPTV 直播
 
-- **M3U 直播源**——匯入標準 M3U/M3U8 播放清單，頻道自動分組
-- **EPG 節目單**——支援 XMLTV 格式電子節目表，當日節目自動清洗去重、捲動跟隨正在播放的節目
+- 匯入 M3U／M3U8 直播源、頻道分組
+- XMLTV EPG 節目單（當日節目清洗、捲動跟隨）
+- 直播相關串流走伺服器 proxy（處理 CORS／金鑰等），與 VOD 直連策略分離
 
-### 資料與同步
+### 資料同步與備份
 
-- **四種儲存後端**——Kvrocks（推薦）/ Redis / Upstash Redis / 瀏覽器 localStorage，觀看記錄、收藏、搜尋歷史跨裝置同步
-- **集數自動更新**——內建 cron 每小時刷新追蹤中劇集的最新集數，狀態可在後台健康頁檢視
-- **資料遷移**——後台一鍵匯出／匯入全部使用者資料
+- **四種儲存後端**：Kvrocks（推薦）／Redis／Upstash／localStorage
+- 觀看紀錄、收藏、搜尋歷史、跳過片頭片尾設定可跨裝置同步（非 localStorage 模式）
+- 後台資料匯出／匯入；匯出備份支援強化保護（scrypt + AES-GCM）
 
 ### 管理後台
 
-- **視覺化片源管理**——新增、排序（拖曳）、批次啟停、有效性驗證
-- **多使用者**——帳號管理與角色權限（站長 / 管理員 / 使用者）
-- **站點設定**——站名、公告、搜尋頁數上限、內容過濾開關、豆瓣代理策略
-- **設定訂閱**——支援遠端設定檔訂閱與自動更新
+- 片源新增、拖曳排序、批次啟停
+- **三級有效性檢測**：可搜尋／可解析集數／可抽樣播放
+- 健康頁：儲存連線、cron、熔斷、搜尋延遲、最近三級檢測結果
+- 一鍵重置健康／熔斷／最近檢測（**不改來源啟停**）
+- 多使用者與角色、站點設定、設定檔訂閱
+
+## 與上游的差異（為什麼用這份）
+
+上游 LunaTV／MoonTV 的核心哲學是：
+
+> 空殼、自架、Docker 優先、個人使用、主路徑好用。
+
+本 fork **完整保留**這個定位，並把力氣花在繁中使用者真正痛的地方：
+
+1. **搜得到陸源**（譯名、繁簡、別名，而不是只做字面搜尋）
+2. **跟得上連載**（詳情刷新與最後一集確認，而不是只靠進頁那一次）
+3. **源站壞了知道是誰**（三級檢測與健康觀察，而不是整站搜尋變慢卻找不到原因）
+4. **私人實例更耐用**（寫入 API 驗簽、SSRF、備份加密、測試與 CI）
+
+若你需要的是「最貼近上游原版、簡中文件為主」的版本，請直接使用 [MoonTechLab/LunaTV](https://github.com/MoonTechLab/LunaTV)。  
+若你要的是**繁中體驗 + 追劇可靠度 + 自架維運**，用本倉庫。
 
 ## 系統架構
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Browser (PWA)                    │
-│   Next.js App Router UI ・ ArtPlayer ・ hls.js      │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│              Next.js 16 (Node.js 24)                │
-│  proxy.ts 全域認證 ・ API Routes ・ 內建 cron        │
-│  搜尋聚合 / 測速優選 / M3U8 廣告過濾 / 圖片代理      │
-└──────┬────────────────────────────┬─────────────────┘
-       │                            │
-┌──────▼──────┐            ┌────────▼────────┐
-│ 儲存後端     │            │ 外部來源（自行設定）│
-│ Kvrocks /   │            │ CMS/VOD API      │
-│ Redis /     │            │ M3U 直播源        │
-│ Upstash /   │            │ 豆瓣 / Bangumi   │
-│ localStorage│            │ （中繼資料）      │
-└─────────────┘            └──────────────────┘
+│                 Browser / PWA 客戶端                 │
+│     Next.js UI · ArtPlayer · hls.js · 直連 VOD      │
+└──────────────────────────┬──────────────────────────┘
+                           │
+┌──────────────────────────▼──────────────────────────┐
+│              Next.js 16（Node.js 24）                 │
+│  proxy 全域登入閘門 · API Routes · 內建 cron         │
+│  搜尋聚合 · 詳情刷新 · 直播 proxy · 圖片代理         │
+│  三級源檢測 · 熔斷/健康 · HMAC 寫入防護              │
+└──────────────┬─────────────────────┬────────────────┘
+               │                     │
+       ┌───────▼───────┐     ┌───────▼────────┐
+       │ 儲存後端       │     │ 你自己接的來源   │
+       │ Kvrocks        │     │ CMS / VOD API   │
+       │ Redis          │     │ M3U 直播源      │
+       │ Upstash        │     │ 豆瓣 / Bangumi  │
+       │ localStorage   │     │ （僅中繼資料）   │
+       └───────────────┘     └────────────────┘
 ```
 
-| 層面   | 技術                                                       |
-| ------ | ---------------------------------------------------------- |
-| 框架   | Next.js 16（App Router）、React 19、TypeScript 5.9         |
-| 樣式   | Tailwind CSS 3                                             |
-| 播放器 | ArtPlayer 5、hls.js（按需載入，非播放頁不佔用初始 bundle） |
-| 認證   | 全域 Proxy 攔截 + 簽名 Cookie 會話（密碼加鹽雜湊儲存）     |
-| 儲存   | Kvrocks / Redis / Upstash / localStorage 四後端同一介面    |
-| 部署   | Docker multi-arch（amd64 / arm64）、Node.js 24             |
+| 層面 | 技術                                               |
+| ---- | -------------------------------------------------- |
+| 框架 | Next.js 16（App Router）、React 19、TypeScript 5.9 |
+| 樣式 | Tailwind CSS 3                                     |
+| 播放 | ArtPlayer 5、hls.js                                |
+| 認證 | 全域 proxy 閘門 + 簽名 Cookie；寫入 API 再驗 HMAC  |
+| 儲存 | Kvrocks / Redis / Upstash / localStorage 同一介面  |
+| 部署 | Docker multi-arch（amd64 / arm64）、GHCR 映像      |
 
-## 快速開始
+## 部署
 
-### Docker Compose（推薦）
+### 方式選哪一種
 
-適合 VPS、NAS 等長期自架場景。建立 `docker-compose.yml`：
+| 方式                         | 適合              | 儲存                  | 備註                         |
+| ---------------------------- | ----------------- | --------------------- | ---------------------------- |
+| **Docker Compose + Kvrocks** | VPS／NAS 長期自架 | Kvrocks               | **最推薦**，資料落盤、成本低 |
+| Docker Compose + Redis       | 已有 Redis 環境   | Redis                 | 記得開 AOF／持久化           |
+| Vercel + Upstash             | 不想管機器        | Upstash               | 需設定 `CRON_SECRET`         |
+| 本機 `pnpm dev`              | 開發除錯          | localStorage 或 Redis | 不建議當正式站               |
+
+> 映像位址：`ghcr.io/berserker8888/lunatv:latest`  
+> 版本標籤可改為 `2.6.1`（發版後）或你需要的 tag。
+
+### Docker Compose + Kvrocks（推薦）
+
+建立 `docker-compose.yml`：
 
 ```yaml
 services:
@@ -122,11 +186,14 @@ services:
       - '3000:3000'
     environment:
       - USERNAME=admin
-      - PASSWORD=請改成你的強密碼
+      - PASSWORD=請改成夠長的強密碼
       - STORAGE_TYPE=kvrocks
       - NEXT_PUBLIC_STORAGE_TYPE=kvrocks
       - KVROCKS_URL=redis://kvrocks:6666
       - NEXT_PUBLIC_SITE_NAME=LunaTV
+      # 可選
+      # - ANNOUNCEMENT=歡迎使用
+      # - SITE_BASE=https://tv.example.com
     depends_on:
       - kvrocks
     networks:
@@ -149,36 +216,111 @@ volumes:
 ```
 
 ```bash
-docker compose up -d        # 啟動
-docker compose pull && docker compose up -d   # 更新到最新版
+docker compose up -d
+# 瀏覽器開啟 http://你的主機:3000
+# 使用 USERNAME / PASSWORD 登入
+
+# 之後更新
+docker compose pull
+docker compose up -d
 ```
 
-容器內建 `HEALTHCHECK`，可搭配 Watchtower 等工具自動更新。
+說明：
 
-### Vercel + Upstash（免伺服器）
+- 容器內建 `HEALTHCHECK`（探測 `/api/server-config`）
+- Docker 啟動腳本會帶內建 cron，定期做維運工作（含追蹤中內容的更新流程）
+- **兩個服務必須在同一 Docker network**，`KVROCKS_URL` 主機名用 compose service 名（上例是 `kvrocks`）
 
-1. Fork 本倉庫後在 Vercel 匯入專案
-2. 建立 [Upstash Redis](https://upstash.com/) 資料庫
-3. 設定環境變數：`USERNAME`、`PASSWORD`、`STORAGE_TYPE=upstash`、
-   `NEXT_PUBLIC_STORAGE_TYPE=upstash`、`UPSTASH_URL`、`UPSTASH_TOKEN`、`CRON_SECRET`
-4. 部署完成後於 `vercel.json` 的排程即會自動刷新集數
+### Docker Compose + Redis
 
-### 部署方式對照
+```yaml
+services:
+  lunatv:
+    image: ghcr.io/berserker8888/lunatv:latest
+    container_name: lunatv
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      - USERNAME=admin
+      - PASSWORD=請改成夠長的強密碼
+      - STORAGE_TYPE=redis
+      - NEXT_PUBLIC_STORAGE_TYPE=redis
+      - REDIS_URL=redis://redis:6379
+      - NEXT_PUBLIC_SITE_NAME=LunaTV
+    depends_on:
+      - redis
 
-| 方式             | 適合對象             | 儲存建議                |
-| ---------------- | -------------------- | ----------------------- |
-| Docker Compose   | VPS、NAS、長期自架   | Kvrocks（輕量）或 Redis |
-| Vercel + Upstash | 不想維護伺服器的個人 | Upstash Redis           |
-| 本機開發         | 開發與除錯           | localStorage 或 Redis   |
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
 
-## 播放源設定
+volumes:
+  redis-data:
+```
 
-部署後系統為**空殼狀態**。登入後進入 `管理面板 → 影片來源` 設定播放源，支援標準蘋果 CMS
-（maccms）API 格式。三種設定方式：
+### Vercel + Upstash
 
-1. **後台逐筆新增**——在管理面板直接填入 API 位址
-2. **設定檔貼上**——在 `管理面板 → 設定檔` 貼上 JSON（格式如下）
-3. **訂閱網址**——填入遠端設定檔 URL，支援自動更新
+適合不想維護 VPS 的個人部署：
+
+1. Fork 本倉庫，在 [Vercel](https://vercel.com) 匯入
+2. 建立 [Upstash Redis](https://upstash.com/) 資料庫，取得 REST URL 與 TOKEN
+3. 在 Vercel 專案設定環境變數：
+
+```env
+USERNAME=admin
+PASSWORD=你的強密碼
+STORAGE_TYPE=upstash
+NEXT_PUBLIC_STORAGE_TYPE=upstash
+UPSTASH_URL=https://xxxx.upstash.io
+UPSTASH_TOKEN=你的_token
+CRON_SECRET=自訂一串夠長的隨機字串
+NEXT_PUBLIC_SITE_NAME=LunaTV
+```
+
+4. 部署完成後用 Vercel 網域登入
+5. 專案內 `vercel.json` 會觸發排程呼叫 cron；**請務必設定 `CRON_SECRET`**
+
+### 更新映像
+
+```bash
+# Docker Compose
+docker compose pull
+docker compose up -d
+
+# 查看目前版本
+# 登入後開啟版本面板，或看映像 tag / 健康頁 version 欄位
+```
+
+也可搭配 Watchtower 等工具自動拉新映像（仍建議先在測試環境驗證）。
+
+## 第一次使用
+
+1. 用 `USERNAME` / `PASSWORD` 登入
+2. 進入 **管理面板**
+3. 到 **影片來源** 新增加法 CMS API（或貼設定檔／訂閱遠端設定）
+4. 用 **三級有效性檢測** 確認來源至少「可搜」，理想是「可搜／可解／可播」
+5. 回首頁或搜尋頁試搜一部你知道存在的片子
+6. 進播放頁確認能播；連載片可跳到最後一集測「下一集／追更」
+7. （可選）到 **健康頁** 看儲存、cron、熔斷與最近檢測
+
+若登入後是警告頁：代表 `PASSWORD` 未設定或未正確注入環境變數。
+
+## 播放源與設定檔
+
+本專案**不附來源**。請只接入你有權使用的 API。
+
+支援常見蘋果 CMS（maccms）風格介面。設定方式：
+
+1. **後台逐筆新增**：管理面板 → 影片來源
+2. **設定檔貼上**：管理面板 → 設定檔
+3. **訂閱網址**：遠端 JSON，可自動更新
+4. **檔案掛載**：容器內 `config.json`，或以 `CONFIG_FILE_PATH` 指定
+
+最小示例：
 
 ```json
 {
@@ -189,99 +331,152 @@ docker compose pull && docker compose up -d   # 更新到最新版
       "name": "示例資源",
       "detail": "https://example.com"
     }
-  },
-  "custom_category": [{ "name": "動作電影", "type": "movie", "query": "動作" }]
+  }
 }
 ```
 
-也可在容器掛載 `config.json`（或以 `CONFIG_FILE_PATH` 指定路徑）作為首次啟動的預設設定。
+直播源在後台 **直播來源** 管理（M3U URL、可選 UA／EPG）。
+
+### 三級檢測怎麼看
+
+| 結果                 | 含義                            | 建議                     |
+| -------------------- | ------------------------------- | ------------------------ |
+| 可播（valid）        | 能搜、能解析集數、m3u8 抽樣成功 | 優先使用                 |
+| 部分通過（partial）  | 通常是能搜但詳情或播放抽樣失敗  | 可留著當備援，觀察       |
+| 無結果（no_results） | API 通但關鍵詞沒命中            | 換個關鍵詞再測           |
+| 無效（invalid）      | 連線／協定失敗                  | 檢查 URL、網路、源站狀態 |
+
+> 檢測**不會**因為失敗就自動禁用來源，避免誤傷不穩定但可用的陸源。
 
 ## 環境變數
 
-### 基本
+### 必填／核心
 
-| 變數                            | 必填   | 說明                                                           |
-| ------------------------------- | ------ | -------------------------------------------------------------- |
-| `USERNAME`                      | 是     | 站長帳號                                                       |
-| `PASSWORD`                      | 是     | 站長密碼（請使用強密碼；未設定時全站顯示警告頁）               |
-| `STORAGE_TYPE`                  | 建議   | 伺服器端儲存：`kvrocks` / `redis` / `upstash` / `localstorage` |
-| `NEXT_PUBLIC_STORAGE_TYPE`      | 建議   | 前端對應儲存類型，需與上者一致                                 |
-| `KVROCKS_URL`                   | 視情況 | Kvrocks 連線位址，如 `redis://kvrocks:6666`                    |
-| `REDIS_URL`                     | 視情況 | Redis 連線位址                                                 |
-| `UPSTASH_URL` / `UPSTASH_TOKEN` | 視情況 | Upstash REST 端點與金鑰                                        |
-| `NEXT_PUBLIC_SITE_NAME`         | 否     | 網站名稱（預設 `BerserkerTV`）                                 |
-| `ANNOUNCEMENT`                  | 否     | 站點公告內容                                                   |
+| 變數                            | 必填        | 說明                                             |
+| ------------------------------- | ----------- | ------------------------------------------------ |
+| `USERNAME`                      | 是          | 站長帳號                                         |
+| `PASSWORD`                      | 是          | 站長密碼（也用於會話簽章；請用強密碼）           |
+| `STORAGE_TYPE`                  | 強烈建議    | `kvrocks` / `redis` / `upstash` / `localstorage` |
+| `NEXT_PUBLIC_STORAGE_TYPE`      | 強烈建議    | 須與 `STORAGE_TYPE` 一致                         |
+| `KVROCKS_URL`                   | kvrocks 時  | 例：`redis://kvrocks:6666`                       |
+| `REDIS_URL`                     | redis 時    | 例：`redis://redis:6379`                         |
+| `UPSTASH_URL` / `UPSTASH_TOKEN` | upstash 時  | Upstash REST 憑證                                |
+| `CRON_SECRET`                   | Vercel 必填 | 保護 `/api/cron`                                 |
+| `NEXT_PUBLIC_SITE_NAME`         | 否          | 站名（預設可能顯示 BerserkerTV／LunaTV）         |
+| `ANNOUNCEMENT`                  | 否          | 公告                                             |
+| `SITE_BASE`                     | 否          | 公開站台 URL（部分回呼／連結場景）               |
 
-### 進階
+### 常用進階
 
-| 變數                                                           | 預設                    | 說明                                 |
-| -------------------------------------------------------------- | ----------------------- | ------------------------------------ |
-| `CONFIG_FILE_PATH`                                             | `./config.json`         | 首次初始化用的設定檔路徑             |
-| `CRON_SECRET`                                                  | —                       | 排程端點驗證密鑰（Vercel 部署必填）  |
-| `NEXT_PUBLIC_SEARCH_MAX_PAGE`                                  | `5`                     | 每個來源搜尋的最大頁數               |
-| `NEXT_PUBLIC_FLUID_SEARCH`                                     | `true`                  | 串流式搜尋輸出（邊搜邊顯示）         |
-| `NEXT_PUBLIC_DISABLE_YELLOW_FILTER`                            | `false`                 | 停用成人內容分類過濾                 |
-| `NEXT_PUBLIC_DOUBAN_PROXY_TYPE`                                | `cmliussss-cdn-tencent` | 豆瓣資料代理策略                     |
-| `NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE`                          | `cmliussss-cdn-tencent` | 豆瓣圖片代理策略                     |
-| `BANGUMI_ACCESS_TOKEN`                                         | —                       | Bangumi API 憑證（提高別名查詢限額） |
-| `SEARCH_CACHE_TTL_MINUTES`                                     | `120`                   | 伺服器端搜尋快取時間                 |
-| `SOURCE_BREAKER_THRESHOLD` / `SOURCE_BREAKER_COOLDOWN_MINUTES` | —                       | 來源熔斷的失敗閾值與冷卻時間         |
+| 變數                                  | 預設                    | 說明                      |
+| ------------------------------------- | ----------------------- | ------------------------- |
+| `CONFIG_FILE_PATH`                    | `./config.json`         | 初始設定檔路徑            |
+| `NEXT_PUBLIC_SEARCH_MAX_PAGE`         | `5`                     | 每源最大搜尋頁數          |
+| `NEXT_PUBLIC_FLUID_SEARCH`            | `true`                  | 串流搜尋（邊搜邊顯示）    |
+| `NEXT_PUBLIC_DISABLE_YELLOW_FILTER`   | `false`                 | 停用成人分類過濾          |
+| `NEXT_PUBLIC_DOUBAN_PROXY_TYPE`       | `cmliussss-cdn-tencent` | 豆瓣資料代理策略          |
+| `NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE` | `cmliussss-cdn-tencent` | 豆瓣圖片代理策略          |
+| `BANGUMI_ACCESS_TOKEN`                | —                       | 提高 Bangumi 別名查詢額度 |
+| `SEARCH_CACHE_TTL_MINUTES`            | `120`                   | 伺服器搜尋快取            |
+| `SOURCE_BREAKER_THRESHOLD`            | `3`                     | 熔斷：連續失敗次數        |
+| `SOURCE_BREAKER_COOLDOWN_MINUTES`     | `10`                    | 熔斷冷卻分鐘              |
 
 ## 本機開發
 
 需求：Node.js ≥ 20.9（建議 24）、pnpm ≥ 10。
 
 ```bash
-pnpm install          # 安裝相依
-pnpm dev              # 開發伺服器（http://localhost:3000）
-pnpm build            # 產線建置
-pnpm lint             # ESLint 檢查
-pnpm typecheck        # TypeScript 型別檢查
-pnpm test             # Jest 單元測試
-pnpm test:coverage    # 覆蓋率報告（門檻防倒退）
-pnpm test:e2e         # Playwright 端對端測試（建置 + 雙裝置模擬）
+pnpm install
+pnpm dev          # http://localhost:3000
+pnpm build
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm test:coverage
+pnpm test:e2e
 ```
 
-專案結構速覽：
+開發時可先用：
+
+```env
+USERNAME=admin
+PASSWORD=admin
+NEXT_PUBLIC_STORAGE_TYPE=localstorage
+STORAGE_TYPE=localstorage
+```
+
+正式環境請改用 Kvrocks／Redis／Upstash，不要用 localStorage 當多人站。
+
+專案結構：
 
 ```
 src/
-├── app/            # App Router 頁面與 API Routes
-│   ├── play/       # 點播播放頁（播放器核心、選集、換源）
-│   ├── live/       # IPTV 直播頁（頻道、EPG）
-│   ├── admin/      # 管理後台
-│   └── api/        # 搜尋聚合、詳情、代理、cron 等端點
-├── components/     # 共用 UI 元件
-├── hooks/          # 共用 React hooks
-└── lib/            # 核心邏輯（搜尋引擎、儲存抽象、繁簡轉換、測速）
+├── app/           # 頁面與 API（play / live / admin / search ...）
+├── components/    # UI
+├── hooks/         # React hooks
+└── lib/           # 搜尋、儲存、繁簡、安全、源檢測等核心邏輯
 ```
+
+## 管理與維運
+
+| 場景           | 建議動作                                             |
+| -------------- | ---------------------------------------------------- |
+| 搜尋突然變慢   | 健康頁看熔斷與延遲；對可疑源做三級檢測               |
+| 某源能搜不能播 | 看檢測的「解／播」；可能是詳情格式或 CDN 暫時失敗    |
+| 連載沒有新集   | 播放頁跳到最後一集再按下一集；確認 detail API 正常   |
+| 想清熔斷狀態   | 後台「重置健康狀態」或健康頁重置（不改啟停）         |
+| 換機器搬遷     | 後台匯出備份 → 新站匯入                              |
+| 升級版本       | `docker compose pull && up -d`，再看版本面板／健康頁 |
 
 ## 工程品質
 
-- **靜態把關**——TypeScript strict、ESLint 9 flat config，並全面啟用
-  eslint-plugin-react-hooks 的 React Compiler 前置規則（`set-state-in-effect`、`purity` 等）
-- **測試**——400+ Jest 單元測試（含 API 路由、儲存層與 Testing Library 元件測試）+ Playwright E2E
-  （桌面與行動雙環境，覆蓋登入、播放、導覽核心流程），覆蓋率門檻於 CI 防倒退
-- **提交管線**——husky + lint-staged + commitlint（Conventional Commits），
-  另含簡體字檢查確保介面用語一致為繁體中文
-- **CI/CD**——GitHub Actions 於每次推送執行品質檢查與 E2E，
-  通過後建置 amd64/arm64 雙架構映像推送至 GHCR
-- **相依安全**——pnpm overrides 集中管理（`pnpm-workspace.yaml`），已知漏洞歸零
+- TypeScript strict、ESLint flat config、React hooks 嚴格規則
+- Jest 單元／整合測試 + Playwright E2E
+- husky + lint-staged + commitlint；介面用語維持繁體中文
+- GitHub Actions：lint / typecheck / test / e2e，通過後推送 amd64+arm64 映像到 GHCR
 
-## 安全與合規聲明
+## 安全與合規
 
-- 本專案僅提供影視資訊**搜尋與播放器介面**，不內建、不上傳、不儲存任何影片內容
-- 所有播放內容均來自使用者自行設定的第三方來源，請自行確認來源的合法性與可用性
-- 因使用者自行設定來源、公開分享、二次分發或部署所產生的風險與責任，由使用者自行承擔
-- 本專案不在特定限制地區提供服務。如有部署或使用，屬個人行為，相關法律風險由使用者自行負責
-- 全站受密碼保護，請務必設定強密碼並避免將站點公開分享
+- 本專案只提供**搜尋與播放介面**，不內建片庫
+- 播放內容來自你自己設定的第三方來源；請遵守當地法律與來源條款
+- 請使用強密碼，關閉不必要的公開暴露，勿把實例當公開片站宣傳
+- 寫入型 API 會驗證登入簽章；管理端點另有權限與驗簽
+- 代理層具備 SSRF 防護（阻擋內網位址）；VOD 仍以瀏覽器直連為主
+- 因設定來源、公開分享、二次分發或部署所生風險，由使用者自行承擔
+
+**不建議**在中國大陸主流社群平台公開宣傳此類自架聚合專案；請低調、自用、合法使用。
+
+## 常見問題
+
+**Q: 部署後什麼都沒有？**  
+A: 正常。請到管理面板自己加源。
+
+**Q: 搜尋有結果但播放失敗？**  
+A: 先跑三級檢測。若「搜✓ 解✓ 播✗」，多半是該源 m3u8／CDN 問題，換源或稍後再試。
+
+**Q: 為什麼不強制所有影片走伺服器代理？**  
+A: 會爆自架頻寬，也更容易被源站封鎖機房 IP。本專案 VOD 採瀏覽器直連、直播才走 proxy。
+
+**Q: localStorage 模式能多使用者嗎？**  
+A: 不適合。正式環境請用 Kvrocks／Redis／Upstash。
+
+**Q: 和上游映像能混用嗎？**  
+A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **2.6.1**）；資料結構多數相容，但升級前請先備份。
 
 ## 致謝
 
-本專案基於 [MoonTechLab/LunaTV](https://github.com/MoonTechLab/LunaTV) 二次開發，
-針對繁體中文使用者深度在地化，並持續進行架構現代化與功能強化。感謝原作者及所有上游貢獻者。
+- 上游專案：[MoonTechLab/LunaTV](https://github.com/MoonTechLab/LunaTV)（及其歷史前身 MoonTV）
+- 靈感與生態：[LibreTV](https://github.com/LibreSpark/LibreTV)
+- 播放器：[ArtPlayer](https://github.com/zhw2590582/ArtPlayer)、[HLS.js](https://github.com/video-dev/hls.js)
+- 豆瓣相關代理／CDN 方案貢獻者（Zwei、CMLiussss 等）
+- 以及所有提供合法可接 API、提交 issue／PR 與測試回饋的使用者
 
 ## License
 
-[CC BY-NC-SA 4.0](LICENSE) — 姓名標示、非商業性、相同方式分享。
-禁止商業用途，衍生作品需以相同授權條款釋出。
+[CC BY-NC-SA 4.0](LICENSE)
+
+- 姓名標示
+- **非商業性**
+- 相同方式分享
+
+衍生作品須保留本專案與上游專案致謝，並以相同授權釋出。禁止商業用途。

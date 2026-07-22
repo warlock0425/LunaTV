@@ -2,13 +2,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireActiveUser } from '@/lib/api-auth';
 import {
   isValidApiTextParam,
   parseAndValidateApiStorageKey,
   readJsonObject,
 } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { Favorite } from '@/lib/types';
 
@@ -23,25 +22,11 @@ export const runtime = 'nodejs';
  */
 export async function GET(request: NextRequest) {
   try {
-    // 從 cookie 取得使用者資訊
-    const authInfo = getAuthInfoFromCookie(request);
-    if (!authInfo || !authInfo.username) {
+    const activeUser = await requireActiveUser(request);
+    if (!activeUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const config = await getConfig();
-    if (authInfo.username !== process.env.USERNAME) {
-      // 非站長，檢查使用者存在或被封禁
-      const user = config.UserConfig.Users.find(
-        (u) => u.username === authInfo.username
-      );
-      if (!user) {
-        return NextResponse.json({ error: '使用者不存在' }, { status: 401 });
-      }
-      if (user.banned) {
-        return NextResponse.json({ error: '使用者已被封禁' }, { status: 401 });
-      }
-    }
+    const username = activeUser.username;
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
@@ -56,12 +41,12 @@ export async function GET(request: NextRequest) {
         );
       }
       const { source, id } = parsedKey;
-      const fav = await db.getFavorite(authInfo.username, source, id);
+      const fav = await db.getFavorite(username, source, id);
       return NextResponse.json(fav, { status: 200 });
     }
 
     // 查詢全部收藏
-    const favorites = await db.getAllFavorites(authInfo.username);
+    const favorites = await db.getAllFavorites(username);
     return NextResponse.json(favorites, { status: 200 });
   } catch (err) {
     console.error('取得收藏失敗', err);
@@ -78,25 +63,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // 從 cookie 取得使用者資訊
-    const authInfo = getAuthInfoFromCookie(request);
-    if (!authInfo || !authInfo.username) {
+    const activeUser = await requireActiveUser(request);
+    if (!activeUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const config = await getConfig();
-    if (authInfo.username !== process.env.USERNAME) {
-      // 非站長，檢查使用者存在或被封禁
-      const user = config.UserConfig.Users.find(
-        (u) => u.username === authInfo.username
-      );
-      if (!user) {
-        return NextResponse.json({ error: '使用者不存在' }, { status: 401 });
-      }
-      if (user.banned) {
-        return NextResponse.json({ error: '使用者已被封禁' }, { status: 401 });
-      }
-    }
+    const username = activeUser.username;
 
     const body = await readJsonObject<{
       key?: string;
@@ -143,7 +114,7 @@ export async function POST(request: NextRequest) {
       save_time: favorite.save_time ?? Date.now(),
     } as Favorite;
 
-    await db.saveFavorite(authInfo.username, source, id, finalFavorite);
+    await db.saveFavorite(username, source, id, finalFavorite);
 
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
@@ -163,27 +134,12 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
-    // 從 cookie 取得使用者資訊
-    const authInfo = getAuthInfoFromCookie(request);
-    if (!authInfo || !authInfo.username) {
+    const activeUser = await requireActiveUser(request);
+    if (!activeUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    const username = activeUser.username;
 
-    const config = await getConfig();
-    if (authInfo.username !== process.env.USERNAME) {
-      // 非站長，檢查使用者存在或被封禁
-      const user = config.UserConfig.Users.find(
-        (u) => u.username === authInfo.username
-      );
-      if (!user) {
-        return NextResponse.json({ error: '使用者不存在' }, { status: 401 });
-      }
-      if (user.banned) {
-        return NextResponse.json({ error: '使用者已被封禁' }, { status: 401 });
-      }
-    }
-
-    const username = authInfo.username;
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
 

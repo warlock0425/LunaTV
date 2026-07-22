@@ -1,7 +1,7 @@
 import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 
-import { getVerifiedAuthInfo } from './api-auth';
+import { getVerifiedAuthInfo, requireActiveUser } from './api-auth';
 import { getAuthSignaturePayload } from './auth';
 
 Object.defineProperty(globalThis, 'crypto', {
@@ -163,5 +163,41 @@ describe('getVerifiedAuthInfo', () => {
       const request = requestWithAuth(await signedAuth('alice'));
       await expect(getVerifiedAuthInfo(request)).resolves.toBeNull();
     });
+  });
+});
+
+describe('requireActiveUser', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv, PASSWORD: SECRET, USERNAME: 'owner' };
+    delete process.env.NEXT_PUBLIC_STORAGE_TYPE;
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('rejects unsigned cookies', async () => {
+    const req = requestWithAuth({ username: 'owner', timestamp: Date.now() });
+    await expect(requireActiveUser(req)).resolves.toBeNull();
+  });
+
+  it('accepts a valid owner session without loading user DB', async () => {
+    process.env.NEXT_PUBLIC_STORAGE_TYPE = 'redis';
+    const req = requestWithAuth(await signedAuth('owner'));
+    const active = await requireActiveUser(req);
+    expect(active?.username).toBe('owner');
+  });
+
+  it('maps localstorage sessions to the localstorage username', async () => {
+    process.env.NEXT_PUBLIC_STORAGE_TYPE = 'localstorage';
+    const payload = {
+      ...(await signedAuth('localstorage')),
+    };
+    delete (payload as { username?: string }).username;
+    const req = requestWithAuth(payload);
+    const active = await requireActiveUser(req);
+    expect(active?.username).toBe('localstorage');
   });
 });

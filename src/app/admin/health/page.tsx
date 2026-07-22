@@ -33,7 +33,37 @@ interface HealthData {
     lastSuccessAt: string | null;
     lastError: string | null;
   };
-  sources: { total: number; enabled: number; liveEnabled: number };
+  sources: {
+    total: number;
+    enabled: number;
+    liveEnabled: number;
+    tripped?: Array<{
+      key: string;
+      untilISO: string;
+      consecutiveFailures: number;
+    }>;
+    health?: Array<{
+      key: string;
+      averageMs: number;
+      samples: number;
+      consecutiveTimeouts: number;
+      disabledUntil: number;
+      disabled: boolean;
+    }>;
+    validations?: Array<{
+      source: string;
+      status: string;
+      message: string;
+      episodeCount: number;
+      latencyMs: number;
+      levels: {
+        search: string;
+        detail: string;
+        playable: string;
+      };
+      checkedAt: number;
+    }>;
+  };
 }
 
 function formatDate(value: string | null): string {
@@ -233,6 +263,137 @@ export default function AdminHealthPage() {
             <p className='text-xs text-zinc-500'>
               最後更新：{formatDate(data.timestamp)}
             </p>
+
+            {(data.sources.tripped?.length ||
+              data.sources.health?.length ||
+              data.sources.validations?.length) && (
+              <section className='space-y-4'>
+                <div className='flex flex-wrap items-center justify-between gap-3'>
+                  <h2 className='text-lg font-semibold text-zinc-900 dark:text-white'>
+                    片源健康與三級檢測
+                  </h2>
+                  <button
+                    type='button'
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(
+                          '/api/admin/source/health-reset',
+                          {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({}),
+                          }
+                        );
+                        if (!res.ok) throw new Error('reset failed');
+                        await loadHealth();
+                      } catch {
+                        setError('重置源健康狀態失敗');
+                      }
+                    }}
+                    className='inline-flex h-9 items-center rounded-md border border-zinc-300 px-3 text-sm text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900'
+                  >
+                    重置健康/熔斷
+                  </button>
+                </div>
+
+                {!!data.sources.tripped?.length && (
+                  <div className='overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800'>
+                    <div className='border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium dark:border-zinc-800 dark:bg-zinc-900'>
+                      熔斷中來源
+                    </div>
+                    <ul className='divide-y divide-zinc-200 text-sm dark:divide-zinc-800'>
+                      {data.sources.tripped.map((item) => (
+                        <li
+                          key={item.key}
+                          className='flex flex-wrap items-center justify-between gap-2 px-4 py-2'
+                        >
+                          <span className='font-mono'>{item.key}</span>
+                          <span className='text-zinc-500'>
+                            連續失敗 {item.consecutiveFailures} · 至{' '}
+                            {formatDate(item.untilISO)}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {!!data.sources.validations?.length && (
+                  <div className='overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800'>
+                    <div className='border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium dark:border-zinc-800 dark:bg-zinc-900'>
+                      最近三級檢測（搜 / 解 / 播）
+                    </div>
+                    <div className='overflow-x-auto'>
+                      <table className='min-w-full text-left text-sm'>
+                        <thead className='bg-zinc-50 text-zinc-500 dark:bg-zinc-900'>
+                          <tr>
+                            <th className='px-4 py-2'>源</th>
+                            <th className='px-4 py-2'>結果</th>
+                            <th className='px-4 py-2'>搜/解/播</th>
+                            <th className='px-4 py-2'>集數</th>
+                            <th className='px-4 py-2'>耗時</th>
+                            <th className='px-4 py-2'>說明</th>
+                          </tr>
+                        </thead>
+                        <tbody className='divide-y divide-zinc-200 dark:divide-zinc-800'>
+                          {data.sources.validations.map((item) => (
+                            <tr key={item.source + String(item.checkedAt)}>
+                              <td className='px-4 py-2 font-mono'>
+                                {item.source}
+                              </td>
+                              <td className='px-4 py-2'>{item.status}</td>
+                              <td className='px-4 py-2'>
+                                {item.levels?.search}/{item.levels?.detail}/
+                                {item.levels?.playable}
+                              </td>
+                              <td className='px-4 py-2'>{item.episodeCount}</td>
+                              <td className='px-4 py-2'>{item.latencyMs}ms</td>
+                              <td className='px-4 py-2 text-zinc-500'>
+                                {item.message}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {!!data.sources.health?.length && (
+                  <div className='overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800'>
+                    <div className='border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium dark:border-zinc-800 dark:bg-zinc-900'>
+                      搜尋延遲統計
+                    </div>
+                    <div className='overflow-x-auto'>
+                      <table className='min-w-full text-left text-sm'>
+                        <thead className='bg-zinc-50 text-zinc-500 dark:bg-zinc-900'>
+                          <tr>
+                            <th className='px-4 py-2'>源</th>
+                            <th className='px-4 py-2'>平均耗時</th>
+                            <th className='px-4 py-2'>樣本</th>
+                            <th className='px-4 py-2'>狀態</th>
+                          </tr>
+                        </thead>
+                        <tbody className='divide-y divide-zinc-200 dark:divide-zinc-800'>
+                          {data.sources.health.map((item) => (
+                            <tr key={item.key}>
+                              <td className='px-4 py-2 font-mono'>
+                                {item.key}
+                              </td>
+                              <td className='px-4 py-2'>{item.averageMs}ms</td>
+                              <td className='px-4 py-2'>{item.samples}</td>
+                              <td className='px-4 py-2'>
+                                {item.disabled ? '暫時降權' : '可用'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         )}
       </main>

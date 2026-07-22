@@ -34,3 +34,46 @@ export async function getVerifiedAuthInfo(
   const verified = await verifyAuthSession(authInfo, subject, secret);
   return verified ? authInfo : null;
 }
+
+export interface ActiveUserContext {
+  username: string;
+  auth: AuthInfo;
+}
+
+/**
+ * 需要登入的使用者 API 統一入口：
+ * 1) HMAC 驗簽（不查 sessionVersion，避免高頻 Redis）
+ * 2) 確認使用者存在且未封禁（站長 USERNAME 直接放行）
+ * 3) localstorage 模式固定 username = 'localstorage'
+ */
+export async function requireActiveUser(
+  request: Request
+): Promise<ActiveUserContext | null> {
+  const auth = await getVerifiedAuthInfo(request);
+  if (!auth) return null;
+
+  const storageType = getServerStorageType();
+  if (storageType === 'localstorage') {
+    return { username: 'localstorage', auth };
+  }
+
+  if (!auth.username) return null;
+
+  if (auth.username === process.env.USERNAME) {
+    return { username: auth.username, auth };
+  }
+
+  const { getConfig } = await import('./config.js');
+  const config = await getConfig();
+  const user = config.UserConfig.Users.find(
+    (entry: { username: string; banned?: boolean }) =>
+      entry.username === auth.username
+  );
+  if (!user || user.banned) return null;
+
+  return { username: auth.username, auth };
+}
+
+export function unauthorizedJson(message = 'Unauthorized', status = 401) {
+  return Response.json({ error: message }, { status });
+}

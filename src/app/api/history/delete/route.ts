@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { requireActiveUser } from '@/lib/api-auth';
 import {
   isValidApiTextParam,
   readJsonObject,
 } from '@/lib/api-input-validation';
-import { getAuthInfoFromCookie } from '@/lib/auth';
 import { storage } from '@/lib/storage';
 import { cleanSourceName, normalizePlayRecordTitle } from '@/lib/string-utils';
 
@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
       );
     }
     const { vod_name, userId } = body;
-    const authInfo = getAuthInfoFromCookie(req);
+    const activeUser = await requireActiveUser(req);
+    if (!activeUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const username = activeUser.username;
 
     if (!vod_name || !isValidApiTextParam(vod_name)) {
       return NextResponse.json(
@@ -50,7 +54,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const mockUserId = authInfo?.username || userId || 'default_user';
+    const mockUserId = username || userId || 'default_user';
     const userHistory =
       (await storage.hgetall(`user:history:${mockUserId}`)) || {};
 

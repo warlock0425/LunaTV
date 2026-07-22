@@ -77,3 +77,35 @@ export function recordSourceSearch(
 export function clearSourceHealthForTests(): void {
   states.clear();
 }
+
+export interface SourceHealthSnapshot {
+  key: string;
+  averageMs: number;
+  samples: number;
+  consecutiveTimeouts: number;
+  disabledUntil: number;
+  disabled: boolean;
+}
+
+export function getSourceHealthSnapshots(
+  now = Date.now()
+): SourceHealthSnapshot[] {
+  return Array.from(states.entries())
+    .map(([key, state]) => ({
+      key,
+      averageMs: state.averageMs,
+      samples: state.samples,
+      consecutiveTimeouts: state.consecutiveTimeouts,
+      disabledUntil: state.disabledUntil,
+      disabled: state.disabledUntil > now,
+    }))
+    .sort((a, b) => b.samples - a.samples || a.averageMs - b.averageMs);
+}
+
+export function resetSourceHealth(sourceKey?: string): void {
+  if (!sourceKey) {
+    states.clear();
+    return;
+  }
+  states.delete(sourceKey);
+}
