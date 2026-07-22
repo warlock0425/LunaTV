@@ -320,3 +320,116 @@ export function formatEpisodeUpdateMessage(
   }
   return null;
 }
+
+/**
+ * 播放中背景刷新專用：可更新集數列表／標題，但：
+ * 1) 絕不縮短已在播的集數列表（上游暫時回較少集時保留 prev）
+ * 2) 固定目前集的 m3u8 URL（避免重建播放器導致音畫/字幕錯位）
+ * 3) 不改變 episode index（呼叫端也不應 setCurrentEpisodeIndex）
+ */
+export function mergeDetailPreservingPlayback(
+  prev: SearchResult | null | undefined,
+  fresh: SearchResult | null | undefined,
+  currentEpisodeIndex: number
+): MergeFreshDetailResult {
+  const previousEpisodeCount = getEpisodeCount(prev);
+  if (!prev?.episodes?.length) {
+    return mergeFreshDetail(prev, fresh, currentEpisodeIndex, {
+      preserveCurrentEpisodeUrl: true,
+    });
+  }
+  if (!fresh?.episodes?.length) {
+    return {
+      applied: false,
+      detail: null,
+      episodeIndex: currentEpisodeIndex,
+      previousEpisodeCount,
+      nextEpisodeCount: previousEpisodeCount,
+      episodeCountIncreased: false,
+      episodeCountChanged: false,
+      currentEpisodeUrlChanged: false,
+      reason: 'empty_fresh',
+    };
+  }
+  if (prev.source !== fresh.source || prev.id !== fresh.id) {
+    return {
+      applied: false,
+      detail: null,
+      episodeIndex: currentEpisodeIndex,
+      previousEpisodeCount,
+      nextEpisodeCount: previousEpisodeCount,
+      episodeCountIncreased: false,
+      episodeCountChanged: false,
+      currentEpisodeUrlChanged: false,
+      reason: 'source_mismatch',
+    };
+  }
+
+  const playingIndex = clampEpisodeIndex(
+    currentEpisodeIndex,
+    previousEpisodeCount
+  );
+  const playingUrl = prev.episodes[playingIndex] || '';
+
+  // 上游暫時回傳更少集數：只更新非播放欄位，集數列表保持 prev
+  let episodes = fresh.episodes.slice();
+  let episodesTitles = Array.isArray(fresh.episodes_titles)
+    ? fresh.episodes_titles.slice()
+    : [];
+
+  if (episodes.length < previousEpisodeCount) {
+    episodes = prev.episodes.slice();
+    episodesTitles = Array.isArray(prev.episodes_titles)
+      ? prev.episodes_titles.slice()
+      : episodesTitles;
+  } else {
+    // 固定正在播的那一集 URL
+    if (playingUrl && playingIndex < episodes.length) {
+      episodes[playingIndex] = playingUrl;
+    }
+    if (
+      Array.isArray(prev.episodes_titles) &&
+      prev.episodes_titles[playingIndex]
+    ) {
+      while (episodesTitles.length <= playingIndex) episodesTitles.push('');
+      episodesTitles[playingIndex] = prev.episodes_titles[playingIndex];
+    }
+  }
+
+  const detail: SearchResult = {
+    ...fresh,
+    episodes,
+    episodes_titles: episodesTitles,
+  };
+
+  const nextEpisodeCount = detail.episodes.length;
+  const unchangedPlayingUrl =
+    getEpisodeUrl(detail, playingIndex) === playingUrl || !playingUrl;
+
+  // 播放中 URL 必須不變，否則拒絕套用（避免 hls 重建）
+  if (playingUrl && !unchangedPlayingUrl) {
+    return {
+      applied: false,
+      detail: null,
+      episodeIndex: playingIndex,
+      previousEpisodeCount,
+      nextEpisodeCount: previousEpisodeCount,
+      episodeCountIncreased: false,
+      episodeCountChanged: false,
+      currentEpisodeUrlChanged: true,
+      reason: 'empty_fresh',
+    };
+  }
+
+  return {
+    applied: true,
+    detail,
+    episodeIndex: playingIndex, // 鎖定索引
+    previousEpisodeCount,
+    nextEpisodeCount,
+    episodeCountIncreased: nextEpisodeCount > previousEpisodeCount,
+    episodeCountChanged: nextEpisodeCount !== previousEpisodeCount,
+    currentEpisodeUrlChanged: false,
+    reason: 'applied',
+  };
+}

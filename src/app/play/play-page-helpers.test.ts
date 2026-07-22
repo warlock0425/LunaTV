@@ -5,6 +5,7 @@ import {
   formatEpisodeUpdateMessage,
   getEpisodeCount,
   getEpisodeUrl,
+  mergeDetailPreservingPlayback,
   mergeFreshDetail,
   resolveEpisodeIndexAfterRefresh,
 } from './play-page-helpers';
@@ -159,5 +160,31 @@ describe('play page detail merge helpers', () => {
     expect(formatEpisodeUpdateMessage(12, 13)).toBe('已更新至第 13 集');
     expect(formatEpisodeUpdateMessage(12, 12)).toBeNull();
     expect(formatEpisodeUpdateMessage(12, 10)).toBeNull();
+  });
+
+  it('preserves playing url and index when background detail grows', () => {
+    const prev = makeDetail({
+      episodes: ['u1', 'u2-playing'],
+      episodes_titles: ['1', '2'],
+    });
+    const fresh = makeDetail({
+      episodes: ['u1b', 'u2-new', 'u3'],
+      episodes_titles: ['1', '2', '3'],
+    });
+    const merged = mergeDetailPreservingPlayback(prev, fresh, 1);
+    expect(merged.applied).toBe(true);
+    expect(merged.episodeIndex).toBe(1);
+    expect(merged.detail?.episodes[1]).toBe('u2-playing');
+    expect(merged.detail?.episodes).toHaveLength(3);
+    expect(merged.currentEpisodeUrlChanged).toBe(false);
+  });
+
+  it('does not shrink episode list during playback when upstream returns fewer', () => {
+    const prev = makeDetail({ episodes: ['a', 'b', 'c'] });
+    const fresh = makeDetail({ episodes: ['a2'] });
+    const merged = mergeDetailPreservingPlayback(prev, fresh, 2);
+    expect(merged.applied).toBe(true);
+    expect(merged.detail?.episodes).toEqual(['a', 'b', 'c']);
+    expect(merged.episodeIndex).toBe(2);
   });
 });

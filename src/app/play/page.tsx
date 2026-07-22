@@ -52,6 +52,7 @@ import {
   formatEpisodeUpdateMessage,
   getCachedDetail,
   getClientStorageType,
+  mergeDetailPreservingPlayback,
   mergeFreshDetail,
   migrateDetailCache,
   setCachedDetail,
@@ -815,30 +816,27 @@ function PlayPageClient() {
             );
             if (!active || freshDetailList.length === 0) return base;
             const freshDetail = freshDetailList[0];
-            // 以 pure merge 套用，保留目前集 URL，避免簽章輪替打斷播放
+            // 播放中背景刷新：可增加集數，但絕不改正在播的 URL/集數索引
+            // （否則會重建 HLS，可能造成音畫或字幕錯位）
             const previousIndex = currentEpisodeIndexRef.current;
-            const merged = mergeFreshDetail(
+            const merged = mergeDetailPreservingPlayback(
               detailRef.current || base,
               freshDetail,
-              previousIndex,
-              { preserveCurrentEpisodeUrl: true }
+              previousIndex
             );
             if (!merged.applied || !merged.detail) return base;
             if (!active) return base;
 
             setCachedDetail(base.source, base.id, merged.detail);
             setDetail((prevDetail) => {
-              const again = mergeFreshDetail(
+              const again = mergeDetailPreservingPlayback(
                 prevDetail || base,
                 freshDetail,
-                currentEpisodeIndexRef.current,
-                { preserveCurrentEpisodeUrl: true }
+                currentEpisodeIndexRef.current
               );
               return again.applied && again.detail ? again.detail : prevDetail;
             });
-            if (merged.episodeIndex !== previousIndex) {
-              setCurrentEpisodeIndex(merged.episodeIndex);
-            }
+            // 背景路徑刻意不 setCurrentEpisodeIndex
             if (merged.episodeCountIncreased) {
               const message = formatEpisodeUpdateMessage(
                 merged.previousEpisodeCount,
@@ -1185,27 +1183,27 @@ function PlayPageClient() {
             return;
           }
           const previousIndex = currentEpisodeIndexRef.current;
-          const merged = mergeFreshDetail(
+          const merged = mergeDetailPreservingPlayback(
             detailRef.current,
             freshDetail,
-            previousIndex,
-            { preserveCurrentEpisodeUrl: true }
+            previousIndex
           );
           if (!merged.applied || !merged.detail) return;
           setCachedDetail(newSource, newId, merged.detail);
           setDetail((prevDetail) => {
-            const again = mergeFreshDetail(
+            const again = mergeDetailPreservingPlayback(
               prevDetail,
               freshDetail,
-              currentEpisodeIndexRef.current,
-              { preserveCurrentEpisodeUrl: true }
+              currentEpisodeIndexRef.current
             );
             return again.applied && again.detail ? again.detail : prevDetail;
           });
-          // 若新詳情集數比搜尋結果少導致當前集越界，校正到最後一集，
-          // 避免 updateVideoUrl 因越界而清空播放源、造成播放中斷
-          if (merged.episodeIndex !== previousIndex) {
-            setCurrentEpisodeIndex(merged.episodeIndex);
+          // 換源後背景刷新同樣不強制改集數索引；僅在確實越界時校正
+          if (
+            currentEpisodeIndexRef.current >= merged.nextEpisodeCount &&
+            merged.nextEpisodeCount > 0
+          ) {
+            setCurrentEpisodeIndex(merged.nextEpisodeCount - 1);
           }
           if (merged.episodeCountIncreased) {
             const message = formatEpisodeUpdateMessage(
