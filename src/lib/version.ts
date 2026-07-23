@@ -6,6 +6,13 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.6.5',
+    date: '2026-07-23',
+    content: `
+- 修正追更時若片源暫時回傳較少集數，會縮短選集列表並跳集的問題；改為視為無更新，與背景刷新的保護一致。
+    `.trim(),
+  },
+  {
     version: 'v2.6.4',
     date: '2026-07-22',
     content: `
