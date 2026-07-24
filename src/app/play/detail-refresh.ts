@@ -64,6 +64,22 @@ export function planApplyFreshDetail(
     };
   }
 
+  // 追更的語意是「找新增的集」。若合併後集數反而變少（片源暫時抽風回傳較短
+  // 清單），視為無更新——不縮短清單、不 clamp 跳集，交由下次背景刷新處理。
+  // 背景刷新路徑已用 mergeDetailPreservingPlayback 做同樣保護，這裡對齊行為。
+  if (
+    merged.previousEpisodeCount > 0 &&
+    merged.nextEpisodeCount < merged.previousEpisodeCount
+  ) {
+    return {
+      applied: false,
+      episodeCountIncreased: false,
+      nextEpisodeCount: merged.previousEpisodeCount,
+      episodeIndex: previousIndex,
+      growthMessage: null,
+    };
+  }
+
   const nextIndex = resolveEpisodeIndexAfterRefresh({
     previousIndex,
     previousEpisodeCount: merged.previousEpisodeCount,

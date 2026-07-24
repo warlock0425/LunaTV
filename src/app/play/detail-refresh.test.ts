@@ -61,6 +61,20 @@ describe('detail-refresh planners', () => {
     expect(plan.episodeIndex).toBe(0);
     expect(plan.growthMessage).toBeNull();
   });
+
+  // 片源抽風回傳更少集時，追更不得縮短清單或 clamp 跳集
+  it('treats a shorter fresh list as no update instead of shrinking', () => {
+    const prev = makeDetail({ episodes: ['a', 'b', 'c', 'd'] });
+    const fresh = makeDetail({ episodes: ['a', 'b'] });
+    const plan = planApplyFreshDetail(prev, fresh, 3, undefined, {
+      preferAdvanceOnGrowth: true,
+      notifyOnGrowth: true,
+    });
+    expect(plan.applied).toBe(false);
+    // 回報的集數維持舊值，呼叫端據此判定「無更新」，不動當前集
+    expect(plan.nextEpisodeCount).toBe(4);
+    expect(plan.episodeIndex).toBe(3);
+  });
 });
 
 describe('fetchFreshDetailFromApi', () => {
