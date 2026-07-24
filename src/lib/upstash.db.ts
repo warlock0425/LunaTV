@@ -6,6 +6,7 @@ import { AdminConfig } from './admin.types';
 import type { BangumiAliasCacheEntry } from './bangumi-alias-storage';
 import { hashPassword, isHashed, verifyPassword } from './password';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
+import { reconcileUserIndex } from './user-index';
 
 // 搜索歷史最大條數
 const SEARCH_HISTORY_LIMIT = 20;
@@ -311,10 +312,24 @@ export class UpstashRedisStorage implements IStorage {
   }
 
   async getAllUsers(): Promise<string[]> {
-    const members = await withRetry(() =>
-      this.client.smembers(this.usersSetKey())
+    // 與 redis-base 同步：密碼鍵為真相、索引自癒。Upstash 客戶端方法為小寫
+    // （smembers/sadd），備份匯入的 sAdd 探測在此後端會靜默失敗，更需要自癒。
+    const [members, pwdKeys] = await Promise.all([
+      withRetry(() => this.client.smembers(this.usersSetKey())),
+      withRetry(() => this.client.keys('u:*:pwd')),
+    ]);
+    const { users, missing } = reconcileUserIndex(
+      ensureStringArray(members as any[]),
+      ensureStringArray(pwdKeys as any[])
     );
-    return ensureStringArray(members as any[]);
+    if (missing.length > 0) {
+      // sadd 簽名要求至少一個固定成員引數，拆出首元素再展開其餘
+      const [first, ...rest] = missing;
+      await withRetry(() =>
+        this.client.sadd(this.usersSetKey(), first, ...rest)
+      );
+    }
+    return users;
   }
 
   // ---------- 管理员設定 ----------

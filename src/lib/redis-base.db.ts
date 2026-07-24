@@ -6,6 +6,7 @@ import { AdminConfig } from './admin.types';
 import type { BangumiAliasCacheEntry } from './bangumi-alias-storage';
 import { hashPassword, isHashed, verifyPassword } from './password';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
+import { reconcileUserIndex } from './user-index';
 
 // 搜索歷史最大條數
 const SEARCH_HISTORY_LIMIT = 20;
@@ -430,10 +431,21 @@ export abstract class BaseRedisStorage implements IStorage {
   }
 
   async getAllUsers(): Promise<string[]> {
-    const members = await this.withRetry(() =>
-      this.client.sMembers(this.usersSetKey())
+    // 對齊上游語意：密碼鍵（u:*:pwd）是名冊的最終真相，sys:users 只是快取。
+    // 索引有多條漏登記路徑（一次性遷移旗標鎖死、備份匯入繞過 sAdd 等），
+    // 漏掉的帳號能登入但會被 cron 集數更新永遠略過，故讀取時比對自癒。
+    const [members, pwdKeys] = await Promise.all([
+      this.withRetry(() => this.client.sMembers(this.usersSetKey())),
+      this.withRetry(() => this.client.keys('u:*:pwd')),
+    ]);
+    const { users, missing } = reconcileUserIndex(
+      ensureStringArray(members as any[]),
+      ensureStringArray(pwdKeys as any[])
     );
-    return ensureStringArray(members as any[]);
+    if (missing.length > 0) {
+      await this.withRetry(() => this.client.sAdd(this.usersSetKey(), missing));
+    }
+    return users;
   }
 
   // ---------- 管理员設定 ----------
