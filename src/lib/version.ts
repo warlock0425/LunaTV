@@ -6,6 +6,13 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.6.6',
+    date: '2026-07-24',
+    content: `
+- 修正部分帳號（如管理員）集數永不更新：使用者名冊改以密碼鍵為最終真相並自動修復索引，對齊上游「能登入就會被更新」的行為。部署後首次 cron 自動生效。
+    `.trim(),
+  },
+  {
     version: 'v2.6.5',
     date: '2026-07-23',
     content: `
