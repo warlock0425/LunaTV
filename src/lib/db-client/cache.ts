@@ -1,4 +1,4 @@
-/* eslint-disable no-console, @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { Favorite, PlayRecord } from './shared';
@@ -27,6 +27,20 @@ const CACHE_EXPIRE_TIME = 60 * 60 * 1000; // 一小時快取過期
 // ---- 快取管理器 ----
 class HybridCacheManager {
   private static instance: HybridCacheManager;
+
+  /**
+   * 已解析快取的記憶體備份。
+   *
+   * 播放期間每 5 秒存一次播放紀錄，每次存檔會多次讀寫快取；若每次都對整份
+   * blob（所有播放紀錄＋收藏＋搜尋歷史＋跳過設定）做 JSON.parse，會在主執行緒
+   * 造成可感知的卡頓。這裡以 localStorage 原始字串為鍵記憶解析結果：字串沒變就
+   * 直接重用，字串一變（含其他分頁寫入）就自動失效重新解析，兼顧效能與正確性。
+   */
+  private memo: {
+    cacheKey: string;
+    raw: string;
+    store: UserCacheStore;
+  } | null = null;
 
   static getInstance(): HybridCacheManager {
     if (!HybridCacheManager.instance) {
@@ -59,9 +73,22 @@ class HybridCacheManager {
     try {
       const cacheKey = this.getUserCacheKey(username);
       const cached = localStorage.getItem(cacheKey);
-      return cached ? JSON.parse(cached) : {};
+      if (!cached) {
+        this.memo = null;
+        return {};
+      }
+
+      // 原始字串未變 ⇒ 重用上次的解析結果，省下整份 blob 的 JSON.parse
+      if (this.memo?.cacheKey === cacheKey && this.memo.raw === cached) {
+        return this.memo.store;
+      }
+
+      const store = JSON.parse(cached) as UserCacheStore;
+      this.memo = { cacheKey, raw: cached, store };
+      return store;
     } catch (error) {
       console.warn('取得使用者快取失敗:', error);
+      this.memo = null;
       return {};
     }
   }
@@ -73,17 +100,21 @@ class HybridCacheManager {
     if (typeof window === 'undefined') return;
 
     try {
-      // 檢查快取大小，超過15MB時清理旧數據
-      const cacheSize = JSON.stringify(cache).length;
-      if (cacheSize > 15 * 1024 * 1024) {
+      // 只序列化一次：序列化結果同時用於大小檢查與寫入。
+      // 僅在真的觸發清理（會就地改動 cache）時才需要重新序列化。
+      let serialized = JSON.stringify(cache);
+      if (serialized.length > 15 * 1024 * 1024) {
         console.warn('快取過大，清理旧數據');
         this.cleanOldCache(cache);
+        serialized = JSON.stringify(cache);
       }
 
       const cacheKey = this.getUserCacheKey(username);
-      localStorage.setItem(cacheKey, JSON.stringify(cache));
+      localStorage.setItem(cacheKey, serialized);
+      this.memo = { cacheKey, raw: serialized, store: cache };
     } catch (error) {
       console.warn('儲存使用者快取失敗:', error);
+      this.memo = null;
       // 存儲空間不足時清理快取后重試
       if (
         error instanceof DOMException &&
@@ -92,7 +123,9 @@ class HybridCacheManager {
         this.clearAllCache();
         try {
           const cacheKey = this.getUserCacheKey(username);
-          localStorage.setItem(cacheKey, JSON.stringify(cache));
+          const retrySerialized = JSON.stringify(cache);
+          localStorage.setItem(cacheKey, retrySerialized);
+          this.memo = { cacheKey, raw: retrySerialized, store: cache };
         } catch (retryError) {
           console.error('重試儲存快取仍然失敗:', retryError);
         }
@@ -128,6 +161,7 @@ class HybridCacheManager {
         localStorage.removeItem(key);
       }
     });
+    this.memo = null;
   }
 
   /**
@@ -278,8 +312,10 @@ class HybridCacheManager {
     try {
       const cacheKey = this.getUserCacheKey(targetUsername);
       localStorage.removeItem(cacheKey);
+      this.memo = null;
     } catch (error) {
       console.warn('清除使用者快取失敗:', error);
+      this.memo = null;
     }
   }
 
@@ -316,8 +352,10 @@ class HybridCacheManager {
       }
 
       keysToRemove.forEach((key) => localStorage.removeItem(key));
+      if (keysToRemove.length > 0) this.memo = null;
     } catch (error) {
       console.warn('清除過期快取失敗:', error);
+      this.memo = null;
     }
   }
 }

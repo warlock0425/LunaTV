@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client';
 
 import {
@@ -11,6 +10,7 @@ import { cacheManager } from './cache';
 import {
   Favorite,
   FAVORITES_KEY,
+  isSameCachedData,
   STORAGE_TYPE,
   triggerGlobalError,
 } from './shared';
@@ -36,7 +36,7 @@ export async function getAllFavorites(): Promise<Record<string, Favorite>> {
       fetchFromApi<Record<string, Favorite>>(`/api/favorites`)
         .then((freshData) => {
           // 只有數據真正不同時才更新快取
-          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+          if (!isSameCachedData(cachedData, freshData)) {
             cacheManager.cacheFavorites(freshData);
             // 触發數據更新事件
             window.dispatchEvent(
@@ -235,7 +235,7 @@ export async function isFavorited(
       fetchFromApi<Record<string, Favorite>>(`/api/favorites`)
         .then((freshData) => {
           // 只有數據真正不同時才更新快取
-          if (JSON.stringify(cachedFavorites) !== JSON.stringify(freshData)) {
+          if (!isSameCachedData(cachedFavorites, freshData)) {
             cacheManager.cacheFavorites(freshData);
             // 触發數據更新事件
             window.dispatchEvent(

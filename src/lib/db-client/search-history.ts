@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client';
 
 import {
@@ -8,6 +7,7 @@ import {
 } from './api';
 import { cacheManager } from './cache';
 import {
+  isSameCachedData,
   SEARCH_HISTORY_KEY,
   SEARCH_HISTORY_LIMIT,
   STORAGE_TYPE,
@@ -29,7 +29,7 @@ export async function getSearchHistory(): Promise<string[]> {
       fetchFromApi<string[]>(`/api/searchhistory`)
         .then((freshData) => {
           // 只有數據真正不同時才更新快取
-          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+          if (!isSameCachedData(cachedData, freshData)) {
             cacheManager.cacheSearchHistory(freshData);
             // 触發數據更新事件
             window.dispatchEvent(

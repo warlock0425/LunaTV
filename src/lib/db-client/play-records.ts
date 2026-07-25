@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client';
 
 import {
@@ -10,6 +9,7 @@ import {
 import { cacheManager } from './cache';
 import {
   getPlayRecordKeysToDelete,
+  isSameCachedData,
   PLAY_RECORDS_KEY,
   PlayRecord,
   STORAGE_TYPE,
@@ -38,7 +38,7 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
       fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`)
         .then((freshData) => {
           // 只有數據真正不同時才更新快取
-          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+          if (!isSameCachedData(cachedData, freshData)) {
             cacheManager.cachePlayRecords(freshData);
             // 触發數據更新事件，供組件監听
             window.dispatchEvent(

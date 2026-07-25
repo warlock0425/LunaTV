@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 'use client';
 
 import {
@@ -8,7 +7,7 @@ import {
   handleDatabaseOperationFailure,
 } from './api';
 import { cacheManager } from './cache';
-import { STORAGE_TYPE, triggerGlobalError } from './shared';
+import { isSameCachedData, STORAGE_TYPE, triggerGlobalError } from './shared';
 import { SkipConfig } from '../types';
 // ------------- 跳過片头片尾設定相關 API -------------
 
@@ -37,7 +36,7 @@ export async function getSkipConfig(
       fetchFromApi<Record<string, SkipConfig>>(`/api/skipconfigs`)
         .then((freshData) => {
           // 只有數據真正不同時才更新快取
-          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+          if (!isSameCachedData(cachedData, freshData)) {
             cacheManager.cacheSkipConfigs(freshData);
             // 触發數據更新事件
             window.dispatchEvent(
@@ -175,7 +174,7 @@ export async function getAllSkipConfigs(): Promise<Record<string, SkipConfig>> {
       fetchFromApi<Record<string, SkipConfig>>(`/api/skipconfigs`)
         .then((freshData) => {
           // 只有數據真正不同時才更新快取
-          if (JSON.stringify(cachedData) !== JSON.stringify(freshData)) {
+          if (!isSameCachedData(cachedData, freshData)) {
             cacheManager.cacheSkipConfigs(freshData);
             // 触發數據更新事件
             window.dispatchEvent(
