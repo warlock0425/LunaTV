@@ -182,7 +182,6 @@ export async function GET(request: NextRequest) {
       headers: { 'Cache-Control': 'no-store' },
     });
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.error('取得播放統計失敗:', err);
     return NextResponse.json({ error: '取得播放統計失敗' }, { status: 500 });
   }

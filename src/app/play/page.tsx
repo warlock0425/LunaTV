@@ -323,8 +323,6 @@ function PlayPageClient() {
     'initing' | 'sourceChanging'
   >('initing');
 
-  // 播放進度儲存相關
-  const saveIntervalRef = useRef<NodeJS.Timeout | null>(null);
   // 用於追蹤初始化 loading setTimeout，元件卸載時清理
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1364,19 +1362,10 @@ function PlayPageClient() {
     }
   );
 
-  useEffect(() => {
-    return () => {
-      if (saveIntervalRef.current) {
-        clearInterval(saveIntervalRef.current);
-      }
-    };
-  }, []);
-
   // 收藏邏輯已抽離到 useFavorite hook（見上方 state 宣告區）
 
   // 播放器建立 effect：頂部參數驗證與初始化失敗的同步 setError 為刻意的
   // 錯誤信號路徑，其餘 setState 皆在播放器事件回呼（非同步）中
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (
       !Artplayer ||
@@ -1396,6 +1385,9 @@ function PlayPageClient() {
       currentEpisodeIndex >= detail.episodes.length ||
       currentEpisodeIndex < 0
     ) {
+      // 播放器錯誤信號：effect 內偵測到無效選集時必須立即中止初始化並回報，
+      // 無法改以 render 期推導（錯誤來自播放器生命週期而非 props）。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError(`選集索引無效，當前共 ${totalEpisodes} 集`);
       return;
     }
@@ -1944,7 +1936,6 @@ function PlayPageClient() {
       setError('播放器初始化失敗');
     }
   }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // 當組件解除安裝時清理定時器、Wake Lock 和播放器資源
   useEffect(() => {
@@ -1960,10 +1951,6 @@ function PlayPageClient() {
 
       if (pipKeyHandlerRef.current) {
         document.removeEventListener('keydown', pipKeyHandlerRef.current);
-      }
-
-      if (saveIntervalRef.current) {
-        clearInterval(saveIntervalRef.current);
       }
 
       releaseWakeLock();

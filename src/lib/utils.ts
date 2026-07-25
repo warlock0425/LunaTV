@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import he from 'he';
 import type { ErrorData, Events, FragLoadedData } from 'hls.js';
 

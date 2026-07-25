@@ -76,7 +76,3 @@ export async function requireActiveUser(
 
   return { username: auth.username, auth };
 }
-
-export function unauthorizedJson(message = 'Unauthorized', status = 401) {
-  return Response.json({ error: message }, { status });
-}

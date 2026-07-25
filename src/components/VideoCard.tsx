@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any,react-hooks/exhaustive-deps,no-console */
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/exhaustive-deps */
 
 import {
   ExternalLink,

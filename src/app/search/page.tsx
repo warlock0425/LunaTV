@@ -488,7 +488,6 @@ function SearchPageClient() {
 
   // URL 查詢參數變化驅動的搜尋協調：同步重置載入狀態並啟動
   // EventSource/fetch，屬 URL→狀態同步的協調器，同步 setState 為刻意設計
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const query = searchParams.get('q') || '';
     currentQueryRef.current = query.trim();
@@ -497,6 +496,9 @@ function SearchPageClient() {
       addSearchHistory(query);
       searchAbortRef.current?.abort();
       searchAbortRef.current = null;
+      // URL→狀態協調器：q 參數變動時需同步重置整組搜尋狀態後才能啟動串流，
+      // 屬本檔頂部註解所述的刻意設計。
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearchQuery(query);
       if (eventSourceRef.current) {
         try {
@@ -709,7 +711,6 @@ function SearchPageClient() {
       setShowSuggestions(false);
     }
   }, [searchParams]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
     return () => {

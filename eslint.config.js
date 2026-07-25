@@ -41,7 +41,10 @@ module.exports = [
     },
     rules: {
       'no-unused-vars': 'off',
-      'no-console': 'warn',
+      // console.error/warn 是自架部署的重要診斷輸出，明確放行；
+      // 僅攔截 console.log/debug，避免除錯訊息汙染 production 日誌。
+      // （放行前全專案 50 個檔案整檔停用本規則，等同完全失效。）
+      'no-console': ['warn', { allow: ['warn', 'error'] }],
 
       // eslint-plugin-react-hooks v7 的 React Compiler 前置規則。
       // 2026-07 已全面重構啟用：prop 同步改為 render 期調整狀態、

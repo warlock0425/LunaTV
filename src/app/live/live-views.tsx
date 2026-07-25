@@ -98,51 +98,6 @@ export function LiveLoadingView({
   );
 }
 
-/** 直播頁錯誤畫面 */
-export function LiveErrorView({ error }: { error: string }) {
-  return (
-    <PageLayout activePath='/live'>
-      <div className='flex items-center justify-center min-h-screen bg-transparent'>
-        <div className='text-center max-w-md mx-auto px-6'>
-          {/* 錯誤圖標 */}
-          <div className='relative mb-8'>
-            <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
-              <div className='text-white text-4xl'>😵</div>
-              {/* 脈衝效果 */}
-              <div className='absolute -inset-2 bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl opacity-20 animate-pulse'></div>
-            </div>
-          </div>
-
-          {/* 錯誤資訊 */}
-          <div className='space-y-4 mb-8'>
-            <h2 className='text-2xl font-bold text-zinc-800 dark:text-zinc-200'>
-              哎呀，出現了一些問題
-            </h2>
-            <div className='bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4'>
-              <p className='text-red-600 dark:text-red-400 font-medium'>
-                {error}
-              </p>
-            </div>
-            <p className='text-sm text-zinc-500 dark:text-zinc-400'>
-              請檢查網路連接或嘗試重新整理頁面
-            </p>
-          </div>
-
-          {/* 操作按鈕 */}
-          <div className='space-y-3'>
-            <button
-              onClick={() => window.location.reload()}
-              className='w-full px-6 py-3 bg-gradient-to-r from-accent to-[#cc3256] text-white rounded-xl font-medium hover:from-[#cc3256] hover:to-[#8a0510] transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl'
-            >
-              🔄 重新嘗試
-            </button>
-          </div>
-        </div>
-      </div>
-    </PageLayout>
-  );
-}
-
 /** 不支援的直播流類型提示蒙層 */
 export function UnsupportedTypeOverlay({ type }: { type: string }) {
   return (

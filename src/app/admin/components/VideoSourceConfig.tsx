@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, no-console */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   closestCenter,
   DndContext,
@@ -29,6 +29,7 @@ import React, {
 import { createPortal } from 'react-dom';
 
 import { AdminConfig } from '@/lib/admin.types';
+import { logger } from '@/lib/logger';
 
 import { AlertModal, showError, useAlertModal } from './AlertModal';
 import { buttonStyles } from './buttonStyles';
@@ -298,7 +299,7 @@ export const VideoSourceConfig = ({
 
             switch (data.type) {
               case 'start':
-                console.log(`開始檢測 ${data.totalSources} 個影片源`);
+                logger.debug(`開始檢測 ${data.totalSources} 個影片源`);
                 break;
 
               case 'source_result':
@@ -382,7 +383,7 @@ export const VideoSourceConfig = ({
                 break;
 
               case 'complete':
-                console.log(
+                logger.debug(
                   `檢測完成，共檢測 ${data.completedSources} 個影片源`
                 );
                 eventSource.close();

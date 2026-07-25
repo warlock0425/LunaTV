@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { requireActiveUser } from '@/lib/api-auth';
@@ -11,6 +9,7 @@ import {
 } from '@/lib/concurrency';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
+import { logger } from '@/lib/logger';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
 import { orderSourcesByValidation } from '@/lib/source-validation';
@@ -82,7 +81,7 @@ export async function GET(request: NextRequest) {
           controller.enqueue(data);
           return true;
         } catch (error) {
-          console.warn('Failed to enqueue data:', error);
+          logger.warn('Failed to enqueue data:', error);
           streamClosed = true;
           searchAbortController.abort();
           return false;
@@ -110,7 +109,7 @@ export async function GET(request: NextRequest) {
           try {
             controller.close();
           } catch (error) {
-            console.warn('Failed to close controller:', error);
+            logger.warn('Failed to close controller:', error);
           }
         }
       };
@@ -182,7 +181,7 @@ export async function GET(request: NextRequest) {
               allResults.push(...filteredResults);
             }
           } catch (error) {
-            console.warn(`搜尋失敗 ${site.name}:`, error);
+            logger.warn(`搜尋失敗 ${site.name}:`, error);
 
             if (!streamClosed) {
               const errorEvent = `data: ${JSON.stringify({
@@ -210,7 +209,7 @@ export async function GET(request: NextRequest) {
       streamClosed = true;
       searchAbortController.abort();
       request.signal.removeEventListener('abort', abortFromRequest);
-      console.log('Client disconnected, cancelling search stream');
+      logger.debug('Client disconnected, cancelling search stream');
     },
   });
 

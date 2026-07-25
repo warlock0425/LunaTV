@@ -1,4 +1,4 @@
-/* eslint-disable no-console,@typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -13,6 +13,7 @@ import { markCronCompleted, markCronStarted } from '@/lib/cron-health';
 import { db } from '@/lib/db';
 import { fetchVideoDetail } from '@/lib/fetchVideoDetail';
 import { refreshLiveChannels } from '@/lib/live';
+import { logger } from '@/lib/logger';
 import { parseStorageKey } from '@/lib/storage-key';
 import { SearchResult } from '@/lib/types';
 
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   try {
-    console.info('Cron job triggered:', new Date().toISOString());
+    logger.info('Cron job triggered:', new Date().toISOString());
 
     const waitForCompletion =
       request.nextUrl.searchParams.get('wait') === 'true';
@@ -222,7 +223,7 @@ async function refreshConfig() {
       console.error('重新整理設定失敗:', e);
     }
   } else {
-    console.info('跳過重新整理：未設定訂閱地址或自動更新');
+    logger.info('跳過重新整理：未設定訂閱地址或自動更新');
   }
 }
 
@@ -296,7 +297,7 @@ async function refreshRecordAndFavorites(deadline: number) {
     const processUser = async (user: string) => {
       if (shouldStopCron(deadline, `user ${user}`)) return;
 
-      console.info(`開始處理使用者: ${user}`);
+      logger.info(`開始處理使用者: ${user}`);
 
       // 播放紀錄
       try {
@@ -336,7 +337,7 @@ async function refreshRecordAndFavorites(deadline: number) {
                 save_time: record.save_time,
                 search_title: record.search_title,
               });
-              console.info(
+              logger.info(
                 `更新播放記錄: ${record.title} (${record.total_episodes} -> ${episodeCount})`
               );
             }
@@ -348,7 +349,7 @@ async function refreshRecordAndFavorites(deadline: number) {
         });
 
         await runWithConcurrency(tasks, 2); // 限制並發數為 2，降低 1C1G CPU 負載
-        console.info(`播放記錄處理完成: ${processedRecords}/${totalRecords}`);
+        logger.info(`播放記錄處理完成: ${processedRecords}/${totalRecords}`);
       } catch (err) {
         console.error(`取得使用者播放記錄失敗 (${user}):`, err);
       }
@@ -391,7 +392,7 @@ async function refreshRecordAndFavorites(deadline: number) {
                 save_time: fav.save_time,
                 search_title: fav.search_title,
               });
-              console.info(
+              logger.info(
                 `更新收藏: ${fav.title} (${fav.total_episodes} -> ${favEpisodeCount})`
               );
             }
@@ -403,7 +404,7 @@ async function refreshRecordAndFavorites(deadline: number) {
         });
 
         await runWithConcurrency(tasks, 2); // 限制並發數為 2，降低 1C1G CPU 負載
-        console.info(`收藏處理完成: ${processedFavorites}/${totalFavorites}`);
+        logger.info(`收藏處理完成: ${processedFavorites}/${totalFavorites}`);
       } catch (err) {
         console.error(`取得使用者收藏失敗 (${user}):`, err);
       }
@@ -413,7 +414,7 @@ async function refreshRecordAndFavorites(deadline: number) {
     const userTasks = users.map((user) => () => processUser(user));
     await runWithConcurrency(userTasks, 1);
 
-    console.info('重新整理播放紀錄/收藏任務完成');
+    logger.info('重新整理播放紀錄/收藏任務完成');
   } catch (err) {
     console.error('重新整理播放紀錄/收藏任務啟動失敗', err);
   }

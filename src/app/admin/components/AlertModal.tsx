@@ -1,7 +1,8 @@
-/* eslint-disable no-console */
 import { AlertCircle, AlertTriangle, CheckCircle } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+
+import { logger } from '@/lib/logger';
 
 import { buttonStyles } from './buttonStyles';
 import { AlertModalState } from './types';
@@ -164,6 +165,6 @@ export const showSuccess = (
   if (showAlert) {
     showAlert({ type: 'success', title: '成功', message, timer: 2000 });
   } else {
-    console.log(message);
+    logger.debug(message);
   }
 };
