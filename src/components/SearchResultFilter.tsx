@@ -193,7 +193,7 @@ const SearchResultFilter: React.FC<SearchResultFilterProps> = ({
                     : 'text-accent cursor-default'
                   : isDefaultValue(category.key)
                     ? 'text-zinc-400 hover:text-zinc-100 cursor-pointer'
-                    : 'text-accent hover:text-[#cc3256] cursor-pointer'
+                    : 'text-accent hover:text-accent-deep cursor-pointer'
               }`}
             >
               <span>{getDisplayText(category.key)}</span>
@@ -239,7 +239,7 @@ const SearchResultFilter: React.FC<SearchResultFilterProps> = ({
             className={`relative z-10 px-1.5 py-0.5 sm:px-2 sm:py-1 md:px-4 md:py-2 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
               mergedValues.yearOrder === 'none'
                 ? 'text-zinc-400 hover:text-zinc-100 cursor-pointer'
-                : 'text-accent hover:text-[#cc3256] cursor-pointer'
+                : 'text-accent hover:text-accent-deep cursor-pointer'
             }`}
             aria-label={`按年份${
               mergedValues.yearOrder === 'none'
@@ -249,7 +249,9 @@ const SearchResultFilter: React.FC<SearchResultFilterProps> = ({
                   : '升序'
             }排序`}
           >
-            <span>年份</span>
+            {/* 標為「年份排序」以與左側的「年份」篩選下拉區分，
+                否則同一列會出現兩個「年份」而分不清哪個是篩選、哪個是排序 */}
+            <span>年份排序</span>
             {mergedValues.yearOrder === 'none' ? (
               <ArrowUpDown className='inline-block ml-1 w-4 h-4 sm:w-4 sm:h-4' />
             ) : mergedValues.yearOrder === 'desc' ? (

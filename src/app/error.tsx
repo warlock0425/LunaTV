@@ -10,7 +10,7 @@ export default function AppError({
   reset: () => void;
 }) {
   return (
-    <main className='flex min-h-screen items-center justify-center bg-zinc-50 p-6 text-zinc-900 dark:bg-[#0b0b0f] dark:text-zinc-100'>
+    <main className='flex min-h-screen items-center justify-center bg-zinc-50 p-6 text-zinc-900 dark:bg-deep dark:text-zinc-100'>
       <section className='w-full max-w-md text-center'>
         <h1 className='text-2xl font-semibold'>頁面暫時無法顯示</h1>
         <p className='mt-3 text-sm text-zinc-600 dark:text-zinc-400'>

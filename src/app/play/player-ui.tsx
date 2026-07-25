@@ -78,7 +78,7 @@ export function AutoNextCountdownOverlay({
         <div className='flex gap-3 justify-center'>
           <button
             onClick={onPlayNow}
-            className='px-5 py-2.5 bg-accent hover:bg-[#cc3256] text-white font-medium rounded-xl transition-colors text-sm'
+            className='px-5 py-2.5 bg-accent hover:bg-accent-deep text-white font-medium rounded-xl transition-colors text-sm'
           >
             立即播放
           </button>
@@ -127,7 +127,7 @@ export function ShortcutsHelpPanel({ onClose }: { onClose: () => void }) {
         </div>
         <button
           onClick={onClose}
-          className='w-full mt-5 py-2.5 bg-accent hover:bg-[#cc3256] text-white font-medium rounded-xl transition-colors text-sm'
+          className='w-full mt-5 py-2.5 bg-accent hover:bg-accent-deep text-white font-medium rounded-xl transition-colors text-sm'
         >
           關閉
         </button>
@@ -282,7 +282,7 @@ export function VideoDetailsPanel({
                     rel='noopener noreferrer'
                     className='absolute top-3 left-3'
                   >
-                    <div className='bg-accent text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-[#cc3256] hover:scale-[1.1] transition-all duration-300 ease-out'>
+                    <div className='bg-accent text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-accent-deep hover:scale-[1.1] transition-all duration-300 ease-out'>
                       <svg
                         width='16'
                         height='16'

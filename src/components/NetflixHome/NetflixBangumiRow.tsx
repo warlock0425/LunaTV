@@ -40,12 +40,16 @@ export function NetflixBangumiRow({
       />
       <div className='relative'>
         <button
+          type='button'
+          aria-label='向左捲動'
           onClick={() => scrollRow(scrollRef as any, 'left')}
           className='absolute left-0 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-zinc-900 shadow-lg ring-1 ring-zinc-200 backdrop-blur-sm transition-colors hover:bg-white dark:bg-black/65 dark:text-white dark:ring-0 dark:hover:bg-black/85 md:flex'
         >
           <ChevronLeft className='w-5 h-5' />
         </button>
         <button
+          type='button'
+          aria-label='向右捲動'
           onClick={() => scrollRow(scrollRef as any, 'right')}
           className='absolute right-0 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-zinc-900 shadow-lg ring-1 ring-zinc-200 backdrop-blur-sm transition-colors hover:bg-white dark:bg-black/65 dark:text-white dark:ring-0 dark:hover:bg-black/85 md:flex'
         >
@@ -107,7 +111,7 @@ export function NetflixBangumiRow({
                   </svg>
                 </div>
 
-                <div className='absolute inset-x-0 bottom-0 p-2 pt-8 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex justify-between items-end'>
+                <div className='absolute inset-x-0 bottom-0 p-2 pt-8 bg-gradient-to-t from-black via-black/80 to-transparent flex justify-between items-end'>
                   <div className='flex gap-1'></div>
                   {anime.rating?.score && (
                     <div className='flex items-center gap-1 text-white text-[11px] font-medium drop-shadow-md'>

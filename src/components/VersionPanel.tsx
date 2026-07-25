@@ -32,7 +32,7 @@ export function VersionPanel({ isOpen = true, onClose }: VersionPanelProps) {
       onClick={handleClose}
     >
       <div
-        className='bg-[#0c0c0e] border border-zinc-800 rounded-3xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col shadow-2xl relative z-[999999]'
+        className='bg-deep border border-zinc-800 rounded-3xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col shadow-2xl relative z-[999999]'
         onClick={(e) => e.stopPropagation()}
       >
         {/* 頂部列 */}

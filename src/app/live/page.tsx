@@ -1461,9 +1461,10 @@ function LivePageGuard() {
       <PageLayout activePath='/live'>
         <div className='flex flex-col items-center justify-center min-h-[60vh] text-center px-4'>
           <Radio className='h-16 w-16 text-zinc-300 dark:text-zinc-600 mb-4' />
-          <h2 className='text-xl font-semibold text-zinc-700 dark:text-zinc-300 mb-2'>
+          {/* 此畫面會取代整個直播頁，因此它就是該狀態下的頁面主標題 */}
+          <h1 className='text-xl font-semibold text-zinc-700 dark:text-zinc-300 mb-2'>
             網頁直播未開啟
-          </h2>
+          </h1>
           <p className='text-zinc-500 dark:text-zinc-400 max-w-md'>
             當前站點未啟用網頁直播功能，請聯繫站點管理員開啟。
           </p>

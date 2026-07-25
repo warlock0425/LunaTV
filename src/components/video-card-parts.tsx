@@ -33,12 +33,15 @@ export function CardDoubanBadge({
       target='_blank'
       rel='noopener noreferrer'
       onClick={(e) => e.stopPropagation()}
-      className='absolute top-2 left-2 opacity-0 -translate-x-2 transition-all duration-300 ease-in-out delay-100 sm:group-hover:opacity-100 sm:group-hover:translate-x-0'
+      // 此徽章只能靠 hover 顯現，觸控裝置永遠觸發不到；原本在手機上是
+      // 「看不見但仍可點、也仍會被鍵盤 focus」的隱形連結，誤觸就會跳出站外。
+      // 因此 sm 以下直接不渲染，並讓鍵盤 focus 時也能顯現。
+      className='absolute top-2 left-2 hidden -translate-x-2 opacity-0 transition-all duration-300 ease-in-out delay-100 focus-visible:opacity-100 focus-visible:translate-x-0 sm:block sm:group-hover:opacity-100 sm:group-hover:translate-x-0'
       style={NO_SELECT_STYLE}
       onContextMenu={stopContextMenu}
     >
       <div
-        className='bg-accent text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-md hover:bg-[#cc3256] hover:scale-[1.1] transition-all duration-300 ease-out'
+        className='bg-accent text-white text-xs font-bold w-7 h-7 rounded-full flex items-center justify-center shadow-md hover:bg-accent-deep hover:scale-[1.1] transition-all duration-300 ease-out'
         style={NO_SELECT_STYLE}
         onContextMenu={stopContextMenu}
       >

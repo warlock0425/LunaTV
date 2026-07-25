@@ -20,7 +20,8 @@ export function NetflixScrollCard({
     >
       <PosterImage src={item.poster} title={item.title} />
       <div className='absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-300' />
-      <div className='absolute bottom-2 left-2'>
+      {/* HD 標籤移至左上：標題改為常駐後，左下角已被標題遮罩佔用 */}
+      <div className='absolute top-2 left-2'>
         <span className='px-2 py-1 bg-black/70 backdrop-blur-sm text-white text-xs font-medium rounded flex items-center gap-1'>
           <Sparkles className='w-3 h-3' /> HD
         </span>
@@ -30,8 +31,10 @@ export function NetflixScrollCard({
           ★ {item.rate}
         </div>
       )}
-      <div className='absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 to-transparent translate-y-full group-hover:translate-y-0 transition-transform duration-300'>
-        <p className='text-white text-sm font-medium line-clamp-2'>
+      {/* 標題常駐顯示：原本以 hover 滑入，觸控裝置沒有 hover，
+          等於手機上永遠看不到片名。遮罩與 VideoCard 一致。 */}
+      <div className='absolute inset-x-0 bottom-0 px-2.5 pt-6 pb-2 bg-gradient-to-t from-black via-black/80 to-transparent'>
+        <p className='text-white text-sm font-medium line-clamp-2 drop-shadow-md'>
           {item.title}
         </p>
         {item.year && <p className='text-zinc-300 text-xs mt-1'>{item.year}</p>}

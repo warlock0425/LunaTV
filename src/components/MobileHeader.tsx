@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 
 import { BackButton } from './BackButton';
 import { useSite } from './SiteProvider';
-import { ThemeToggle } from './ThemeToggle';
 import { UserMenu } from './UserMenu';
 
 interface MobileHeaderProps {
@@ -49,8 +48,9 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
         </div>
 
         {/* 右側按鈕 */}
+        {/* 本站以 ThemeProvider 的 forcedTheme='dark' 固定為深色，
+            主題切換鈕按了不會有任何效果，故移除以免誤導。 */}
         <div className='flex items-center gap-2'>
-          <ThemeToggle />
           <UserMenu />
         </div>
       </div>
@@ -59,7 +59,9 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
       <div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
         <Link
           href='/'
-          className='text-2xl font-black text-zinc-900 dark:text-zinc-100 dark:drop-shadow-[0_0_8px_rgba(0,229,255,0.8)] font-[Impact] tracking-wider hover:opacity-80 transition-opacity'
+          // 加上內距讓可點高度達 40px（原本僅 29px）。標頭本身高 48px，
+          // 且此區塊為絕對置中，補內距不會影響版面。
+          className='inline-flex items-center px-2 py-1.5 text-2xl font-black text-zinc-900 dark:text-zinc-100 dark:drop-shadow-[0_0_8px_rgba(0,229,255,0.8)] font-[Impact] tracking-wider hover:opacity-80 transition-opacity'
         >
           {siteName}
         </Link>

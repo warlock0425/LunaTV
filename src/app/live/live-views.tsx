@@ -24,10 +24,10 @@ export function LiveLoadingView({
         <div className='text-center max-w-md mx-auto px-6'>
           {/* 動畫直播圖標 */}
           <div className='relative mb-8'>
-            <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-accent to-[#cc3256] rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
+            <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-accent to-accent-deep rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
               <div className='text-white text-4xl'>📺</div>
               {/* 旋轉光環 */}
-              <div className='absolute -inset-2 bg-gradient-to-r from-accent to-[#cc3256] rounded-2xl opacity-20 animate-spin'></div>
+              <div className='absolute -inset-2 bg-gradient-to-r from-accent to-accent-deep rounded-2xl opacity-20 animate-spin'></div>
             </div>
 
             {/* 浮動粒子效果 */}
@@ -73,7 +73,7 @@ export function LiveLoadingView({
             {/* 進度條 */}
             <div className='w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden'>
               <div
-                className='h-full bg-gradient-to-r from-accent to-[#cc3256] rounded-full transition-all duration-1000 ease-out'
+                className='h-full bg-gradient-to-r from-accent to-accent-deep rounded-full transition-all duration-1000 ease-out'
                 style={{
                   width:
                     loadingStage === 'loading'
@@ -135,9 +135,9 @@ export function LiveVideoLoadingOverlay() {
     <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[500] transition-all duration-300'>
       <div className='text-center max-w-md mx-auto px-6'>
         <div className='relative mb-8'>
-          <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-accent to-[#cc3256] rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
+          <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-accent to-accent-deep rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
             <div className='text-white text-4xl'>📺</div>
-            <div className='absolute -inset-2 bg-gradient-to-r from-accent to-[#cc3256] rounded-2xl opacity-20 animate-spin'></div>
+            <div className='absolute -inset-2 bg-gradient-to-r from-accent to-accent-deep rounded-2xl opacity-20 animate-spin'></div>
           </div>
         </div>
         <div className='space-y-2'>

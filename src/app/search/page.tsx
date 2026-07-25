@@ -802,7 +802,9 @@ function SearchPageClient() {
                     setShowSuggestions(false);
                     document.getElementById('searchInput')?.focus();
                   }}
-                  className='absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 transition-colors dark:text-zinc-500 dark:hover:text-zinc-300'
+                  // 原本可點區域只有 20x20，對觸控過小；放大到 40x40 並讓
+                  // 圖示維持原尺寸置中，外觀不變
+                  className='absolute right-1.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-zinc-400 transition-colors hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300'
                   aria-label='清除搜尋內容'
                 >
                   <X className='h-5 w-5' />
@@ -836,7 +838,7 @@ function SearchPageClient() {
           {showResults ? (
             <section className='mb-12'>
               <div className='mb-4'>
-                <h2 className='text-xl font-bold text-zinc-800 dark:text-zinc-200'>
+                <h1 className='text-xl font-bold text-zinc-800 dark:text-zinc-200'>
                   搜尋結果
                   {totalSources > 0 && useFluidSearch && (
                     <span className='ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400'>
@@ -848,7 +850,7 @@ function SearchPageClient() {
                       <span className='inline-block h-3 w-3 border-2 border-zinc-300 border-t-accent rounded-full animate-spin'></span>
                     </span>
                   )}
-                </h2>
+                </h1>
               </div>
               {/* 篩選列固定顯示：串流搜尋的結果逐批到達，若依結果數顯示會在
                   搜尋途中突然插入而推擠版面 */}
@@ -917,8 +919,16 @@ function SearchPageClient() {
                     <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-accent'></div>
                   </div>
                 ) : (
-                  <div className='text-center text-zinc-500 py-8 dark:text-zinc-400'>
-                    未找到相關結果
+                  <div className='flex flex-col items-center justify-center gap-3 px-6 py-16 text-center'>
+                    <div className='flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200/70 dark:bg-zinc-800/70'>
+                      <Search className='h-6 w-6 text-zinc-500 dark:text-zinc-400' />
+                    </div>
+                    <p className='text-base font-medium text-zinc-700 dark:text-zinc-200'>
+                      找不到「{resolvedSearchQuery || searchQuery}」的結果
+                    </p>
+                    <p className='max-w-sm text-sm leading-relaxed text-zinc-500 dark:text-zinc-400'>
+                      可以試試更簡短的關鍵字、改用原文片名，或關閉上方的「聚合」以顯示各來源的個別結果。
+                    </p>
                   </div>
                 )
               ) : (

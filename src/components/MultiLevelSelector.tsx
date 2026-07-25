@@ -523,7 +523,7 @@ const MultiLevelSelector: React.FC<MultiLevelSelectorProps> = ({
                     : 'text-accent cursor-default'
                   : isDefaultValue(category.key)
                     ? 'text-zinc-400 hover:text-zinc-100 cursor-pointer'
-                    : 'text-accent hover:text-[#cc3256] cursor-pointer'
+                    : 'text-accent hover:text-accent-deep cursor-pointer'
               }`}
             >
               <span>{getDisplayText(category.key)}</span>

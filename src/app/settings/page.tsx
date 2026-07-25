@@ -187,7 +187,7 @@ export default function SettingsPage() {
           <div className='flex items-center gap-3'>
             <button
               onClick={handleBack}
-              className='flex items-center gap-2 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors'
+              className='-ml-2 flex items-center gap-2 rounded-lg px-2 py-2.5 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
             >
               <ArrowLeft className='w-5 h-5' />
               <span className='text-sm font-medium'>返回</span>
@@ -196,7 +196,7 @@ export default function SettingsPage() {
           </div>
           <button
             onClick={handleReset}
-            className='text-xs text-zinc-500 hover:text-accent transition-colors px-3 py-1.5 rounded-lg hover:bg-red-500/10 font-medium'
+            className='-mr-1 rounded-lg px-3 py-3 text-xs font-medium text-zinc-500 transition-colors hover:bg-red-500/10 hover:text-accent'
           >
             恢復預設
           </button>

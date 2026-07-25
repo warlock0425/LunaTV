@@ -62,10 +62,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#000000' },
-  ],
+  // 本站固定深色（ThemeProvider forcedTheme='dark'），因此不隨系統偏好切換，
+  // 直接對齊 globals.css 的 html.dark body 背景色，避免淺色系統下瀏覽器
+  // 狀態列出現白底而與頁面不連續。
+  themeColor: '#050505',
 };
 
 export default async function RootLayout({

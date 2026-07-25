@@ -35,8 +35,10 @@ export function NetflixGridCard({ item }: { item: DoubanItem }) {
           ★ {item.rate}
         </div>
       )}
-      <div className='absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent'>
-        <p className='text-white text-sm font-medium line-clamp-2 group-hover:text-white transition-colors'>
+      {/* 標題遮罩與 VideoCard 一致：實心黑起始 + 較長的漸層過渡，
+          避免花俏海報（本身就有大字設計）讓標題糊成一團 */}
+      <div className='absolute inset-x-0 bottom-0 px-2.5 pt-6 pb-2 bg-gradient-to-t from-black via-black/80 to-transparent'>
+        <p className='text-white text-sm font-medium line-clamp-2 drop-shadow-md'>
           {item.title}
         </p>
         {item.year && <p className='text-zinc-300 text-xs mt-1'>{item.year}</p>}

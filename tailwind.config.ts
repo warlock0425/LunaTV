@@ -33,6 +33,9 @@ const config: Config = {
           900: '#0c4a6e',
         },
         accent: '#00B4D8',
+        // accent 的漸層／hover 搭配色。原本以 [#cc3256] 硬編碼散落 15 處，
+        // 收斂成 token 以便日後統一調整主色。
+        'accent-deep': '#cc3256',
         'anime-dark': '#111111',
         'anime-bg': '#151515',
         'oled-black': '#000000',

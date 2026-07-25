@@ -126,7 +126,7 @@ export function UserMenu() {
       {/* 下拉選單 */}
       {isOpen && (
         <div
-          className='absolute right-0 mt-3 w-56 rounded-2xl bg-white dark:bg-[#0c0c0e]/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 p-2 shadow-2xl z-[999999]'
+          className='absolute right-0 mt-3 w-56 rounded-2xl bg-white dark:bg-deep/95 backdrop-blur-xl border border-zinc-200 dark:border-zinc-800 p-2 shadow-2xl z-[999999]'
           onClick={(e) => e.stopPropagation()}
         >
           <div className='px-4 py-2.5 border-b border-zinc-200 dark:border-zinc-900 select-none'>

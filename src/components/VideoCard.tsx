@@ -640,7 +640,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
     return (
       <>
         <div
-          className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-out hover:scale-[1.05] hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/20 hover:z-[500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-[#0b0c10]'
+          className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-out hover:scale-[1.05] hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/20 hover:z-[500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-deep'
           onClick={handleClick}
           onKeyDown={handleKeyDown}
           role='button'

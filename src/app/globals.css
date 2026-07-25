@@ -21,13 +21,10 @@
   }
 }
 
-:root {
-  --foreground-rgb: 255, 255, 255;
-  --accent: #ff3e6c;
-  --accent-rgb: 255, 62, 108;
-  --surface-dark: #111116;
-  --panel-dark: #17171c;
-}
+/* 註：此處原本定義了 --foreground-rgb / --accent / --accent-rgb /
+   --surface-dark / --panel-dark 五個變數，但全專案零引用，且其中
+   --accent (#ff3e6c 粉) 與實際主色 (tailwind.config.ts 的 accent
+   #00B4D8 青，使用逾 200 處) 衝突，容易誤導後續維護，故移除。 */
 
 html,
 body {

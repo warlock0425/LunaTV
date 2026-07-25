@@ -337,28 +337,33 @@ export default function NetflixHome({
                     </button>
                   </div>
                   <div className='relative group/carousel [mask-image:linear-gradient(to_right,transparent,black_2%,black_98%,transparent)] md:[mask-image:linear-gradient(to_right,transparent,black_4%,black_96%,transparent)] -mx-2 px-2'>
-                    <div
+                    {/* 改用 button：原為 <div onClick>，鍵盤無法操作 */}
+                    <button
+                      type='button'
+                      aria-label='向左捲動'
                       onClick={(e) => {
                         e.stopPropagation();
                         scrollRow(continueRef as any, 'left');
                       }}
                       className='absolute left-0 top-0 hidden h-full w-14 items-center justify-center bg-gradient-to-r from-white/85 to-transparent dark:from-black/55 transition-all duration-200 z-50 cursor-pointer md:flex'
                     >
-                      <div className='w-10 h-10 rounded-full bg-white text-zinc-900 flex items-center justify-center font-black shadow-lg ring-1 ring-zinc-200 dark:ring-0'>
+                      <span className='w-10 h-10 rounded-full bg-white text-zinc-900 flex items-center justify-center font-black shadow-lg ring-1 ring-zinc-200 dark:ring-0'>
                         <ChevronLeft className='w-6 h-6' />
-                      </div>
-                    </div>
-                    <div
+                      </span>
+                    </button>
+                    <button
+                      type='button'
+                      aria-label='向右捲動'
                       onClick={(e) => {
                         e.stopPropagation();
                         scrollRow(continueRef as any, 'right');
                       }}
                       className='absolute right-0 top-0 hidden h-full w-14 items-center justify-center bg-gradient-to-l from-white/85 to-transparent dark:from-black/55 transition-all duration-200 z-50 cursor-pointer md:flex'
                     >
-                      <div className='w-10 h-10 rounded-full bg-white text-zinc-900 flex items-center justify-center font-black shadow-lg ring-1 ring-zinc-200 dark:ring-0'>
+                      <span className='w-10 h-10 rounded-full bg-white text-zinc-900 flex items-center justify-center font-black shadow-lg ring-1 ring-zinc-200 dark:ring-0'>
                         <ChevronRight className='w-6 h-6' />
-                      </div>
-                    </div>
+                      </span>
+                    </button>
                     <div
                       ref={continueRef}
                       className='flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth flex-nowrap no-scrollbar py-6 px-2 relative scroll-px-2'

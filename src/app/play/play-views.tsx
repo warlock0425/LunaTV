@@ -64,7 +64,7 @@ export function PlayLoadingView({
             {/* 進度條 */}
             <div className='w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden'>
               <div
-                className='h-full bg-gradient-to-r from-accent to-[#cc3256] rounded-full transition-all duration-1000 ease-out'
+                className='h-full bg-gradient-to-r from-accent to-accent-deep rounded-full transition-all duration-1000 ease-out'
                 style={{
                   width:
                     loadingStage === 'searching' || loadingStage === 'fetching'
@@ -126,9 +126,10 @@ export function PlayErrorView({
 
           {/* 錯誤資訊 */}
           <div className='space-y-4 mb-8'>
-            <h2 className='text-2xl font-bold text-zinc-800 dark:text-zinc-200'>
+            {/* 此錯誤畫面會取代整個播放頁，因此它就是該狀態下的頁面主標題 */}
+            <h1 className='text-2xl font-bold text-zinc-800 dark:text-zinc-200'>
               哎呀，出現了一些問題
-            </h2>
+            </h1>
             <div className='bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4'>
               <p className='text-red-600 dark:text-red-400 font-medium'>
                 {error}
@@ -147,7 +148,7 @@ export function PlayErrorView({
                   ? router.push(`/search?q=${encodeURIComponent(videoTitle)}`)
                   : router.back()
               }
-              className='w-full px-6 py-3 bg-accent text-white rounded-xl font-medium hover:bg-[#cc3256] transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl'
+              className='w-full px-6 py-3 bg-accent text-white rounded-xl font-medium hover:bg-accent-deep transform hover:scale-105 transition-all duration-200 shadow-lg hover:shadow-xl'
             >
               {videoTitle ? '🔍 返回搜尋' : '← 返回上頁'}
             </button>

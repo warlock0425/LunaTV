@@ -23,7 +23,9 @@ export function SectionTitle({
       {viewAllHref && (
         <Link
           href={viewAllHref}
-          className='flex items-center text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors gap-1'
+          // 補上內距把可點區域從 76x20 拉到約 92x40（負 margin 抵銷，版面不變），
+          // 以符合觸控目標的最小尺寸建議
+          className='-my-2 -mr-2 flex items-center gap-1 px-2 py-2.5 text-sm text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white'
         >
           查看更多 <ChevronRight className='w-4 h-4' />
         </Link>
