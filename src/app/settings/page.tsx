@@ -180,9 +180,9 @@ export default function SettingsPage() {
   if (!mounted) return null;
 
   return (
-    <div className='min-h-screen bg-zinc-50 dark:bg-[#141414] text-zinc-900 dark:text-white'>
+    <div className='min-h-screen bg-zinc-50 dark:bg-anime-bg text-zinc-900 dark:text-white'>
       {/* 頂部導航 */}
-      <div className='fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-[#141414]/90 backdrop-blur-md border-b border-zinc-200 dark:border-white/5'>
+      <div className='fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-anime-bg/90 backdrop-blur-md border-b border-zinc-200 dark:border-white/5'>
         <div className='flex items-center justify-between px-4 sm:px-10 h-14'>
           <div className='flex items-center gap-3'>
             <button

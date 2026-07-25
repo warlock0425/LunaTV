@@ -150,7 +150,7 @@ export default function SearchSuggestions({
     return (
       <div
         ref={containerRef}
-        className='absolute top-full left-0 right-0 z-[600] mt-2 bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-zinc-200/50 dark:border-white/10 max-h-[80vh] overflow-y-auto overflow-x-hidden p-4'
+        className='absolute top-full left-0 right-0 z-[600] mt-2 bg-white/95 dark:bg-surface-panel/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-zinc-200/50 dark:border-white/10 max-h-[80vh] overflow-y-auto overflow-x-hidden p-4'
       >
         {hasHistory && (
           <div className='mb-6'>
@@ -222,7 +222,7 @@ export default function SearchSuggestions({
   return (
     <div
       ref={containerRef}
-      className='absolute top-full left-0 right-0 z-[600] mt-2 bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-zinc-200/50 dark:border-white/10 max-h-80 overflow-y-auto py-2'
+      className='absolute top-full left-0 right-0 z-[600] mt-2 bg-white/95 dark:bg-surface-panel/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-zinc-200/50 dark:border-white/10 max-h-80 overflow-y-auto py-2'
     >
       {suggestions.map((suggestion) => (
         <button

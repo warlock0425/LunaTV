@@ -20,7 +20,7 @@ export default function AppError({
           <button
             type='button'
             onClick={reset}
-            className='inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#d9345c]'
+            className='inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-deep'
           >
             <RefreshCcw className='h-4 w-4' aria-hidden='true' />
             重新載入

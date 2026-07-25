@@ -9,9 +9,9 @@ export const metadata: Metadata = {
 
 export default function WarningPage() {
   return (
-    <div className='min-h-screen bg-[#040404] flex flex-col'>
+    <div className='min-h-screen bg-surface-page flex flex-col'>
       <div className='flex-1 flex items-center justify-center p-4'>
-        <div className='max-w-2xl w-full bg-[#1a1a1a]/90 rounded-2xl shadow-2xl p-6 sm:p-8 border border-accent/30 backdrop-blur-md'>
+        <div className='max-w-2xl w-full bg-surface-panel/90 rounded-2xl shadow-2xl p-6 sm:p-8 border border-accent/30 backdrop-blur-md'>
           <div className='flex justify-center mb-6 sm:mb-8'>
             <div className='w-16 h-16 sm:w-20 sm:h-20 bg-accent/10 rounded-full flex items-center justify-center border border-accent/30'>
               <svg
@@ -77,7 +77,7 @@ export default function WarningPage() {
               </h3>
               <p className='text-sm sm:text-base text-zinc-300'>
                 請立即設定{' '}
-                <code className='bg-[#1a1a1a] px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono text-accent border border-accent/20'>
+                <code className='bg-surface-panel px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono text-accent border border-accent/20'>
                   PASSWORD
                 </code>{' '}
                 環境變數以啟用存取控制。

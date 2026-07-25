@@ -33,7 +33,7 @@ export function PosterImage({
 
   if (!imageUrl || imgError) {
     return (
-      <div className='absolute inset-0 flex items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-900 to-[#2a1020] px-3 text-center'>
+      <div className='absolute inset-0 flex items-center justify-center bg-gradient-to-br from-zinc-900 via-zinc-900 to-poster-fallback px-3 text-center'>
         <span className='line-clamp-4 text-sm font-semibold leading-relaxed text-zinc-200'>
           {title}
         </span>

@@ -782,7 +782,7 @@ function DoubanPageClient() {
           {/* 選擇器組件 */}
           <div className={`${showFilters ? 'block' : 'hidden'} sm:block`}>
             {type !== 'custom' ? (
-              <div className='bg-white/80 dark:bg-[#111116]/80 rounded-xl p-3 sm:p-4 border border-zinc-200 dark:border-white/5 backdrop-blur-sm'>
+              <div className='bg-white/80 dark:bg-anime-dark/80 rounded-xl p-3 sm:p-4 border border-zinc-200 dark:border-white/5 backdrop-blur-sm'>
                 <DoubanSelector
                   type={type as 'movie' | 'tv' | 'show' | 'anime'}
                   primarySelection={primarySelection}
@@ -794,7 +794,7 @@ function DoubanPageClient() {
                 />
               </div>
             ) : (
-              <div className='bg-white/80 dark:bg-[#111116]/80 rounded-xl p-3 sm:p-4 border border-zinc-200 dark:border-white/5 backdrop-blur-sm'>
+              <div className='bg-white/80 dark:bg-anime-dark/80 rounded-xl p-3 sm:p-4 border border-zinc-200 dark:border-white/5 backdrop-blur-sm'>
                 <DoubanCustomSelector
                   customCategories={customCategories}
                   primarySelection={primarySelection}
@@ -883,7 +883,7 @@ function DoubanPageClient() {
               </p>
               <button
                 onClick={() => loadInitialData()}
-                className='px-6 py-2 bg-accent text-white rounded-md text-sm font-medium hover:bg-[#b80710] transition-colors focus:outline-none focus:ring-2 focus:ring-accent/50'
+                className='px-6 py-2 bg-accent text-white rounded-md text-sm font-medium hover:bg-accent-deep transition-colors focus:outline-none focus:ring-2 focus:ring-accent/50'
               >
                 重試一次
               </button>

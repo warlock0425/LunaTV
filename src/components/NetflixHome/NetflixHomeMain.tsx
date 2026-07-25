@@ -254,7 +254,7 @@ export default function NetflixHome({
         <header
           className={`sticky top-0 z-40 h-16 md:h-20 flex items-center justify-between px-4 md:px-8 transition-all duration-300 ${
             isScrolled
-              ? 'bg-white/80 dark:bg-[#040404]/80 backdrop-blur-xl border-b border-zinc-200 dark:border-white/5'
+              ? 'bg-white/80 dark:bg-surface-page/80 backdrop-blur-xl border-b border-zinc-200 dark:border-white/5'
               : 'bg-transparent'
           }`}
         >
@@ -516,7 +516,7 @@ export default function NetflixHome({
           className='fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4'
           onTouchMove={(e) => e.stopPropagation()}
         >
-          <div className='w-full max-w-md rounded-2xl bg-white dark:bg-[#1a1a1a] border border-zinc-200 dark:border-white/10 p-8 shadow-2xl'>
+          <div className='w-full max-w-md rounded-2xl bg-white dark:bg-surface-panel border border-zinc-200 dark:border-white/10 p-8 shadow-2xl'>
             <div className='flex items-start justify-between mb-6'>
               <div>
                 <h3 className='text-xl font-bold text-zinc-900 dark:text-white mb-1'>
@@ -532,7 +532,7 @@ export default function NetflixHome({
               </button>
             </div>
             <div className='mb-8'>
-              <div className='bg-zinc-50 dark:bg-[#141414] rounded-xl p-5 border-l-4 border-accent'>
+              <div className='bg-zinc-50 dark:bg-anime-bg rounded-xl p-5 border-l-4 border-accent'>
                 <p className='text-zinc-600 dark:text-zinc-300 leading-relaxed'>
                   {announcement}
                 </p>
@@ -540,7 +540,7 @@ export default function NetflixHome({
             </div>
             <button
               onClick={() => handleCloseAnnouncement(announcement)}
-              className='w-full py-3 bg-accent hover:bg-[#ff557e] text-white font-bold rounded-xl transition-colors'
+              className='w-full py-3 bg-accent hover:bg-accent-deep text-white font-bold rounded-xl transition-colors'
             >
               確定
             </button>

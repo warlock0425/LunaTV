@@ -36,6 +36,12 @@ const config: Config = {
         // accent 的漸層／hover 搭配色。原本以 [#cc3256] 硬編碼散落 15 處，
         // 收斂成 token 以便日後統一調整主色。
         'accent-deep': '#cc3256',
+        // 深色底面：頁面底色與面板底色。原本以 8 種肉眼難辨的近黑色硬編碼，
+        // 統一成兩階，其餘與既有 anime-dark／anime-bg 合併。
+        'surface-page': '#040404',
+        'surface-panel': '#1a1a1a',
+        // 海報載入失敗時的底圖漸層末端
+        'poster-fallback': '#2a1020',
         'anime-dark': '#111111',
         'anime-bg': '#151515',
         'oled-black': '#000000',

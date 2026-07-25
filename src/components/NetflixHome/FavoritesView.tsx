@@ -263,7 +263,7 @@ export function FavoritesView() {
           {!activeTag && (
             <Link
               href='/search'
-              className='mt-5 rounded-full bg-accent px-5 py-2 text-sm font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-[#e63560]'
+              className='mt-5 rounded-full bg-accent px-5 py-2 text-sm font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-accent-deep'
             >
               前往搜尋
             </Link>

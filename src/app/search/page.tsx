@@ -1015,7 +1015,7 @@ function SearchPageClient() {
             </section>
           ) : (
             <section className='mb-12 flex flex-col items-center justify-center h-[50vh]'>
-              <div className='w-20 h-20 bg-zinc-100 dark:bg-[#1a1a1a] rounded-full flex items-center justify-center mb-6 shadow-inner'>
+              <div className='w-20 h-20 bg-zinc-100 dark:bg-surface-panel rounded-full flex items-center justify-center mb-6 shadow-inner'>
                 <Search className='w-10 h-10 text-zinc-300 dark:text-zinc-600' />
               </div>
               <h2 className='text-xl font-bold text-zinc-800 dark:text-zinc-200 mb-2'>

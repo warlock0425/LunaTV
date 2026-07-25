@@ -98,7 +98,7 @@ export function NetflixHomePage() {
 
   if (loading) {
     return (
-      <div className='min-h-screen bg-slate-50 dark:bg-[#040404] pb-20 pt-20 md:pt-28'>
+      <div className='min-h-screen bg-slate-50 dark:bg-surface-page pb-20 pt-20 md:pt-28'>
         {/* Hero Section Skeleton */}
         <div className='w-full h-[50vh] md:h-[70vh] bg-zinc-200 dark:bg-zinc-800/40 animate-pulse mb-12 relative rounded-b-3xl md:rounded-b-[3rem] overflow-hidden'>
           <div className='absolute bottom-10 left-4 md:left-12 flex flex-col gap-4 w-full md:w-1/2'>
@@ -127,7 +127,7 @@ export function NetflixHomePage() {
     searchParams.get('tab') !== 'favorites'
   ) {
     return (
-      <div className='min-h-screen bg-slate-50 dark:bg-[#040404] flex flex-col items-center justify-center p-6'>
+      <div className='min-h-screen bg-slate-50 dark:bg-surface-page flex flex-col items-center justify-center p-6'>
         <div className='flex flex-col items-center gap-6 max-w-md text-center bg-white dark:bg-zinc-900/50 p-8 rounded-3xl shadow-xl border border-zinc-200 dark:border-zinc-800'>
           <div className='w-20 h-20 bg-red-100 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-2'>
             <Search className='w-10 h-10 text-accent' />
@@ -140,7 +140,7 @@ export function NetflixHomePage() {
           </p>
           <button
             onClick={() => window.location.reload()}
-            className='mt-4 px-8 py-3 bg-accent hover:bg-[#e0315a] text-white rounded-full font-medium transition-all hover:scale-105 active:scale-95 flex items-center gap-2'
+            className='mt-4 px-8 py-3 bg-accent hover:bg-accent-deep text-white rounded-full font-medium transition-all hover:scale-105 active:scale-95 flex items-center gap-2'
           >
             重新整理
           </button>

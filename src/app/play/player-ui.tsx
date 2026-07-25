@@ -39,7 +39,7 @@ export function VideoLoadingOverlay({
     <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl flex items-center justify-center z-[500] transition-all duration-300'>
       <div className='text-center max-w-md mx-auto px-6'>
         <div className='relative mb-8'>
-          <div className='relative mx-auto w-24 h-24 bg-[#17171c] rounded-2xl shadow-2xl flex items-center justify-center border border-accent/30'>
+          <div className='relative mx-auto w-24 h-24 bg-surface-panel rounded-2xl shadow-2xl flex items-center justify-center border border-accent/30'>
             <div className='text-white text-4xl'>🎬</div>
             <div className='absolute -inset-1 rounded-2xl border border-accent/20' />
           </div>

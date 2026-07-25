@@ -16,6 +16,19 @@ import {
   triggerGlobalError,
 } from './shared';
 import { getPlayRecordKeysToReplace } from '../play-records';
+
+/**
+ * 儲存播放進度後，最短多久才允許再次向伺服器重抓整份播放紀錄。
+ * 換集一定會立即重抓，不受此限制；此值只用來節流「純進度心跳」。
+ */
+const REFRESH_MIN_INTERVAL_MS = 60_000;
+let lastRemoteRefreshAt = 0;
+
+/** 供測試重置節流狀態（模組層狀態會跨測試殘留）。 */
+export function __resetPlayRecordRefreshThrottle(): void {
+  lastRemoteRefreshAt = 0;
+}
+
 // ---- API ----
 /**
  * 讀取全部播放記錄。
@@ -180,6 +193,14 @@ export async function savePlayRecord(
   if (STORAGE_TYPE !== 'localstorage') {
     const cachedRecords = cacheManager.getCachedPlayRecords();
     const prevRecords = cachedRecords ? { ...cachedRecords } : null;
+    // 判斷是否為「換集」：集數或總集數變動時，務必以伺服器資料為準重新整理
+    // （這正是先前修「集數永不更新」時要保住的行為）。單純的播放進度心跳
+    // 則不需要每次都把整份清單重抓一遍。
+    const previousRecord = cachedRecords?.[key];
+    const episodeChanged =
+      !previousRecord ||
+      previousRecord.index !== enrichedRecord.index ||
+      previousRecord.total_episodes !== enrichedRecord.total_episodes;
     if (cachedRecords) {
       const nextCachedRecords = { ...cachedRecords };
       getPlayRecordKeysToReplace(nextCachedRecords, targetRecord).forEach(
@@ -225,6 +246,20 @@ export async function savePlayRecord(
     }
 
     // POST 已成功。重新整理列表若暫時失敗，不應回滾或誤報成儲存失敗。
+    //
+    // 播放期間每 5 秒就會存一次進度，若每次都重抓整份播放紀錄，等於每分鐘
+    // 多下載十幾 KB 只為了確認剛寫進去的東西。因此只在真正需要時才重抓：
+    //   1) 換集（集數/總集數變動）— 必須以伺服器為準；
+    //   2) 距離上次重抓超過 REFRESH_MIN_INTERVAL_MS — 讓其他裝置的變更仍能同步進來。
+    const now = Date.now();
+    if (
+      !episodeChanged &&
+      now - lastRemoteRefreshAt < REFRESH_MIN_INTERVAL_MS
+    ) {
+      return;
+    }
+    lastRemoteRefreshAt = now;
+
     try {
       const freshData =
         await fetchFromApi<Record<string, PlayRecord>>(`/api/playrecords`);
