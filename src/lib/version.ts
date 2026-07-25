@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.7.0',
+    date: '2026-07-25',
+    content: `
+- 播放期間效能優化：播放進度每 5 秒存檔時不再重複解析整份本地快取，主執行緒負擔降低約 6 成（低階手機更明顯）。
+- 修正背景同步誤判：快取比對改為不受欄位順序影響，伺服器回傳順序變動不再觸發無謂的整頁重繪。
+- 日誌整理：cron 追更與搜尋串流的除錯訊息不再輸出到正式環境日誌；資料遷移與管理操作稽核紀錄維持可見。如需完整除錯輸出，可設定環境變數 NEXT_PUBLIC_DEBUG_LOGS=true。
+- 程式碼清理：移除未使用的元件與函式，並恢復播放／搜尋頁的 React 狀態更新靜態檢查（原本整段停用）。
+    `.trim(),
+  },
+  {
     version: 'v2.6.6',
     date: '2026-07-24',
     content: `
