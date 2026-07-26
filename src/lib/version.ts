@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.0',
+    date: '2026-07-26',
+    content: `
+- 支援電視遙控器操作：在電視上可用方向鍵移動焦點、OK 開啟、返回上一頁，功能與紀錄和手機／網頁完全相同。桌機與手機的操作方式不受影響。
+- 新增 Android TV 客戶端，可安裝到電視上直接開啟站台；安裝檔由 GitHub Actions 自動建置，取得方式見 tv-app 說明。
+- 修正一個鍵盤操作的既有問題：搜尋建議清單開啟時會攔截整頁的 Enter 鍵，導致用鍵盤選取項目後按 Enter 沒有反應。
+    `.trim(),
+  },
+  {
     version: 'v2.8.1',
     date: '2026-07-26',
     content: `
