@@ -130,16 +130,49 @@ export default function SearchSuggestions({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Enter' && isVisible) {
-        e.preventDefault();
-        e.stopPropagation();
-        onClose();
-        onEnterKey();
-      }
+      if (e.key !== 'Enter' || !isVisible) return;
+
+      // 這個監聽器掛在 document 的 capture 階段並且 stopPropagation，
+      // 若不限定範圍，只要建議清單還開著就會把「整頁」的 Enter 都吃掉——
+      // 滑鼠操作時因為點擊他處會觸發 mousedown 關閉而不易察覺，但純鍵盤
+      // （尤其電視遙控器）操作時，焦點移到卡片後按 OK 完全沒有反應。
+      const target = e.target as Node | null;
+      const insideSuggestions = !!(
+        target && containerRef.current?.contains(target)
+      );
+      const isTextInput =
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+      if (!insideSuggestions && !isTextInput) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+      onEnterKey();
     };
     if (isVisible) document.addEventListener('keydown', handleKeyDown, true);
     return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [isVisible, onClose, onEnterKey]);
+
+  // 焦點離開搜尋區時關閉建議清單。原本只靠 mousedown 判定「點到外面」，
+  // 純鍵盤操作不會產生 mousedown，清單會一直開著。
+  useEffect(() => {
+    if (!isVisible) return;
+    const handleFocusIn = (e: FocusEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (containerRef.current?.contains(target)) return;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')
+      ) {
+        return;
+      }
+      onClose();
+    };
+    document.addEventListener('focusin', handleFocusIn);
+    return () => document.removeEventListener('focusin', handleFocusIn);
+  }, [isVisible, onClose]);
 
   if (!isVisible) return null;
 
