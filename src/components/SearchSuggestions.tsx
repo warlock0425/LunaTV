@@ -133,9 +133,9 @@ export default function SearchSuggestions({
       if (e.key !== 'Enter' || !isVisible) return;
 
       // 這個監聽器掛在 document 的 capture 階段並且 stopPropagation，
-      // 若不限定範圍，只要建議清單還開著就會把「整頁」的 Enter 都吃掉——
+      // 若不限定範圍，只要建議清單還開著就會把「整頁」的 Enter 都吃掉。
       // 滑鼠操作時因為點擊他處會觸發 mousedown 關閉而不易察覺，但純鍵盤
-      // （尤其電視遙控器）操作時，焦點移到卡片後按 OK 完全沒有反應。
+      // 操作沒有 mousedown，清單會一直開著，導致選到別的元素按 Enter 沒反應。
       const target = e.target as Node | null;
       const insideSuggestions = !!(
         target && containerRef.current?.contains(target)

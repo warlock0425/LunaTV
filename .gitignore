@@ -61,14 +61,3 @@ diff.patch
 # claude code local config
 .claude/
 config.json
-
-# android tv 客戶端的建置產物（原始碼要進版控，產物不要）
-tv-app/.gradle/
-tv-app/build/
-tv-app/app/build/
-tv-app/local.properties
-tv-app/gradle/wrapper/gradle-wrapper.jar
-*.apk
-*.aab
-*.keystore
-*.jks

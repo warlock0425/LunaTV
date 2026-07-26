@@ -13,7 +13,6 @@ import { SiteProvider } from '../components/SiteProvider';
 import { ThemeColorSync } from '../components/ThemeColorSync';
 import { ThemeProvider } from '../components/ThemeProvider';
 import { ToastProvider } from '../components/ToastProvider';
-import TvRemoteNavigation from '../components/TvRemoteNavigation';
 
 // iOS PWA 啟動畫（apple-touch-startup-image 需精確匹配裝置尺寸）
 const APPLE_SPLASH_SCREENS = [
@@ -167,7 +166,6 @@ export default async function RootLayout({
               <GlobalErrorIndicator />
               <PwaRegister />
               <ThemeColorSync />
-              <TvRemoteNavigation />
             </SiteProvider>
           </ToastProvider>
         </ThemeProvider>
