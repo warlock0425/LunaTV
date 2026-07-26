@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.7.3',
+    date: '2026-07-26',
+    content: `
+- 修正「電視劇」與「綜藝」分頁按下「全部」時查無內容：送往豆瓣的分類參數未轉成簡體，豆瓣收到繁體會回傳空結果且不報錯。現已可正常瀏覽。
+- 同時補強轉換機制：對照表未收錄的詞改用通用繁簡轉換器，不再把繁體原樣送出，避免日後新增篩選條件時再次出現整頁空白。
+    `.trim(),
+  },
+  {
     version: 'v2.7.2',
     date: '2026-07-25',
     content: `
