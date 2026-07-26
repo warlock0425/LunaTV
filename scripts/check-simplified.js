@@ -121,6 +121,8 @@ const EXCLUDED_FILES = [
   // 豆瓣 API 參數值（标签/类型/地区選項值）必須為簡體
   'douban.ts',
   'DoubanSelector.tsx',
+  // 斷言 toSimplified 的輸出，預期值本來就必須是簡體
+  'douban-to-simplified.test.ts',
 ];
 
 files.forEach((file) => {

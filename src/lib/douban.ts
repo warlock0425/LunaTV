@@ -1,5 +1,6 @@
 import { setBoundedMapValue } from './bounded-map';
 import { readResponseTextWithLimit } from './response-limit';
+import { convertT2S } from './s2t';
 
 interface CachedDoubanEntry {
   expiresAt: number;
@@ -80,6 +81,12 @@ const T2S_MAP: Record<string, string> = {
   最近熱門: '最近热门',
   每日放送: '每日放送',
 
+  // 形式（作為 selected_categories.形式 與 tags 送出）。
+  // 缺這兩筆會讓「電視劇／綜藝」分頁的「全部」永遠查無結果：
+  // 豆瓣只認簡體，收到繁體時回傳 0 筆。
+  電視劇: '电视剧',
+  綜藝: '综艺',
+
   // 類型 / 標籤
   喜劇: '喜剧',
   愛情: '爱情',
@@ -159,9 +166,19 @@ const T2S_MAP: Record<string, string> = {
 };
 
 /**
- * 將繁體中文轉換為簡體中文，以符合豆瓣 API 的參數要求
+ * 將繁體中文轉換為簡體中文，以符合豆瓣 API 的參數要求。
+ *
+ * 對照表未命中時改用通用轉換器，而不是把原字串直接送出去——豆瓣收到繁體
+ * 會回傳 0 筆且不報錯，症狀是「篩選後整頁空白」，很難聯想到是參數語言問題。
+ * 對照表仍保留在前，因為部分詞的豆瓣用語與逐字轉換結果不同（例如分類名）。
  */
 export function toSimplified(str: string): string {
   if (!str) return '';
-  return T2S_MAP[str] || str;
+  const mapped = T2S_MAP[str];
+  if (mapped) return mapped;
+  try {
+    return convertT2S(str) || str;
+  } catch {
+    return str;
+  }
 }
