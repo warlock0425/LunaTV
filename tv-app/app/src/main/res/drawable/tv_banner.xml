@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android TV 桌面卡片（banner）。官方建議 320x180；此處以向量繪製，
+  避免在版本庫裡放二進位圖檔。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+
+    <path
+        android:fillColor="#050505"
+        android:pathData="M0,0h320v180h-320z" />
+
+    <!-- 播放符號 -->
+    <path
+        android:fillColor="#00B4D8"
+        android:pathData="M132,66l40,24l-40,24z" />
+
+    <!-- 底部強調線 -->
+    <path
+        android:fillColor="#CC3256"
+        android:pathData="M110,132h100v6h-100z" />
+</vector>

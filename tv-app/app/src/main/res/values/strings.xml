@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BerserkerTV</string>
+    <string name="server_url_title">設定站台位址</string>
+    <string name="server_url_message">請輸入你自架的站台網址，例如 https://tv.example.com</string>
+    <string name="server_url_hint">https://tv.example.com</string>
+    <string name="server_url_invalid">網址格式不正確，請以 http:// 或 https:// 開頭</string>
+    <string name="confirm">確定</string>
+    <string name="cancel">取消</string>
+</resources>
