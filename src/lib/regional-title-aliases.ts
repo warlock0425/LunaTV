@@ -40,6 +40,15 @@ export const REGIONAL_TITLE_ALIASES: RegionalTitleAlias[] = [
   { tw: '捍衛任務', cn: '疾速追杀' },
   { tw: '鏈鋸人', cn: '电锯人' },
   { tw: '冰與火之歌', cn: '权力的游戏' },
+  // 以下每筆都先確認兩件事才收錄：
+  // (1) 繁簡轉換無法解決（鋼彈→钢弹、蜘蛛人→蜘蛛人、棋靈王→棋灵王…）
+  // (2) 簡體名在豆瓣確實查得到對應作品
+  { tw: '機動戰士鋼彈', cn: '机动战士高达' },
+  { tw: '鋼彈', cn: '高达' },
+  { tw: '蜘蛛人', cn: '蜘蛛侠' },
+  { tw: '鋼鐵人', cn: '钢铁侠' },
+  { tw: '中華一番', cn: '中华小当家' },
+  { tw: '棋靈王', cn: '棋魂' },
 ];
 
 const SORTED_ALIASES = [...REGIONAL_TITLE_ALIASES].sort(

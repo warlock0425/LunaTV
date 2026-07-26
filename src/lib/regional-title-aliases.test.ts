@@ -28,4 +28,21 @@ describe('regional title aliases', () => {
   ])('maps Taiwan title %s to mainland title %s', (tw, cn) => {
     expect(getRegionalMainlandTitles(tw)[0]).toBe(cn);
   });
+
+  // 新增條目：字元轉換無法解決，且簡體名已在豆瓣確認存在
+  it.each([
+    ['機動戰士鋼彈', '机动战士高达'],
+    ['蜘蛛人', '蜘蛛侠'],
+    ['鋼鐵人3', '钢铁侠3'],
+    ['中華一番', '中华小当家'],
+    ['棋靈王', '棋魂'],
+  ])('maps Taiwan title %s to mainland title %s', (tw, cn) => {
+    expect(getRegionalMainlandTitles(tw)[0]).toBe(cn);
+  });
+
+  it('prefers the longer, more specific alias over the bare term', () => {
+    // 「機動戰士鋼彈」比「鋼彈」長，排序後應先命中，不會產生「机动战士高达」以外的結果
+    expect(getRegionalMainlandTitles('機動戰士鋼彈')[0]).toBe('机动战士高达');
+    expect(getRegionalMainlandTitles('SD鋼彈')[0]).toBe('SD高达');
+  });
 });

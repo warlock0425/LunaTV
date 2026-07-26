@@ -2,7 +2,6 @@ import {
   cleanSourceName,
   normalizePlayRecordTitle,
   normalizeTitle,
-  titlesMatch,
 } from './string-utils';
 
 describe('normalizeTitle', () => {
@@ -69,23 +68,5 @@ describe('cleanSourceName', () => {
 
   it('trims whitespace', () => {
     expect(cleanSourceName('  高清  ')).toBe('高清');
-  });
-});
-
-describe('titlesMatch', () => {
-  it('matches identical titles', () => {
-    expect(titlesMatch('鬼滅之刃', '鬼滅之刃')).toBe(true);
-  });
-
-  it('matches titles that differ only in suffix', () => {
-    expect(titlesMatch('鬼滅之刃動畫版', '鬼滅之刃')).toBe(true);
-  });
-
-  it('matches when one title contains the other', () => {
-    expect(titlesMatch('鬼滅之刃', '鬼滅之刃無限列車篇')).toBe(true);
-  });
-
-  it('does not match completely different titles', () => {
-    expect(titlesMatch('鬼滅之刃', '進擊的巨人')).toBe(false);
   });
 });

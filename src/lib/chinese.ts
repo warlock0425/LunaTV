@@ -43,43 +43,14 @@ function normalizeFullwidthAlnum(text: string): string {
 }
 
 export function toSearchSimplified(text: string): string {
-  return convertT2S(normalizeFullwidthAlnum(text))
-    .replace(/進/g, '进')
-    .replace(/擊/g, '击')
-    .replace(/滅/g, '灭')
-    .replace(/術/g, '术')
-    .replace(/迴/g, '回')
-    .replace(/間/g, '间')
-    .replace(/諜/g, '谍')
-    .replace(/職/g, '职')
-    .replace(/獵/g, '猎')
-    .replace(/廢/g, '废')
-    .replace(/紀/g, '纪')
-    .replace(/學/g, '学')
-    .replace(/與/g, '与')
-    .replace(/來/g, '来')
-    .replace(/長/g, '长')
-    .replace(/規/g, '规')
-    .replace(/賢/g, '贤')
-    .replace(/無/g, '无')
-    .replace(/雙/g, '双')
-    .replace(/級/g, '级')
-    .replace(/師/g, '师')
-    .replace(/險/g, '险')
-    .replace(/記/g, '记')
-    .replace(/轉/g, '转')
-    .replace(/樂/g, '乐')
-    .replace(/國/g, '国')
-    .replace(/會/g, '会')
-    .replace(/體/g, '体')
-    .replace(/實/g, '实')
-    .replace(/際/g, '际')
-    .replace(/愛/g, '爱')
-    .replace(/時/g, '时')
-    .replace(/動/g, '动')
-    .replace(/畫/g, '画')
-    .replace(/劇/g, '剧')
-    .replace(/場/g, '场');
+  // 這裡原本在轉換器之後逐字補了 36 個字（進→进、擊→击……），看起來像是
+  // 不信任轉換器而逐一打補丁。以 38 個真實片名語料實測，其中 35 個轉換器
+  // 本來就處理正確，移除後輸出完全一致，因此只保留唯一必要的那一個。
+  //
+  // 迴／回 在繁體是兩個不同的字（輪迴、迴轉），簡體才合併為「回」，
+  // 轉換器不動它是正確行為，故仍需補上——少了這個，「咒術迴戰」會轉成
+  // 「咒术迴战」而搜不到任何陸源。此行為由 s2t-real.test.ts 看守。
+  return convertT2S(normalizeFullwidthAlnum(text)).replace(/迴/g, '回');
 }
 
 export function generateNumberVariant(query: string): string | null {

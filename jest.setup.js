@@ -54,18 +54,16 @@ if (typeof globalThis.MessagePort === 'undefined') {
 // eslint-disable-next-line no-undef
 jest.mock('next/router', () => require('next-router-mock'));
 
-jest.mock('switch-chinese', () => {
-  return jest.fn().mockImplementation(() => ({
-    traditionalized: (text) =>
-      text
-        .replace(/关于我转生变成史莱姆这档事/g, '關於我轉生變成史萊姆這檔事')
-        .replace(/苍海之泪篇/g, '蒼海之淚篇'),
-    simplized: (text) =>
-      text
-        .replace(/關於我轉生變成史萊姆這檔事/g, '关于我转生变成史莱姆这档事')
-        .replace(/蒼海之淚篇/g, '苍海之泪篇'),
-  }));
-});
+// 註：此處原本把 switch-chinese 整個 mock 掉，且 mock 只處理兩個寫死字串、
+// 其餘一律原樣返回。那讓約 90 條涉及繁簡轉換的測試即使在轉換完全失效時仍會
+// 全綠——等於本專案最核心的「繁體搜到簡體片源」沒有測試保護。
+//
+// 該 mock 應是在 jest.config.js 補上 moduleNameMapper／transformIgnorePatterns
+// 之前，為了繞過 switch-chinese 的 ESM 解析問題而加的權宜措施；那些設定到位後
+// 已無必要。移除後全套測試（552 條）通過，執行時間不變。
+//
+// 若日後真的需要在個別測試中固定轉換結果，請在該測試檔內局部 jest.mock，
+// 不要再放回全域，以免又把整層保護關掉。
 
 // Polyfill USERNAME env var for Linux/CI environments
 process.env.USERNAME = process.env.USERNAME || 'admin';
