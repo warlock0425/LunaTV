@@ -1,5 +1,6 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { useEffect } from 'react';
 
 import {
@@ -98,6 +99,60 @@ function focusElement(el: HTMLElement) {
 }
 
 export default function TvRemoteNavigation() {
+  const pathname = usePathname();
+
+  /**
+   * 進入畫面時自動給予初始焦點。
+   *
+   * Android TV 指引要求「使用者可以立刻用方向鍵操作」；若進畫面時沒有焦點，
+   * 第一次按方向鍵只會變成「取得焦點」而不會移動，體感就是按了沒反應——
+   * 而且每次換頁都會再發生一次。
+   *
+   * 內容多為非同步載入，因此在一段時間內重試，直到抓到可聚焦的元素為止。
+   */
+  useEffect(() => {
+    if (!isRemoteControlledDevice()) return;
+
+    let cancelled = false;
+    let attempts = 0;
+
+    const tryFocus = () => {
+      if (cancelled) return;
+      const active = document.activeElement as HTMLElement | null;
+      // 已經有焦點（例如使用者正在輸入密碼）就不要搶走
+      if (active && active !== document.body) return;
+
+      // 初始焦點避開文字輸入框：在電視上聚焦搜尋框會叫出螢幕小鍵盤蓋住畫面，
+      // 使用者得先按返回才能繼續瀏覽。沒有其他可聚焦元素時才退而求其次。
+      const all = collectCandidates();
+      const nonInput = all.filter((c) => {
+        const tag = c.ref.tagName.toLowerCase();
+        if (tag === 'textarea') return false;
+        if (tag !== 'input') return true;
+        const type = (c.ref.getAttribute('type') || 'text').toLowerCase();
+        return ['checkbox', 'radio', 'button', 'submit', 'reset'].includes(
+          type
+        );
+      });
+
+      const initial = pickInitialCandidate(
+        nonInput.length > 0 ? nonInput : all,
+        window.innerHeight
+      );
+      if (initial) {
+        focusElement(initial.ref);
+        return;
+      }
+      if (attempts++ < 20) window.setTimeout(tryFocus, 250);
+    };
+
+    const timer = window.setTimeout(tryFocus, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [pathname]);
+
   useEffect(() => {
     if (!isRemoteControlledDevice()) return;
 

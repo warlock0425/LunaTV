@@ -263,3 +263,36 @@ div[data-media-provider] video {
   background: linear-gradient(90deg, #2d2d2d 25%, #3d3d3d 50%, #2d2d2d 75%);
   background-size: 200% 100%;
 }
+
+/* ---------------- 電視（遙控器）模式 ----------------
+   只在 TvRemoteNavigation 判定為電視時掛上 data-tv-remote="on"，
+   桌機與手機的外觀完全不受影響。
+
+   Android TV 設計指引要求焦點必須「一眼看得出來」，並建議以顏色、
+   放大或陰影標示。站台原本的 2px 半透明白框是為滑鼠／鍵盤設計的，
+   在三公尺外的電視上幾乎看不見。 */
+html[data-tv-remote='on'] :focus-visible {
+  outline: 4px solid theme('colors.accent');
+  outline-offset: 3px;
+  border-radius: 0.5rem;
+}
+
+/* 卡片類元素額外放大並加上光暈，讓目前選取的項目在整面海報牆中跳出來 */
+html[data-tv-remote='on'] button:focus-visible,
+html[data-tv-remote='on'] a:focus-visible {
+  box-shadow:
+    0 0 0 4px theme('colors.accent'),
+    0 0 24px 6px rgb(0 180 216 / 55%);
+  transform: scale(1.06);
+  transition:
+    transform 120ms ease-out,
+    box-shadow 120ms ease-out;
+  z-index: 50;
+  position: relative;
+}
+
+/* 電視上不顯示捲軸（遙控器不會用到，且會佔用畫面邊緣） */
+html[data-tv-remote='on'] ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
