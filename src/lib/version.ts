@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.8.1',
+    date: '2026-07-26',
+    content: `
+- 安全性更新：升級 Next.js 修補 9 個已知漏洞（其中 4 個為高風險），包含一個會讓登入驗證被繞過的問題。建議儘早更新映像。
+- 補上密碼雜湊模組的測試（先前完全沒有測試覆蓋），確保登入驗證與舊資料相容路徑的行為受到保護。
+    `.trim(),
+  },
+  {
     version: 'v2.8.0',
     date: '2026-07-26',
     content: `
