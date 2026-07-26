@@ -7,4 +7,8 @@
     <string name="server_url_invalid">網址格式不正確，請以 http:// 或 https:// 開頭</string>
     <string name="confirm">確定</string>
     <string name="cancel">取消</string>
+    <string name="load_failed_title">無法連線到站台</string>
+    <string name="load_failed_message">請確認網址正確、電視已連上網路，且站台正在運作。\n\n%1$s</string>
+    <string name="reconfigure">重新輸入網址</string>
+    <string name="retry">重試</string>
 </resources>

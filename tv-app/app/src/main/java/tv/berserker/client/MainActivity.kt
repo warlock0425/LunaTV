@@ -65,6 +65,32 @@ class MainActivity : AppCompatActivity() {
                     view: WebView,
                     request: WebResourceRequest,
                 ): Boolean = false
+
+                /**
+                 * 主頁面載不起來時主動跳出設定對話框。
+                 *
+                 * 這是必要的逃生口：多數 Google TV／Android TV 遙控器沒有選單鍵，
+                 * 若網址打錯又沒有這個機制，使用者會被鎖在空白頁，只能移除重裝。
+                 */
+                override fun onReceivedError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    error: android.webkit.WebResourceError,
+                ) {
+                    if (!request.isForMainFrame) return
+                    showLoadFailure(error.description?.toString())
+                }
+
+                override fun onReceivedHttpError(
+                    view: WebView,
+                    request: WebResourceRequest,
+                    errorResponse: android.webkit.WebResourceResponse,
+                ) {
+                    if (!request.isForMainFrame) return
+                    // 401 是尚未登入，屬正常情況，交給網頁自己導向登入頁
+                    if (errorResponse.statusCode == 401) return
+                    showLoadFailure("HTTP ${errorResponse.statusCode}")
+                }
             }
 
             isFocusable = true
@@ -86,6 +112,28 @@ class MainActivity : AppCompatActivity() {
         val separator = if (url.contains("?")) "&" else "?"
         webView.loadUrl("$url${separator}tv=1")
         webView.requestFocus()
+    }
+
+    /**
+     * 站台載入失敗時提示並讓使用者重新輸入網址。
+     * 以旗標避免同一次失敗彈出多個對話框。
+     */
+    private fun showLoadFailure(detail: String?) {
+        if (isFinishing || isDialogShowing) return
+        isDialogShowing = true
+        AlertDialog.Builder(this)
+            .setTitle(R.string.load_failed_title)
+            .setMessage(getString(R.string.load_failed_message, detail ?: ""))
+            .setCancelable(false)
+            .setPositiveButton(R.string.reconfigure) { _, _ ->
+                isDialogShowing = false
+                promptForServerUrl(initial = false)
+            }
+            .setNegativeButton(R.string.retry) { _, _ ->
+                isDialogShowing = false
+                prefs.getString(KEY_SERVER_URL, null)?.let { load(it) }
+            }
+            .show()
     }
 
     /** 首次啟動或使用者要更換伺服器時，詢問站台網址 */
@@ -154,6 +202,8 @@ class MainActivity : AppCompatActivity() {
         webView.destroy()
         super.onDestroy()
     }
+
+    private var isDialogShowing = false
 
     private companion object {
         const val KEY_SERVER_URL = "server_url"

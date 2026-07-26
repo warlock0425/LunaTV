@@ -39,6 +39,6 @@ android {
 }
 
 dependencies {
+  // 只用到框架內建的 android.webkit.WebView，不需要 androidx.webkit
   implementation("androidx.appcompat:appcompat:1.7.0")
-  implementation("androidx.webkit:webkit:1.12.1")
 }
