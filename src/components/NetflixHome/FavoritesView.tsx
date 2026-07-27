@@ -133,8 +133,14 @@ export function FavoritesView() {
   }, [toast, updateFavoriteItems]);
 
   const refreshTags = () => {
+    const nextTags = getFavoriteTags();
     setItemTagsState(getAllItemTags());
-    setDefinedTags(getFavoriteTags());
+    setDefinedTags(nextTags);
+    // 正在篩選的標籤若已在標籤管理中被刪除，要退回「全部」。否則清單會空掉、
+    // 「全部」也不會highlight，使用者被卡在一個看不見的篩選條件上。
+    setActiveTag((prev) =>
+      prev && !nextTags.some((tag) => tag.name === prev) ? null : prev
+    );
   };
 
   const handleClearAll = async () => {

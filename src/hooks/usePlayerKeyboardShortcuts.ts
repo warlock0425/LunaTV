@@ -39,11 +39,19 @@ export function usePlayerKeyboardShortcuts(
       } = optionsRef.current;
 
       // 忽略輸入框中的按鍵事件
+      const target = e.target as HTMLElement | null;
       if (
-        (e.target as HTMLElement).tagName === 'INPUT' ||
-        (e.target as HTMLElement).tagName === 'TEXTAREA'
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable
       )
         return;
+
+      // 放行瀏覽器／系統快捷鍵：不加這道防線，Ctrl+F（尋找）會被下方的
+      // 全螢幕切換吃掉、Ctrl+H（歷史）會開啟快捷鍵面板，且都被 preventDefault。
+      // Alt 是本頁刻意使用的換集組合鍵，因此不在攔截範圍。
+      if (e.ctrlKey || e.metaKey) return;
 
       // Alt + 左箭頭 = 上一集
       if (e.altKey && e.key === 'ArrowLeft') {

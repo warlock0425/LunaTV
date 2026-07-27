@@ -1070,11 +1070,17 @@ function LivePageClient() {
   useEffect(() => {
     const handleKeyboardShortcuts = (e: KeyboardEvent) => {
       // 忽略輸入框中的按鍵事件
+      const target = e.target as HTMLElement | null;
       if (
-        (e.target as HTMLElement).tagName === 'INPUT' ||
-        (e.target as HTMLElement).tagName === 'TEXTAREA'
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable
       )
         return;
+
+      // 放行瀏覽器／系統快捷鍵，避免 Ctrl+F 被下方的全螢幕切換吃掉
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
 
       // 上箭頭 = 音量+
       if (e.key === 'ArrowUp') {

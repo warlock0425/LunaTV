@@ -7,6 +7,7 @@ import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
+import { splitTitleWords } from '@/lib/string-utils';
 import { yellowWords } from '@/lib/yellow';
 
 export const runtime = 'nodejs';
@@ -106,7 +107,7 @@ async function generateSuggestions(
           )
           .map((r: any) => r.title)
           .filter(Boolean)
-          .flatMap((title: string) => title.split(/[ -:：·、-]/))
+          .flatMap((title: string) => splitTitleWords(title))
           .filter(
             (w: string) => w.length > 1 && w.toLowerCase().includes(queryLower)
           )
@@ -117,7 +118,7 @@ async function generateSuggestions(
   // 根據關鍵詞與查詢的匹配程度計算分數，並動態確定類型
   const realSuggestions = realKeywords.map((word) => {
     const wordLower = word.toLowerCase();
-    const queryWords = queryLower.split(/[ -:：·、-]/);
+    const queryWords = splitTitleWords(queryLower);
 
     // 計算匹配分數：完全匹配得分更高
     let score = 1.0;

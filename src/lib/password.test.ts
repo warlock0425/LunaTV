@@ -54,6 +54,21 @@ describe('password', () => {
       expect(verifyPassword(pw, hashPassword(pw))).toBe(true);
       expect(verifyPassword(pw + '!', hashPassword(pw))).toBe(false);
     });
+
+    it('雜湊段長度對但含非 hex 字元時回傳 false 而非拋錯', () => {
+      // Buffer.from(..., 'hex') 遇到非 hex 字元會在該處截斷，產生短 buffer；
+      // 直接餵給 timingSafeEqual 會拋 RangeError，讓登入回 500 而不是「密碼錯誤」。
+      const corrupted = '0'.repeat(32) + ':' + 'z'.repeat(128);
+      expect(() => verifyPassword('anything', corrupted)).not.toThrow();
+      expect(verifyPassword('anything', corrupted)).toBe(false);
+
+      const partiallyCorrupted =
+        '0'.repeat(32) + ':' + 'ab'.repeat(60) + 'zzzzzzzz';
+      expect(() =>
+        verifyPassword('anything', partiallyCorrupted)
+      ).not.toThrow();
+      expect(verifyPassword('anything', partiallyCorrupted)).toBe(false);
+    });
   });
 
   describe('verifyPassword（舊的明文相容路徑）', () => {

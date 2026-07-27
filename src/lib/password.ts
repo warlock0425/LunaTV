@@ -34,12 +34,18 @@ export function verifyPassword(password: string, storedValue: string): boolean {
     parts[1].length === KEY_LENGTH * 2
   ) {
     const [salt, storedHash] = parts;
+    const storedHashBuf = Buffer.from(storedHash, 'hex');
+    // 長度對但含非 hex 字元時 Buffer.from 會在該字元處截斷，長度就會短於
+    // KEY_LENGTH，直接丟給 timingSafeEqual 會拋 RangeError，讓登入變成 500
+    // 而不是「密碼錯誤」。資料毀損時應該當作驗證失敗。
+    if (storedHashBuf.length !== KEY_LENGTH) {
+      return false;
+    }
     const hash = scryptSync(password, salt, KEY_LENGTH, {
       N: SCRYPT_COST,
       r: BLOCK_SIZE,
       p: PARALLELIZATION,
     });
-    const storedHashBuf = Buffer.from(storedHash, 'hex');
     return timingSafeEqual(hash, storedHashBuf);
   }
 

@@ -350,9 +350,11 @@ export class DbManager {
     await renewalInFlight;
 
     const released = await releaseLock.call(this.storage, lockKey, ownerToken);
+    // mutation 本身的錯誤優先回報：它才是呼叫端需要看到的根因。
+    // 反過來先丟 StorageLockLostError 會把真正的失敗原因整個吃掉。
+    if (mutationFailed) throw mutationError;
     if (!released) throw new StorageLockLostError(lockKey);
     if (heartbeatError) throw heartbeatError;
-    if (mutationFailed) throw mutationError;
     return result;
   }
 

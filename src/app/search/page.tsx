@@ -37,7 +37,11 @@ function SearchPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentQueryRef = useRef<string>('');
+  // searchQuery 是輸入框的即時值，會隨每次按鍵變動；
+  // submittedQuery 才是這批結果對應的查詢詞。結果的過濾與排序一律用後者，
+  // 否則使用者一開始輸入下一個關鍵字，畫面上的舊結果就會被逐字元濾光。
   const [searchQuery, setSearchQuery] = useState('');
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [resolvedSearchQuery, setResolvedSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -298,10 +302,10 @@ function SearchPageClient() {
 
   // 核心更新：對 API 返回的結果進行模糊匹配過濾，根治譯名差異導致的空畫面
   const fuzzySearchResults = useMemo(() => {
-    const query = searchQuery.trim();
+    const query = submittedQuery.trim();
     if (!query) return searchResults;
     return searchResults.filter((item) => isFuzzyMatch(item.title, query));
-  }, [searchResults, searchQuery]);
+  }, [searchResults, submittedQuery]);
 
   const aggregatedResults = useMemo(() => {
     const map = new Map<string, SearchResult[]>();
@@ -418,8 +422,8 @@ function SearchPageClient() {
       const yearComp = compareYear(a.year, b.year, yearOrder);
       if (yearComp !== 0) return yearComp;
 
-      const aExactMatch = a.title === searchQuery.trim();
-      const bExactMatch = b.title === searchQuery.trim();
+      const aExactMatch = a.title === submittedQuery.trim();
+      const bExactMatch = b.title === submittedQuery.trim();
       if (aExactMatch && !bExactMatch) return -1;
       if (!aExactMatch && bExactMatch) return 1;
 
@@ -427,7 +431,7 @@ function SearchPageClient() {
         ? a.title.localeCompare(b.title)
         : b.title.localeCompare(a.title);
     });
-  }, [fuzzySearchResults, filterAll, searchQuery]);
+  }, [fuzzySearchResults, filterAll, submittedQuery]);
 
   const filteredAggResults = useMemo(() => {
     const { source, title, year, yearOrder } = filterAgg;
@@ -452,8 +456,8 @@ function SearchPageClient() {
       const yearComp = compareYear(aYear, bYear, yearOrder);
       if (yearComp !== 0) return yearComp;
 
-      const aExactMatch = a[1][0]?.title === searchQuery.trim();
-      const bExactMatch = b[1][0]?.title === searchQuery.trim();
+      const aExactMatch = a[1][0]?.title === submittedQuery.trim();
+      const bExactMatch = b[1][0]?.title === submittedQuery.trim();
       if (aExactMatch && !bExactMatch) return -1;
       if (!aExactMatch && bExactMatch) return 1;
 
@@ -463,7 +467,7 @@ function SearchPageClient() {
         ? aTitle.localeCompare(bTitle)
         : bTitle.localeCompare(aTitle);
     });
-  }, [aggregatedResults, filterAgg, searchQuery]);
+  }, [aggregatedResults, filterAgg, submittedQuery]);
 
   useEffect(() => {
     if (!searchParams.get('q')) {
@@ -500,12 +504,16 @@ function SearchPageClient() {
       // 屬本檔頂部註解所述的刻意設計。
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearchQuery(query);
+      setSubmittedQuery(query);
       if (eventSourceRef.current) {
         try {
           eventSourceRef.current.close();
         } catch {}
         eventSourceRef.current = null;
       }
+      // 這兩張表以「標題-年份-類型」為鍵，跨搜尋不會重用，不清會一直長
+      groupRefs.current.clear();
+      groupStatsRef.current.clear();
       setSearchResults([]);
       setResolvedSearchQuery('');
       setTotalSources(0);
@@ -707,6 +715,7 @@ function SearchPageClient() {
       }
       setShowSuggestions(false);
     } else {
+      setSubmittedQuery('');
       setShowResults(false);
       setShowSuggestions(false);
     }
@@ -829,7 +838,7 @@ function SearchPageClient() {
           </form>
           {showResults && (
             <SearchQueryNotice
-              query={searchQuery}
+              query={submittedQuery}
               resolvedQuery={resolvedSearchQuery}
             />
           )}

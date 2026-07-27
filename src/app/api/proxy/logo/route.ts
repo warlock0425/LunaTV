@@ -47,6 +47,7 @@ export async function GET(request: Request) {
     const timeoutId = setTimeout(() => controller.abort(), LOGO_TIMEOUT_MS);
     let imageResponse: Response;
     let imageBytes: Uint8Array<ArrayBuffer>;
+    let contentType: string | null;
     try {
       imageResponse = await fetchSafeRemoteUrl(imageUrl, {
         cache: 'no-cache',
@@ -57,9 +58,23 @@ export async function GET(request: Request) {
         },
       });
       if (!imageResponse.ok) {
+        imageResponse.body?.cancel();
         return NextResponse.json(
           { error: imageResponse.statusText },
           { status: imageResponse.status }
+        );
+      }
+      // Content-Type 必須在讀取 body 之前檢查。原本順序相反，等於先把最多
+      // 10 MB 的非圖片內容整個下載完才拒絕，之後的 body.cancel() 也因為
+      // body 已被讀完而是空操作。
+      contentType = getSafeImageContentType(
+        imageResponse.headers.get('content-type')
+      );
+      if (!contentType) {
+        imageResponse.body?.cancel();
+        return NextResponse.json(
+          { error: 'Unsupported image content type' },
+          { status: 415 }
         );
       }
       imageBytes = await readResponseBytesWithLimit(
@@ -68,17 +83,6 @@ export async function GET(request: Request) {
       );
     } finally {
       clearTimeout(timeoutId);
-    }
-
-    const contentType = getSafeImageContentType(
-      imageResponse.headers.get('content-type')
-    );
-    if (!contentType) {
-      imageResponse.body?.cancel();
-      return NextResponse.json(
-        { error: 'Unsupported image content type' },
-        { status: 415 }
-      );
     }
 
     // 創建響應頭

@@ -83,6 +83,39 @@ function isM3u8Link(url: string): boolean {
   return /\.m3u8($|\?)/i.test(url);
 }
 
+/**
+ * 解析 vod_play_url（格式為 `播放組$$$播放組`，每組為 `標題$網址#標題$網址`）。
+ * 取集數最多的那一組。欄位缺失或型別不符時回傳空結果，不拋錯。
+ */
+function parseVodPlayUrl(vodPlayUrl: unknown): {
+  episodes: string[];
+  titles: string[];
+} {
+  let episodes: string[] = [];
+  let titles: string[] = [];
+  if (typeof vodPlayUrl !== 'string' || !vodPlayUrl) {
+    return { episodes, titles };
+  }
+
+  vodPlayUrl.split('$$$').forEach((group) => {
+    const matchEpisodes: string[] = [];
+    const matchTitles: string[] = [];
+    group.split('#').forEach((titleUrl) => {
+      const parts = titleUrl.split('$');
+      if (parts.length === 2 && isM3u8Link(parts[1])) {
+        matchTitles.push(parts[0]);
+        matchEpisodes.push(parts[1]);
+      }
+    });
+    if (matchEpisodes.length > episodes.length) {
+      episodes = matchEpisodes;
+      titles = matchTitles;
+    }
+  });
+
+  return { episodes, titles };
+}
+
 function normalizeVariantsForUpstream(variants: string[]): string[] {
   return Array.from(
     new Set(
@@ -113,16 +146,18 @@ async function searchWithCache(
     return { results: [] };
   }
 
+  // 呼叫端已經取消就別發請求。但一旦進到 deduplicateRequest，這個 fetch 就是
+  // 多個併發呼叫端共用的，絕不能再綁任何「單一呼叫端」的 signal——否則其中一位
+  // 使用者離開頁面時會連帶中止共用請求，其他人也一起拿到空結果。
+  // 逾時由下方自己的 controller 負責，最多多跑 timeoutMs，結果還能進快取。
+  if (parentSignal?.aborted) {
+    return { results: [] };
+  }
+
   const cacheKey = `${apiSite.key}::${query}::${page}`;
   return deduplicateRequest(cacheKey, async () => {
     const controller = new AbortController();
     let timedOut = false;
-    const abortFromParent = () => controller.abort();
-    if (parentSignal?.aborted) {
-      controller.abort();
-    } else {
-      parentSignal?.addEventListener('abort', abortFromParent, { once: true });
-    }
     const timeoutId = setTimeout(() => {
       timedOut = true;
       controller.abort();
@@ -151,49 +186,37 @@ async function searchWithCache(
       ) {
         return { results: [] };
       }
-      const allResults = data.list.map((item: ApiSearchItem) => {
-        let episodes: string[] = [];
-        let titles: string[] = [];
-        if (item.vod_play_url) {
-          item.vod_play_url.split('$$$').forEach((url: string) => {
-            const matchEpisodes: string[] = [];
-            const matchTitles: string[] = [];
-            url.split('#').forEach((title_url: string) => {
-              const episode_title_url = title_url.split('$');
-              if (
-                episode_title_url.length === 2 &&
-                isM3u8Link(episode_title_url[1])
-              ) {
-                matchTitles.push(episode_title_url[0]);
-                matchEpisodes.push(episode_title_url[1]);
-              }
-            });
-            if (matchEpisodes.length > episodes.length) {
-              episodes = matchEpisodes;
-              titles = matchTitles;
-            }
-          });
-        }
-        return {
-          id: item.vod_id.toString(),
-          title: item.vod_name.trim().replace(/\s+/g, ' '),
-          poster: item.vod_pic,
-          episodes,
-          episodes_titles: titles,
-          source: apiSite.key,
-          source_name: apiSite.name,
-          class: item.vod_class,
-          year: item.vod_year
-            ? item.vod_year.match(/\d{4}/)?.[0] || ''
-            : 'unknown',
-          desc: cleanHtmlTags(item.vod_content || ''),
-          type_name: item.type_name,
-          douban_id: item.vod_douban_id,
-        };
+      // 逐筆解析：採集站資料品質參差，單筆缺 vod_id / vod_name 不該讓整個
+      // 片源的結果被外層 catch 吃掉變成空陣列（那會讓該源整站搜不到東西）。
+      const results = data.list.flatMap((item: ApiSearchItem) => {
+        if (item?.vod_id === undefined || item?.vod_id === null) return [];
+        if (typeof item.vod_name !== 'string' || !item.vod_name.trim())
+          return [];
+
+        const { episodes, titles } = parseVodPlayUrl(item.vod_play_url);
+        if (episodes.length === 0) return [];
+
+        return [
+          {
+            id: String(item.vod_id),
+            title: item.vod_name.trim().replace(/\s+/g, ' '),
+            poster: item.vod_pic,
+            episodes,
+            episodes_titles: titles,
+            source: apiSite.key,
+            source_name: apiSite.name,
+            class: item.vod_class,
+            // 保持原語意：vod_year 為空／缺漏時填入哨兵值 'unknown'。
+            // String() 只是讓數字型 vod_year 不再拋錯（原本會整批失敗）。
+            year: item.vod_year
+              ? String(item.vod_year).match(/\d{4}/)?.[0] || ''
+              : 'unknown',
+            desc: cleanHtmlTags(item.vod_content || ''),
+            type_name: item.type_name,
+            douban_id: item.vod_douban_id,
+          } as SearchResult,
+        ];
       });
-      const results = allResults.filter(
-        (r: SearchResult) => r.episodes.length > 0
-      );
       const pageCount = page === 1 ? data.pagecount || 1 : undefined;
       setCachedSearchPage(apiSite.key, query, page, 'ok', results, pageCount);
       return { results, pageCount };
@@ -202,14 +225,12 @@ async function searchWithCache(
         setCachedSearchPage(apiSite.key, query, page, 'timeout', []);
         recordSourceFailure(apiSite.key);
       } else if (error?.name !== 'AbortError') {
-        // 連線失敗（DNS 解析失敗、拒絕連線等）也計入熔斷；
-        // 呼叫端主動中止（AbortError 且非逾時）不計
+        // 連線失敗（DNS 解析失敗、拒絕連線等）也計入熔斷
         recordSourceFailure(apiSite.key);
       }
       return { results: [] };
     } finally {
       clearTimeout(timeoutId);
-      parentSignal?.removeEventListener('abort', abortFromParent);
     }
   });
 }
@@ -385,37 +406,21 @@ export async function getDetailFromApi(
       throw new DownstreamNotFoundError();
     }
     const videoDetail = data.list[0];
-    let episodes: string[] = [];
-    let titles: string[] = [];
-    if (videoDetail.vod_play_url) {
-      const vod_play_url_array = videoDetail.vod_play_url.split('$$$');
-      vod_play_url_array.forEach((url: string) => {
-        const matchEpisodes: string[] = [];
-        const matchTitles: string[] = [];
-        const title_url_array = url.split('#');
-        title_url_array.forEach((title_url: string) => {
-          const episode_title_url = title_url.split('$');
-          if (
-            episode_title_url.length === 2 &&
-            isM3u8Link(episode_title_url[1])
-          ) {
-            matchTitles.push(episode_title_url[0]);
-            matchEpisodes.push(episode_title_url[1]);
-          }
-        });
-        if (matchEpisodes.length > episodes.length) {
-          episodes = matchEpisodes;
-          titles = matchTitles;
-        }
-      });
+    // list[0] 為 null 時視同查無資料。若放行，端點會回 200 + 零集數，
+    // 播放頁只會顯示空播放器而不是「未找到匹配結果」。
+    if (!videoDetail || typeof videoDetail !== 'object') {
+      throw new DownstreamNotFoundError();
     }
-    if (episodes.length === 0 && videoDetail.vod_content) {
+    const parsed = parseVodPlayUrl(videoDetail.vod_play_url);
+    let episodes = parsed.episodes;
+    const titles = parsed.titles;
+    if (episodes.length === 0 && typeof videoDetail.vod_content === 'string') {
       const matches = videoDetail.vod_content.match(M3U8_PATTERN) || [];
       episodes = matches.map((link: string) => link.replace(/^\$/, ''));
     }
     return localizeSearchResult({
       id: id.toString(),
-      title: videoDetail.vod_name,
+      title: videoDetail.vod_name ?? '',
       poster: videoDetail.vod_pic,
       episodes,
       episodes_titles: titles,
@@ -423,9 +428,9 @@ export async function getDetailFromApi(
       source_name: apiSite.name,
       class: videoDetail.vod_class,
       year: videoDetail.vod_year
-        ? videoDetail.vod_year.match(/\d{4}/)?.[0] || ''
+        ? String(videoDetail.vod_year).match(/\d{4}/)?.[0] || ''
         : 'unknown',
-      desc: cleanHtmlTags(videoDetail.vod_content),
+      desc: cleanHtmlTags(videoDetail.vod_content || ''),
       type_name: videoDetail.type_name,
       douban_id: videoDetail.vod_douban_id,
     });

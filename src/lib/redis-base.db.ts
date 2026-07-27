@@ -38,6 +38,40 @@ function ensureStringArray(value: any[]): string[] {
   return value.map((item) => String(item));
 }
 
+/**
+ * 解析 Hash 欄位。單一欄位毀損（連線截斷、手動改壞）不該讓整個
+ * hGetAll 拋錯——那會讓該使用者的播放紀錄／收藏永久 500，而且使用者
+ * 自己救不回來。壞掉的欄位記錄後跳過即可。
+ */
+function parseHashEntries<T>(
+  all: Record<string, string | null | undefined>,
+  hashKey: string
+): Record<string, T> {
+  const result: Record<string, T> = {};
+  for (const [field, raw] of Object.entries(all)) {
+    if (!raw) continue;
+    try {
+      result[field] = JSON.parse(raw) as T;
+    } catch {
+      console.warn(`略過毀損的資料欄位: ${hashKey} / ${field}`);
+    }
+  }
+  return result;
+}
+
+function parseJsonValue<T>(
+  raw: string | null | undefined,
+  label: string
+): T | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    console.warn(`略過毀損的資料: ${label}`);
+    return null;
+  }
+}
+
 // 連接設定接口
 export interface RedisConnectionConfig {
   url: string;
@@ -239,7 +273,10 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.hGet(this.prHashKey(userName), key)
     );
-    return val ? (JSON.parse(val) as PlayRecord) : null;
+    return parseJsonValue<PlayRecord>(
+      val,
+      `${this.prHashKey(userName)}/${key}`
+    );
   }
 
   async setPlayRecord(
@@ -258,13 +295,7 @@ export abstract class BaseRedisStorage implements IStorage {
     const all = await this.withRetry(() =>
       this.client.hGetAll(this.prHashKey(userName))
     );
-    const result: Record<string, PlayRecord> = {};
-    for (const [field, raw] of Object.entries(all)) {
-      if (raw) {
-        result[field] = JSON.parse(raw) as PlayRecord;
-      }
-    }
-    return result;
+    return parseHashEntries<PlayRecord>(all, this.prHashKey(userName));
   }
 
   async deletePlayRecord(userName: string, key: string): Promise<void> {
@@ -284,7 +315,7 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.hGet(this.favHashKey(userName), key)
     );
-    return val ? (JSON.parse(val) as Favorite) : null;
+    return parseJsonValue<Favorite>(val, `${this.favHashKey(userName)}/${key}`);
   }
 
   async setFavorite(
@@ -301,13 +332,7 @@ export abstract class BaseRedisStorage implements IStorage {
     const all = await this.withRetry(() =>
       this.client.hGetAll(this.favHashKey(userName))
     );
-    const result: Record<string, Favorite> = {};
-    for (const [field, raw] of Object.entries(all)) {
-      if (raw) {
-        result[field] = JSON.parse(raw) as Favorite;
-      }
-    }
-    return result;
+    return parseHashEntries<Favorite>(all, this.favHashKey(userName));
   }
 
   async deleteFavorite(userName: string, key: string): Promise<void> {
@@ -457,7 +482,7 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.get(this.adminConfigKey())
     );
-    return val ? (JSON.parse(val) as AdminConfig) : null;
+    return parseJsonValue<AdminConfig>(val, this.adminConfigKey());
   }
 
   async setAdminConfig(config: AdminConfig): Promise<void> {
@@ -483,7 +508,10 @@ export abstract class BaseRedisStorage implements IStorage {
     const val = await this.withRetry(() =>
       this.client.hGet(this.skipHashKey(userName), this.skipField(source, id))
     );
-    return val ? (JSON.parse(val) as SkipConfig) : null;
+    return parseJsonValue<SkipConfig>(
+      val,
+      `${this.skipHashKey(userName)}/${this.skipField(source, id)}`
+    );
   }
 
   async setSkipConfig(
@@ -517,13 +545,7 @@ export abstract class BaseRedisStorage implements IStorage {
     const all = await this.withRetry(() =>
       this.client.hGetAll(this.skipHashKey(userName))
     );
-    const configs: { [key: string]: SkipConfig } = {};
-    for (const [field, raw] of Object.entries(all)) {
-      if (raw) {
-        configs[field] = JSON.parse(raw) as SkipConfig;
-      }
-    }
-    return configs;
+    return parseHashEntries<SkipConfig>(all, this.skipHashKey(userName));
   }
 
   // ---------- 數據遷移：旧扁平 key → Hash 結构 ----------
@@ -701,7 +723,10 @@ export abstract class BaseRedisStorage implements IStorage {
     const raw = await this.withRetry(() =>
       this.client.hGet(this.bangumiAliasHashKey(), bangumiId)
     );
-    return raw ? (JSON.parse(raw) as BangumiAliasCacheEntry) : null;
+    return parseJsonValue<BangumiAliasCacheEntry>(
+      raw,
+      `${this.bangumiAliasHashKey()}/${bangumiId}`
+    );
   }
 
   async setBangumiAliasCache(

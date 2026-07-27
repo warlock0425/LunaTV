@@ -115,6 +115,14 @@ export default function SearchSuggestions({
     };
   }, [query, isVisible, debouncedFetchSuggestions]);
 
+  // 卸載時中止仍在飛的建議請求，否則它會在元件消失後才回來並 setState
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (

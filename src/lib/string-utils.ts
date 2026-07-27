@@ -67,3 +67,16 @@ export function normalizePlayRecordTitle(title?: string): string {
 export function cleanSourceName(source?: string): string {
   return (source || '').replace(/(資源|片源)/g, '').trim();
 }
+
+/**
+ * 影片標題斷詞：僅以空白、連字號、冒號（半形／全形）、間隔號、頓號切分。
+ *
+ * 連字號必須放在字元類結尾才是字面意義。曾經寫成 `[ -:：·、-]`，其中 ` -:`
+ * 被當成 0x20–0x3A 的範圍，涵蓋所有數字與大部分 ASCII 標點，
+ * 「進擊的巨人第2季」會被切成「進擊的巨人第」「季」，季數與年份全被吃掉。
+ */
+const TITLE_WORD_SEPARATORS = /[ :：·、-]/;
+
+export function splitTitleWords(text: string): string[] {
+  return text.split(TITLE_WORD_SEPARATORS);
+}

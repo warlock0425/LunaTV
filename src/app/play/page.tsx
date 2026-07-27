@@ -221,7 +221,6 @@ function PlayPageClient() {
   const videoCoverRef = useRef(videoCover);
   const detailRef = useRef<SearchResult | null>(detail);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
-  const pipKeyHandlerRef = useRef<((e: KeyboardEvent) => void) | null>(null);
   const skipHistoryRestoreRef = useRef(false);
   const autoNextBusyRef = useRef(false);
   const episodeRefreshInFlightRef = useRef(false);
@@ -375,18 +374,56 @@ function PlayPageClient() {
     }
   };
 
-  // 清理播放器資源的統一函數
-  const cleanupPlayer = (resetCountdownUi = true) => {
-    lastLoadedVideoUrlRef.current = '';
+  /**
+   * 中止自動連播倒數。
+   * 使用者在倒數期間手動切集時務必呼叫，否則倒數結束仍會強制跳到「倒數開始那一刻
+   * 的下一集」，把人從剛選的集數拉走。
+   */
+  const cancelAutoNextCountdown = (resetUi = true) => {
     if (countdownTimerRef.current) {
       clearInterval(countdownTimerRef.current);
       countdownTimerRef.current = null;
     }
-    if (resetCountdownUi) {
+    if (resetUi) {
       setShowCountdownOverlay(false);
       setAutoNextCountdown(0);
     }
     autoNextBusyRef.current = false;
+  };
+
+  const playNextEpisodeFromCountdown = () => {
+    const d = detailRef.current;
+    const idx = currentEpisodeIndexRef.current;
+    if (d?.episodes && idx < d.episodes.length - 1) {
+      setCurrentEpisodeIndex(idx + 1);
+    }
+  };
+
+  /**
+   * 啟動自動連播倒數。切集時才讀取當下的集數索引——不可沿用倒數開始時捕獲的值，
+   * 否則使用者在這 5 秒內手動換集會被拉回去。
+   */
+  const startAutoNextCountdown = () => {
+    autoNextBusyRef.current = true;
+    let remaining = 5;
+    setAutoNextCountdown(remaining);
+    setShowCountdownOverlay(true);
+    countdownTimerRef.current = setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        setAutoNextCountdown(remaining);
+        return;
+      }
+
+      cancelAutoNextCountdown();
+      playNextEpisodeFromCountdown();
+    }, 1000);
+  };
+
+  // 清理播放器資源的統一函數
+  const cleanupPlayer = (resetCountdownUi = true) => {
+    lastLoadedVideoUrlRef.current = '';
+    cancelAutoNextCountdown(resetCountdownUi);
 
     if (artPlayerRef.current) {
       try {
@@ -1090,6 +1127,8 @@ function PlayPageClient() {
     const requestId = ++sourceChangeRequestRef.current;
     const isLatestRequest = () => sourceChangeRequestRef.current === requestId;
     try {
+      // 換源等同手動介入，先中止進行中的自動連播倒數
+      cancelAutoNextCountdown();
       // 顯示換源載入狀態
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
@@ -1269,6 +1308,8 @@ function PlayPageClient() {
   // 處理集數切換
   const handleEpisodeChange = (episodeNumber: number) => {
     if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
+      // 手動切集要先取消倒數，否則倒數結束會把使用者拉回自動連播的目標集
+      cancelAutoNextCountdown();
       // 在更換集數前儲存當前播放進度
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
@@ -1289,6 +1330,7 @@ function PlayPageClient() {
     const d = detailRef.current;
     const idx = currentEpisodeIndexRef.current;
     if (d && d.episodes && idx > 0) {
+      cancelAutoNextCountdown();
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
@@ -1303,6 +1345,7 @@ function PlayPageClient() {
 
     // 尚有下一集：直接切換
     if (idx < d.episodes.length - 1) {
+      cancelAutoNextCountdown();
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
@@ -1316,6 +1359,9 @@ function PlayPageClient() {
 
   const handleCheckEpisodeUpdates = () => {
     if (isCheckingEpisodes || episodeRefreshInFlightRef.current) return;
+    // 手動檢查更新時可能正跑著「最後一集追更」的倒數；不取消的話 refresh 會
+    // 推進一集、倒數結束又推進一集，等於跳過中間那集。
+    cancelAutoNextCountdown();
     if (artPlayerRef.current) {
       saveCurrentPlayProgress();
     }
@@ -1646,28 +1692,6 @@ function PlayPageClient() {
         pipVideoEl.addEventListener('leavepictureinpicture', onPiPChange);
       }
 
-      const onKeyDown = (e: KeyboardEvent) => {
-        if (e.key.toLowerCase() === 'p' && !e.ctrlKey && !e.metaKey) {
-          const active = document.activeElement?.tagName;
-          if (active === 'INPUT' || active === 'TEXTAREA') return;
-          (async () => {
-            try {
-              if (document.pictureInPictureElement) {
-                await document.exitPictureInPicture();
-                setIsPiP(false);
-              } else if (artPlayerRef.current?.video) {
-                await artPlayerRef.current.video.requestPictureInPicture();
-                setIsPiP(true);
-              }
-            } catch {
-              setIsPiP(false);
-            }
-          })();
-        }
-      };
-      document.addEventListener('keydown', onKeyDown);
-      pipKeyHandlerRef.current = onKeyDown;
-
       // 監聽影片可播放事件，這時恢復播放進度更可靠
       artPlayerRef.current.on('video:canplay', () => {
         const player = artPlayerRef.current;
@@ -1838,30 +1862,7 @@ function PlayPageClient() {
           idx < d.episodes.length - 1 &&
           autoNextRef.current
         ) {
-          autoNextBusyRef.current = true;
-          // 啟動 5 秒倒數計時
-          // 倒數狀態同時記在區域變數，讓切集等副作用留在 interval 回呼裡；
-          // setState 的 updater 必須是純函式（React 可能重複呼叫它）。
-          let remaining = 5;
-          setAutoNextCountdown(remaining);
-          setShowCountdownOverlay(true);
-          countdownTimerRef.current = setInterval(() => {
-            remaining -= 1;
-            if (remaining > 0) {
-              setAutoNextCountdown(remaining);
-              return;
-            }
-
-            // 倒數結束，切換到下一集
-            if (countdownTimerRef.current) {
-              clearInterval(countdownTimerRef.current);
-              countdownTimerRef.current = null;
-            }
-            setAutoNextCountdown(0);
-            setShowCountdownOverlay(false);
-            autoNextBusyRef.current = false;
-            setCurrentEpisodeIndex(idx + 1);
-          }, 1000);
+          startAutoNextCountdown();
           return;
         }
 
@@ -1889,25 +1890,7 @@ function PlayPageClient() {
               return;
             }
 
-            autoNextBusyRef.current = true;
-            let remaining = 5;
-            setAutoNextCountdown(remaining);
-            setShowCountdownOverlay(true);
-            countdownTimerRef.current = setInterval(() => {
-              remaining -= 1;
-              if (remaining > 0) {
-                setAutoNextCountdown(remaining);
-                return;
-              }
-              if (countdownTimerRef.current) {
-                clearInterval(countdownTimerRef.current);
-                countdownTimerRef.current = null;
-              }
-              setAutoNextCountdown(0);
-              setShowCountdownOverlay(false);
-              autoNextBusyRef.current = false;
-              setCurrentEpisodeIndex(currentIdx + 1);
-            }, 1000);
+            startAutoNextCountdown();
           })();
         }
       });
@@ -1937,6 +1920,45 @@ function PlayPageClient() {
     }
   }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
 
+  // P 鍵切換子母畫面。
+  // 這個監聽必須獨立於播放器建立 effect：後者的依賴含 videoUrl，每換一集就重跑
+  // 一次，而它沒有（也不該有）移除 document 監聽的 cleanup——過去每換一集就會
+  // 多疊一個 handler，按 P 時多個 handler 依序進出 PiP，看起來像完全沒反應。
+  // 這裡只透過 ref 存取播放器，因此掛載一次即可。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== 'p' || e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      }
+      const active = document.activeElement as HTMLElement | null;
+      if (
+        active?.tagName === 'INPUT' ||
+        active?.tagName === 'TEXTAREA' ||
+        active?.isContentEditable
+      ) {
+        return;
+      }
+      void (async () => {
+        try {
+          if (document.pictureInPictureElement) {
+            await document.exitPictureInPicture();
+            setIsPiP(false);
+          } else if (artPlayerRef.current?.video) {
+            await artPlayerRef.current.video.requestPictureInPicture();
+            setIsPiP(true);
+          }
+        } catch {
+          setIsPiP(false);
+        }
+      })();
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+
   // 當組件解除安裝時清理定時器、Wake Lock 和播放器資源
   useEffect(() => {
     return () => {
@@ -1944,17 +1966,9 @@ function PlayPageClient() {
 
       saveCurrentPlayProgress();
 
-      if (countdownTimerRef.current) {
-        clearInterval(countdownTimerRef.current);
-        countdownTimerRef.current = null;
-      }
-
-      if (pipKeyHandlerRef.current) {
-        document.removeEventListener('keydown', pipKeyHandlerRef.current);
-      }
-
       releaseWakeLock();
 
+      // cleanupPlayer 內部會一併中止自動連播倒數
       cleanupPlayer(false);
     };
   }, []);
@@ -2075,28 +2089,11 @@ function PlayPageClient() {
                   <AutoNextCountdownOverlay
                     countdown={autoNextCountdown}
                     onPlayNow={() => {
-                      if (countdownTimerRef.current) {
-                        clearInterval(countdownTimerRef.current);
-                        countdownTimerRef.current = null;
-                      }
-                      setShowCountdownOverlay(false);
-                      setAutoNextCountdown(0);
-                      autoNextBusyRef.current = false;
-                      // 立即播放下一集
-                      const d = detailRef.current;
-                      const idx = currentEpisodeIndexRef.current;
-                      if (d && d.episodes && idx < d.episodes.length - 1) {
-                        setCurrentEpisodeIndex(idx + 1);
-                      }
+                      cancelAutoNextCountdown();
+                      playNextEpisodeFromCountdown();
                     }}
                     onCancel={() => {
-                      if (countdownTimerRef.current) {
-                        clearInterval(countdownTimerRef.current);
-                        countdownTimerRef.current = null;
-                      }
-                      setShowCountdownOverlay(false);
-                      setAutoNextCountdown(0);
-                      autoNextBusyRef.current = false;
+                      cancelAutoNextCountdown();
                     }}
                   />
                 )}

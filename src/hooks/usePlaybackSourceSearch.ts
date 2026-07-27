@@ -243,11 +243,12 @@ export function usePlaybackSourceSearch({
     res: SearchResult,
     signal?: AbortSignal
   ) => {
-    try {
-      const key = `${res.source}-${res.id}`;
-      if (speedTestedKeys.current.has(key)) return;
-      speedTestedKeys.current.add(key);
+    const key = `${res.source}-${res.id}`;
+    if (speedTestedKeys.current.has(key)) return;
+    // 進行中就先佔位，避免同一輪重複測速
+    speedTestedKeys.current.add(key);
 
+    try {
       const episodeUrl =
         res.episodes.length > 1
           ? res.episodes[res.episodes.length - 1]
@@ -261,6 +262,11 @@ export function usePlaybackSourceSearch({
         return next;
       });
     } catch (e) {
+      // 測速失敗或被中止時務必把佔位移除，否則這個源會被永久標記成
+      // 「已測過」卻沒有任何結果——之後每一輪都會 early return，
+      // 選集面板上它的畫質／速度會一直空著。fetchSourcesData 每次呼叫都會
+      // abort 前一批測速，所以這條路徑非常容易走到。
+      speedTestedKeys.current.delete(key);
       logger.warn(`Speed test failed for ${res.source_name}:`, e);
     }
   };
