@@ -27,11 +27,76 @@ const PRIVATE_HOST_PATTERNS = [
 const DNS_SAFETY_CACHE_TTL_MS = 5 * 60 * 1000;
 const MAX_DNS_SAFETY_CACHE_ENTRIES = 1000;
 const MAX_PINNED_AGENTS = 100;
+/**
+ * DNS 查詢逾時。
+ *
+ * node 的 dns.lookup 走 libuv 執行緒池（預設僅 4 條），既不吃 AbortSignal
+ * 也沒有內建逾時——呼叫端設的 AbortController 完全管不到這一段。解析器一慢，
+ * 卡住的查詢會佔滿執行緒池，連帶拖垮同行程中所有需要執行緒池的工作
+ * （檔案 I/O、gzip、scrypt 密碼驗證）。這裡自己加上限，讓單張圖片失敗，
+ * 而不是整站一起等。
+ */
+const DNS_LOOKUP_TIMEOUT_MS = 5000;
+/**
+ * 解析失敗的負面快取，避免死掉的主機每次請求都再賠上一次逾時。
+ *
+ * 刻意取短（10 秒）：這台部署主機的 DNS 是「慢但可用」，逾時有機會誤判到
+ * 正常的圖床。快取太久等於讓一次瞬斷把好主機停用一段時間，海報會整批破圖。
+ * 10 秒足以擋掉單次頁面載入內的重複重試，又能讓瞬斷很快恢復。
+ */
+const DNS_FAILURE_CACHE_TTL_MS = 10 * 1000;
+const MAX_DNS_FAILURE_CACHE_ENTRIES = 500;
 const dnsSafetyCache = new Map<
   string,
   { expiresAt: number; addresses: Array<{ address: string }> }
 >();
+const dnsFailureCache = new Map<string, number>();
+/**
+ * 同一主機名的並發查詢去重。
+ *
+ * 首頁一次載入數十張海報，同一個圖床冷快取時會同時發出多次「一模一樣」的
+ * 解析請求，每一次都吃掉一個執行緒池名額。共用同一個 Promise 後，N 次併發
+ * 只會實際查詢一次。
+ */
+const inFlightLookups = new Map<string, Promise<Array<{ address: string }>>>();
 const pinnedAgentCache = new Map<string, Agent>();
+
+class DnsLookupTimeoutError extends Error {
+  constructor(hostname: string) {
+    super(`DNS lookup timed out: ${hostname}`);
+    this.name = 'DnsLookupTimeoutError';
+  }
+}
+
+function lookupWithTimeout(
+  hostname: string
+): Promise<Array<{ address: string }>> {
+  const existing = inFlightLookups.get(hostname);
+  if (existing) return existing;
+
+  const lookupPromise = lookup(hostname, { all: true, verbatim: true });
+  // 逾時後底層的 getaddrinfo 仍會在執行緒池裡跑到完才 settle，而那時 race
+  // 早已 reject、沒有人再接它。先掛一個吞掉錯誤的 handler，否則會變成
+  // 未處理的 promise rejection。
+  lookupPromise.catch(() => undefined);
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const pending = Promise.race([
+    lookupPromise,
+    new Promise<never>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new DnsLookupTimeoutError(hostname)),
+        DNS_LOOKUP_TIMEOUT_MS
+      );
+    }),
+  ]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+    inFlightLookups.delete(hostname);
+  });
+
+  inFlightLookups.set(hostname, pending);
+  return pending;
+}
 
 function getNormalizedHostname(parsed: URL): string {
   return parsed.hostname.replace(/^\[|\]$/g, '');
@@ -114,9 +179,23 @@ async function resolveSafeRemoteAddresses(
   let addresses = cached && cached.expiresAt > now ? cached.addresses : null;
 
   if (!addresses) {
+    const failedUntil = dnsFailureCache.get(hostname);
+    if (failedUntil !== undefined) {
+      if (failedUntil > now) {
+        throw new UnsafeRemoteUrlError('Unable to resolve remote host');
+      }
+      dnsFailureCache.delete(hostname);
+    }
+
     try {
-      addresses = await lookup(hostname, { all: true, verbatim: true });
+      addresses = await lookupWithTimeout(hostname);
     } catch {
+      setBoundedMapValue(
+        dnsFailureCache,
+        hostname,
+        now + DNS_FAILURE_CACHE_TTL_MS,
+        MAX_DNS_FAILURE_CACHE_ENTRIES
+      );
       throw new UnsafeRemoteUrlError('Unable to resolve remote host');
     }
   }

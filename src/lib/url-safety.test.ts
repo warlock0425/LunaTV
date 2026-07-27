@@ -212,4 +212,58 @@ describe('url safety helpers', () => {
       readResponseJsonWithLimit(createTextResponse('{"ok":true}'), 4)
     ).rejects.toThrow('exceeds 4 bytes');
   });
+
+  /**
+   * dns.lookup 走 libuv 執行緒池（預設 4 條）且不吃 AbortSignal，呼叫端的
+   * AbortController 完全管不到它。慢速或無回應的解析器會佔滿執行緒池，
+   * 連帶拖垮同行程的檔案 I/O、gzip 與 scrypt。以下三條把防護釘死。
+   */
+  describe('DNS 解析的執行緒池防護', () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('同一主機名的並發查詢只實際解析一次', async () => {
+      mockedLookup.mockResolvedValue([
+        { address: '93.184.216.34', family: 4 },
+      ] as unknown as Awaited<ReturnType<typeof lookup>>);
+
+      await Promise.all([
+        fetchSafeRemoteUrl('https://dedupe-probe.example.com/1.m3u8'),
+        fetchSafeRemoteUrl('https://dedupe-probe.example.com/2.m3u8'),
+        fetchSafeRemoteUrl('https://dedupe-probe.example.com/3.m3u8'),
+      ]);
+
+      expect(mockedLookup).toHaveBeenCalledTimes(1);
+    });
+
+    it('解析卡住時會逾時，不會無限期等待', async () => {
+      jest.useFakeTimers();
+      mockedLookup.mockReturnValue(
+        new Promise(() => undefined) as ReturnType<typeof lookup>
+      );
+
+      const pending = fetchSafeRemoteUrl('https://hung-dns.example.com/1.m3u8');
+      const assertion = expect(pending).rejects.toThrow(
+        'Unable to resolve remote host'
+      );
+      await jest.advanceTimersByTimeAsync(5000);
+      await assertion;
+
+      expect(global.fetch).not.toHaveBeenCalled();
+    });
+
+    it('解析失敗會進負面快取，死掉的主機不會每次都再賠一次逾時', async () => {
+      mockedLookup.mockRejectedValue(new Error('ENOTFOUND'));
+
+      await expect(
+        fetchSafeRemoteUrl('https://dead-host-probe.example.com/1.m3u8')
+      ).rejects.toThrow('Unable to resolve remote host');
+      await expect(
+        fetchSafeRemoteUrl('https://dead-host-probe.example.com/2.m3u8')
+      ).rejects.toThrow('Unable to resolve remote host');
+
+      expect(mockedLookup).toHaveBeenCalledTimes(1);
+    });
+  });
 });
