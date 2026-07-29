@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import {
+  hasControlChars,
   isValidApiSource,
   isValidApiTextParam,
   readJsonObject,
@@ -44,17 +45,27 @@ function isValidTextList(value: unknown, maxLength = 128): value is string[] {
 /**
  * 新帳號的使用者名格式。
  *
- * 使用者名會直接組成儲存鍵（u:<name>:pwd、u:<name>:pr…），含冒號會污染
- * 命名空間：例如帳號 `a:pwd` 會產生 `u:a:pwd:pwd`，被名冊掃描的
- * /^u:(.+?):pwd$/ 非貪婪解析成不存在的帳號 `a`。
+ * 只擋真正會出事的字元，不用白名單——本專案面向繁中使用者，中文帳號是合理
+ * 需求，Redis 鍵本身也是二進位安全的：
+ *   - 冒號：使用者名會直接組成儲存鍵（u:<name>:pwd），帳號 `a:pwd` 會產生
+ *     `u:a:pwd:pwd`，被名冊掃描的 /^u:(.+?):pwd$/ 非貪婪解析成不存在的帳號 `a`。
+ *   - 空白與控制字元：`alice` 與 `alice ` 會變成兩個難以分辨的帳號。
+ *   - 長度：避免鍵無限膨脹。
  *
  * 僅套用在「新增」，不驗證既有帳號，避免升級後舊帳號被鎖在門外。
  */
-const NEW_USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
+const MAX_USERNAME_LENGTH = 64;
 const MAX_PASSWORD_LENGTH = 128;
 
 function isValidNewUsername(value: unknown): value is string {
-  return typeof value === 'string' && NEW_USERNAME_PATTERN.test(value);
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_USERNAME_LENGTH &&
+    !value.includes(':') &&
+    !/\s/.test(value) &&
+    !hasControlChars(value)
+  );
 }
 
 function isValidNewPassword(value: unknown): value is string {
@@ -179,8 +190,7 @@ export async function POST(request: NextRequest) {
         if (!isValidNewUsername(targetUsername)) {
           return NextResponse.json(
             {
-              error:
-                '使用者名只能包含英數字與 . _ @ -，長度 1～64（冒號會污染儲存鍵）',
+              error: `使用者名不可含冒號、空白或控制字元，長度 1～${MAX_USERNAME_LENGTH}`,
             },
             { status: 400 }
           );

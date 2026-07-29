@@ -13,7 +13,7 @@ const MEDIA_ID_PATTERN = /^[A-Za-z0-9._~:/?#@!$&()*+,;=%-]+$/;
 const NUMERIC_ID_PATTERN = /^\d{1,12}$/;
 const UNSAFE_TEXT_CHARS_PATTERN = /[<>`\\]/;
 
-function hasControlChars(value: string): boolean {
+export function hasControlChars(value: string): boolean {
   for (const char of value) {
     const code = char.charCodeAt(0);
     if (code <= 31 || code === 127) return true;

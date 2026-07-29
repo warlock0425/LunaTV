@@ -455,33 +455,19 @@ export abstract class BaseRedisStorage implements IStorage {
     return 'sys:users';
   }
 
-  /**
-   * 以 SCAN 逐批取得密碼鍵。
-   *
-   * KEYS 是 O(N) 全鍵掃描且會阻塞整個 Redis 主執行緒，而 getAllUsers 是每次
-   * 讀取都會呼叫（cron 每輪、管理後台、備份匯出匯入）。SCAN 分批不阻塞，
-   * 代價只是多幾次往返。
-   */
-  private async scanUserPwdKeys(): Promise<string[]> {
-    const keys: string[] = [];
-    let cursor = '0';
-    do {
-      const reply = await this.withRetry(() =>
-        this.client.scan(cursor as never, { MATCH: 'u:*:pwd', COUNT: 500 })
-      );
-      cursor = String(reply.cursor);
-      keys.push(...ensureStringArray(reply.keys as any[]));
-    } while (cursor !== '0');
-    return keys;
-  }
-
   async getAllUsers(): Promise<string[]> {
     // 對齊上游語意：密碼鍵（u:*:pwd）是名冊的最終真相，sys:users 只是快取。
     // 索引有多條漏登記路徑（一次性遷移旗標鎖死、備份匯入繞過 sAdd 等），
     // 漏掉的帳號能登入但會被 cron 集數更新永遠略過，故讀取時比對自癒。
+    //
+    // 這裡刻意保留 KEYS 而不改用 SCAN。KEYS 確實會阻塞主執行緒，但本專案的
+    // 鍵空間規模是「使用者數 × 個位數個鍵」，實際耗時微不足道；而後端可能是
+    // Kvrocks，其 SCAN 的游標語意與 MATCH 行為和 Redis 並不完全一致，一旦
+    // 少掃到密碼鍵就會讓帳號從名冊消失——症狀正是「該帳號的集數永遠不更新」，
+    // 而且完全沒有錯誤訊息。除非鍵空間真的長到會拖慢，否則不值得換。
     const [members, pwdKeys] = await Promise.all([
       this.withRetry(() => this.client.sMembers(this.usersSetKey())),
-      this.scanUserPwdKeys(),
+      this.withRetry(() => this.client.keys('u:*:pwd')),
     ]);
     const { users, missing } = reconcileUserIndex(
       ensureStringArray(members as any[]),

@@ -107,8 +107,9 @@ describe('/api/admin/user 新增帳號的輸入驗證', () => {
 
   it.each([
     ['含冒號', 'evil:pwd'],
-    ['含萬用字元', 'a*b'],
     ['含空白', 'bad name'],
+    ['含定位字元', `tab${String.fromCharCode(9)}here`],
+    ['含控制字元', `nul${String.fromCharCode(0)}`],
     ['空字串', ''],
     ['超過 64 字', 'x'.repeat(65)],
   ])('拒絕不合法的使用者名（%s）', async (_label, targetUsername) => {
@@ -119,6 +120,22 @@ describe('/api/admin/user 新增帳號的輸入驗證', () => {
     expect(response.status).toBe(400);
     expect(db.registerUser).not.toHaveBeenCalled();
     expect(mockedSaveConfig).not.toHaveBeenCalled();
+  });
+
+  // 只擋真正會出事的字元。本專案面向繁中使用者，中文帳號是合理需求；
+  // 連字號更要確認沒被誤擋——寫在字元類結尾的 `-` 很容易變成字面字元。
+  it.each([
+    ['一般英數', 'zoe'],
+    ['連字號', 'bob-smith'],
+    ['點與底線與 @', 'bob.smith_01@x-y'],
+    ['中文', '小明'],
+  ])('接受合法的使用者名（%s）', async (_label, targetUsername) => {
+    const response = await POST(
+      request({ action: 'add', targetUsername, targetPassword: 'pw' })
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.registerUser).toHaveBeenCalledWith(targetUsername, 'pw');
   });
 
   it('拒絕過長的密碼', async () => {
@@ -143,18 +160,5 @@ describe('/api/admin/user 新增帳號的輸入驗證', () => {
 
     expect(response.status).toBe(400);
     expect(db.registerUser).not.toHaveBeenCalled();
-  });
-
-  it('合法的使用者名可以正常新增', async () => {
-    const response = await POST(
-      request({
-        action: 'add',
-        targetUsername: 'bob.smith_01@x-y',
-        targetPassword: 'pw',
-      })
-    );
-
-    expect(response.status).toBe(200);
-    expect(db.registerUser).toHaveBeenCalledWith('bob.smith_01@x-y', 'pw');
   });
 });

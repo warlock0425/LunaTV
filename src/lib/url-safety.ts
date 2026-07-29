@@ -263,6 +263,9 @@ function getPinnedAgent(hostname: string, targets: ResolvedAddress[]): Agent {
   return agent;
 }
 
+/** 帶 Location 的重導向狀態碼（304 / 300 不在其列，它們不是重導向） */
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
 export class UnsafeRemoteUrlError extends Error {
   constructor(message = 'Unsafe remote URL') {
     super(message);
@@ -315,13 +318,15 @@ export async function fetchSafeRemoteUrl(
       dispatcher,
     } as RequestInit & { dispatcher: Agent });
 
-    if (response.status < 300 || response.status >= 400) {
+    // 只跟隨真正帶 Location 的重導向。3xx 不等於重導向——304 Not Modified、
+    // 300 Multiple Choices 都在這個區間卻沒有 Location，原本會被當成重導向
+    // 處理、body 先被 cancel 掉才回傳，呼叫端拿到的是讀不動的空殼。
+    if (!REDIRECT_STATUSES.has(response.status)) {
       return response;
     }
 
     const location = response.headers.get('location');
-    // 3xx 但沒有 Location 就是壞掉的回應，我們無從跟隨。原本會先 cancel 掉
-    // body 再把它回傳出去，呼叫端拿到的是一個讀不動的空殼；直接當成錯誤處理，
+    // 重導向狀態碼卻沒有 Location 是壞掉的回應，無從跟隨，當成錯誤處理。
     // 呼叫端本來就都有接 UnsafeRemoteUrlError。
     if (!location) {
       void response.body?.cancel().catch(() => undefined);
