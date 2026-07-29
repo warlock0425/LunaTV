@@ -327,13 +327,17 @@ export async function deletePlayRecord(
       source,
       id
     );
+    // 複製後再刪：getCachedPlayRecords 回傳的是快取記憶體內的活引用，
+    // 就地 delete 會在還沒寫回 localStorage 之前就改動 memo，讓 memo 與
+    // 實際儲存內容不一致。其餘同檔案的寫入路徑本來就是複製後再改。
+    const nextRecords = { ...cachedRecords };
     keysToDelete.forEach((k) => {
-      delete cachedRecords[k];
+      delete nextRecords[k];
     });
-    cacheManager.cachePlayRecords(cachedRecords);
+    cacheManager.cachePlayRecords(nextRecords);
     window.dispatchEvent(
       new CustomEvent('playRecordsUpdated', {
-        detail: cachedRecords,
+        detail: nextRecords,
       })
     );
 

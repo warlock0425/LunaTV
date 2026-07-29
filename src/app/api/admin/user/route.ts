@@ -41,6 +41,30 @@ function isValidTextList(value: unknown, maxLength = 128): value is string[] {
   );
 }
 
+/**
+ * 新帳號的使用者名格式。
+ *
+ * 使用者名會直接組成儲存鍵（u:<name>:pwd、u:<name>:pr…），含冒號會污染
+ * 命名空間：例如帳號 `a:pwd` 會產生 `u:a:pwd:pwd`，被名冊掃描的
+ * /^u:(.+?):pwd$/ 非貪婪解析成不存在的帳號 `a`。
+ *
+ * 僅套用在「新增」，不驗證既有帳號，避免升級後舊帳號被鎖在門外。
+ */
+const NEW_USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,64}$/;
+const MAX_PASSWORD_LENGTH = 128;
+
+function isValidNewUsername(value: unknown): value is string {
+  return typeof value === 'string' && NEW_USERNAME_PATTERN.test(value);
+}
+
+function isValidNewPassword(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    value.length <= MAX_PASSWORD_LENGTH
+  );
+}
+
 export async function POST(request: NextRequest) {
   const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
@@ -152,13 +176,30 @@ export async function POST(request: NextRequest) {
         if (targetEntry) {
           return NextResponse.json({ error: '使用者已存在' }, { status: 400 });
         }
-        if (!targetPassword) {
+        if (!isValidNewUsername(targetUsername)) {
           return NextResponse.json(
-            { error: '缺少目標使用者密碼' },
+            {
+              error:
+                '使用者名只能包含英數字與 . _ @ -，長度 1～64（冒號會污染儲存鍵）',
+            },
             { status: 400 }
           );
         }
-        await db.registerUser(targetUsername!, targetPassword);
+        if (!isValidNewPassword(targetPassword)) {
+          return NextResponse.json(
+            { error: `密碼不得為空，且長度不可超過 ${MAX_PASSWORD_LENGTH}` },
+            { status: 400 }
+          );
+        }
+        // 設定與資料庫可能不同步（例如帳號從設定移除但密碼鍵仍在），
+        // 直接 registerUser 會覆蓋掉既有帳號的密碼。
+        if (await db.checkUserExist(targetUsername)) {
+          return NextResponse.json(
+            { error: '該使用者名已被使用' },
+            { status: 400 }
+          );
+        }
+        await db.registerUser(targetUsername, targetPassword);
 
         // 取得使用者群組資訊
         const { userGroup } = body as { userGroup?: string };
@@ -270,8 +311,11 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           );
         }
-        if (!targetPassword) {
-          return NextResponse.json({ error: '缺少新密碼' }, { status: 400 });
+        if (!isValidNewPassword(targetPassword)) {
+          return NextResponse.json(
+            { error: `密碼不得為空，且長度不可超過 ${MAX_PASSWORD_LENGTH}` },
+            { status: 400 }
+          );
         }
 
         // 權限檢查：不允許修改站長密碼

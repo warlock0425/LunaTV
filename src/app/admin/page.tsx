@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import {
@@ -14,6 +13,7 @@ import { Suspense, useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { AdminConfig, AdminConfigResult } from '@/lib/admin.types';
+import { readErrorMessage } from '@/lib/safe-json';
 
 import DataMigration from '@/components/DataMigration';
 import PageLayout from '@/components/PageLayout';
@@ -67,8 +67,7 @@ function AdminPageClient() {
       const response = await fetch(`/api/admin/config`);
 
       if (!response.ok) {
-        const data = (await response.json()) as any;
-        throw new Error(`取得設定失敗: ${data.error}`);
+        throw new Error(await readErrorMessage(response, '取得設定失敗'));
       }
 
       const data = (await response.json()) as AdminConfigResult;

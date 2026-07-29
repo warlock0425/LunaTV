@@ -165,13 +165,15 @@ export async function deleteFavorite(
     // 立即更新快取
     const cachedFavorites = cacheManager.getCachedFavorites() || {};
     const prevFavorites = { ...cachedFavorites };
-    delete cachedFavorites[key];
-    cacheManager.cacheFavorites(cachedFavorites);
+    // 複製後再刪：getCachedFavorites 回傳的是快取記憶體內的活引用
+    const nextFavorites = { ...cachedFavorites };
+    delete nextFavorites[key];
+    cacheManager.cacheFavorites(nextFavorites);
 
     // 触發立即更新事件
     window.dispatchEvent(
       new CustomEvent('favoritesUpdated', {
-        detail: cachedFavorites,
+        detail: nextFavorites,
       })
     );
 

@@ -19,11 +19,13 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const { vod_name, userId } = body;
+    const { vod_name } = body;
     const activeUser = await requireActiveUser(req);
     if (!activeUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // 身分一律以 cookie 為準。先前還接受一個客戶端傳來的 userId，但它從未被
+    // 使用（下方一律用 username），純粹是看起來像 IDOR 的死參數。
     const username = activeUser.username;
 
     if (!vod_name || !isValidApiTextParam(vod_name)) {
@@ -33,9 +35,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1. 撈出 Redis / Kvrocks 中該使用者所有的觀看雜湊表
     if (
-      (userId && !isValidApiTextParam(userId, 128)) ||
       (body.source && !isValidApiTextParam(body.source)) ||
       (body.source_name && !isValidApiTextParam(body.source_name))
     ) {
@@ -54,9 +54,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const mockUserId = username || userId || 'default_user';
     const userHistory =
-      (await storage.hgetall(`user:history:${mockUserId}`)) || {};
+      (await storage.hgetall(`user:history:${username}`)) || {};
 
     // 允許前端傳入 source 做精確比對，避免抹除不同來源的同名記錄
     const requestedSource =
@@ -82,7 +81,7 @@ export async function POST(req: NextRequest) {
         // 刪除資料必須精確匹配正規化後的標題；模糊包含會誤刪短標題的其他作品。
         if (cleanRecordTitle && cleanRecordTitle === targetTitle) {
           if (sourceForMatch && sourceInRecord !== sourceForMatch) continue;
-          await storage.hdel(`user:history:${mockUserId}`, fieldKey);
+          await storage.hdel(`user:history:${username}`, fieldKey);
         }
       } catch (e) {
         // 舊的或損壞的 JSON 忽略

@@ -11,6 +11,8 @@ import {
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
+import { readErrorMessage } from '@/lib/safe-json';
+
 import PageLayout from '@/components/PageLayout';
 
 interface HealthData {
@@ -100,10 +102,12 @@ export default function AdminHealthPage() {
   const loadHealth = useCallback(async () => {
     try {
       const response = await fetch('/api/admin/health', { cache: 'no-store' });
-      const payload = (await response.json()) as HealthData & {
-        error?: string;
-      };
-      if (!response.ok) throw new Error(payload.error || '無法讀取系統狀態');
+      // 先判斷狀態碼再解析：驗證失敗回的是純文字，硬解會拋 SyntaxError
+      // 並蓋掉「登入已過期」這個真正的原因。
+      if (!response.ok) {
+        throw new Error(await readErrorMessage(response, '無法讀取系統狀態'));
+      }
+      const payload = (await response.json()) as HealthData;
       setData(payload);
     } catch (loadError) {
       setError(

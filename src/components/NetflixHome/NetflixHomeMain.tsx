@@ -16,7 +16,6 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
 import { BangumiCalendarData } from '@/lib/bangumi.client';
 import type { PlayRecord } from '@/lib/db.client';
 import { clearAllPlayRecords, deletePlayRecord } from '@/lib/db.client';
@@ -166,8 +165,8 @@ export default function NetflixHome({
         });
       }
 
-      const authInfo = getAuthInfoFromBrowserCookie();
-      const userId = authInfo?.username || 'default_user';
+      // 補掃同名殘留（deletePlayRecord 只比對 source+id，抓不到同名不同 id 的舊紀錄）。
+      // 使用者身分一律由伺服器從 cookie 判定，不從客戶端傳。
       await fetch('/api/history/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -175,7 +174,6 @@ export default function NetflixHome({
           vod_name: item.title || item.vod_name,
           source: realSource,
           source_name: item.source_name,
-          userId,
         }),
       }).catch((err) => {
         console.warn('API 歷史刪除失敗:', err);

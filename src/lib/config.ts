@@ -439,12 +439,14 @@ async function getInitConfig(
   return adminConfig;
 }
 
-export async function getConfig(): Promise<AdminConfig> {
-  // 使用內存快取，帶 TTL 過期檢查
-  if (cachedConfig && Date.now() - cachedConfigTimestamp < CONFIG_CACHE_TTL) {
-    return cachedConfig;
-  }
+/**
+ * 快取過期時的重新載入。以 Promise 去重，避免同時湧入的請求各自打一次
+ * 資料庫——getConfig 有 24 個 API route 在呼叫，其中包含播放時每個影片
+ * 分片都會經過的 /api/proxy/segment，TTL 一到就是一波驚群。
+ */
+let configReloadPromise: Promise<AdminConfig> | null = null;
 
+async function reloadConfig(): Promise<AdminConfig> {
   // 讀 db
   let adminConfig: AdminConfig | null = null;
   try {
@@ -452,6 +454,7 @@ export async function getConfig(): Promise<AdminConfig> {
   } catch (e) {
     console.error('取得管理員設定失敗:', e);
   }
+  const loadedFromDb = adminConfig !== null;
 
   // db 中無設定，執行一次初始化
   if (!adminConfig) {
@@ -473,15 +476,50 @@ export async function getConfig(): Promise<AdminConfig> {
     }
     adminConfig = await getInitConfig(defaultConfigFileContent);
   }
+
+  // 自我修復前後若無差異就不必寫回。原本每次快取過期都會把整份設定
+  // 重寫一遍，等於每 5 分鐘被動產生一次寫入，而絕大多數情況根本沒改動。
+  // 但首次初始化（db 尚無設定）一定要落地，否則每個請求都會重跑
+  // getInitConfig（讀 config.json + 撈使用者清單），設定也永遠不會存進 db。
+  const before = loadedFromDb ? safeSerializeConfig(adminConfig) : null;
   adminConfig = configSelfCheck(adminConfig);
+  const after = safeSerializeConfig(adminConfig);
+
   cachedConfig = adminConfig;
   cachedConfigTimestamp = Date.now();
-  try {
-    await db.saveAdminConfig(cachedConfig);
-  } catch (error) {
-    console.error('儲存自我修復後的管理員設定失敗:', error);
+
+  if (before === null || before !== after) {
+    try {
+      await db.saveAdminConfig(cachedConfig);
+    } catch (error) {
+      console.error('儲存自我修復後的管理員設定失敗:', error);
+    }
   }
+
   return cachedConfig;
+}
+
+function safeSerializeConfig(config: AdminConfig | null): string {
+  try {
+    return JSON.stringify(config);
+  } catch {
+    // 序列化失敗（理論上不該發生）就回傳不同的哨兵值，讓寫回照舊執行
+    return Math.random().toString(36);
+  }
+}
+
+export async function getConfig(): Promise<AdminConfig> {
+  // 使用內存快取，帶 TTL 過期檢查
+  if (cachedConfig && Date.now() - cachedConfigTimestamp < CONFIG_CACHE_TTL) {
+    return cachedConfig;
+  }
+
+  if (configReloadPromise) return configReloadPromise;
+
+  configReloadPromise = reloadConfig().finally(() => {
+    configReloadPromise = null;
+  });
+  return configReloadPromise;
 }
 
 export async function getFreshConfig(): Promise<AdminConfig> {

@@ -6,6 +6,8 @@ import React, {
   ReactNode,
   useCallback,
   useContext,
+  useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -33,14 +35,28 @@ export function useToast() {
 
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const dismissTimersRef = useRef<Set<ReturnType<typeof setTimeout>>>(
+    new Set()
+  );
 
   const toast = useCallback((message: string, type: ToastType = 'info') => {
     const id = Math.random().toString(36).substring(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
 
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      dismissTimersRef.current.delete(timer);
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 3000);
+    dismissTimersRef.current.add(timer);
+  }, []);
+
+  // 卸載時清掉尚未觸發的自動關閉計時器
+  useEffect(() => {
+    const timers = dismissTimersRef.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
   }, []);
 
   return (

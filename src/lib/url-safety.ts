@@ -320,10 +320,14 @@ export async function fetchSafeRemoteUrl(
     }
 
     const location = response.headers.get('location');
-    response.body?.cancel();
+    // 3xx 但沒有 Location 就是壞掉的回應，我們無從跟隨。原本會先 cancel 掉
+    // body 再把它回傳出去，呼叫端拿到的是一個讀不動的空殼；直接當成錯誤處理，
+    // 呼叫端本來就都有接 UnsafeRemoteUrlError。
     if (!location) {
-      return response;
+      void response.body?.cancel().catch(() => undefined);
+      throw new UnsafeRemoteUrlError('Redirect without Location header');
     }
+    void response.body?.cancel().catch(() => undefined);
 
     const nextUrl = parseSafeRemoteUrl(
       new URL(location, currentUrl).toString()

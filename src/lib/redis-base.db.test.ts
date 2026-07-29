@@ -86,3 +86,71 @@ describe('BaseRedisStorage 對毀損資料的容忍度', () => {
     await expect(storage.getAdminConfig()).resolves.toBeNull();
   });
 });
+
+/**
+ * getAllUsers 每次讀取都會呼叫（cron 每輪、管理後台、備份匯出匯入）。
+ * 原本用 KEYS 掃描全鍵，會阻塞 Redis 主執行緒；改為 SCAN 分批。
+ */
+describe('BaseRedisStorage 的使用者名冊掃描', () => {
+  afterEach(() => {
+    jest.dontMock('redis');
+    jest.restoreAllMocks();
+    jest.resetModules();
+  });
+
+  async function createStorage(client: Record<string, unknown>) {
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.doMock('redis', () => ({ createClient: jest.fn(() => client) }));
+    const { BaseRedisStorage } =
+      jest.requireActual<typeof import('./redis-base.db.js')>(
+        './redis-base.db'
+      );
+    class TestRedisStorage extends BaseRedisStorage {
+      constructor() {
+        super(
+          { url: 'redis://example.test:6379', clientName: 'TestRedis' },
+          Symbol('test-redis-scan')
+        );
+      }
+    }
+    return new TestRedisStorage();
+  }
+
+  it('用 SCAN 逐批取完所有密碼鍵，且不呼叫 KEYS', async () => {
+    const scan = jest
+      .fn()
+      .mockResolvedValueOnce({ cursor: '17', keys: ['u:alice:pwd'] })
+      .mockResolvedValueOnce({ cursor: '42', keys: ['u:bob:pwd'] })
+      .mockResolvedValueOnce({ cursor: '0', keys: ['u:carol:pwd'] });
+    const keys = jest.fn();
+    const storage = await createStorage({
+      connect: jest.fn().mockResolvedValue(undefined),
+      on: jest.fn(),
+      sMembers: jest.fn().mockResolvedValue(['alice']),
+      sAdd: jest.fn().mockResolvedValue(2),
+      scan,
+      keys,
+    });
+
+    const users = await storage.getAllUsers();
+
+    expect(keys).not.toHaveBeenCalled();
+    expect(scan).toHaveBeenCalledTimes(3);
+    expect(users.sort()).toEqual(['alice', 'bob', 'carol']);
+  });
+
+  it('索引缺漏的帳號會補寫回 sys:users', async () => {
+    const sAdd = jest.fn().mockResolvedValue(1);
+    const storage = await createStorage({
+      connect: jest.fn().mockResolvedValue(undefined),
+      on: jest.fn(),
+      sMembers: jest.fn().mockResolvedValue([]),
+      sAdd,
+      scan: jest.fn().mockResolvedValue({ cursor: '0', keys: ['u:dave:pwd'] }),
+    });
+
+    await storage.getAllUsers();
+
+    expect(sAdd).toHaveBeenCalledWith('sys:users', ['dave']);
+  });
+});

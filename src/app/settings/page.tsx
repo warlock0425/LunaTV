@@ -144,28 +144,39 @@ export default function SettingsPage() {
   };
 
   const handleSave = () => {
-    localStorage.setItem('doubanDataSource', doubanSource);
-    localStorage.setItem('doubanProxyUrl', proxyUrl);
-    localStorage.setItem('doubanImageProxyType', imageProxyType);
-    localStorage.setItem('doubanImageProxyUrl', imageProxyUrl);
-    localStorage.setItem('enableOptimization', String(enableOptimization));
-    localStorage.setItem('defaultAggregateSearch', String(aggregateResults));
-    localStorage.removeItem('defaultAggregateResults');
-    writeStreamingSearchPreference(localStorage, streamSearch);
-    localStorage.setItem('iptvDirectConnect', String(iptvDirect));
-    showSaveMessage('設定已儲存');
+    // 沒有這道 try 的話，配額不足或無痕模式下第一個 setItem 就會拋錯：
+    // 後面的設定全部沒寫入，而且連「已儲存」的提示都不會執行——
+    // 使用者按了儲存卻毫無反應，也不知道失敗了。
+    try {
+      localStorage.setItem('doubanDataSource', doubanSource);
+      localStorage.setItem('doubanProxyUrl', proxyUrl);
+      localStorage.setItem('doubanImageProxyType', imageProxyType);
+      localStorage.setItem('doubanImageProxyUrl', imageProxyUrl);
+      localStorage.setItem('enableOptimization', String(enableOptimization));
+      localStorage.setItem('defaultAggregateSearch', String(aggregateResults));
+      localStorage.removeItem('defaultAggregateResults');
+      writeStreamingSearchPreference(localStorage, streamSearch);
+      localStorage.setItem('iptvDirectConnect', String(iptvDirect));
+      showSaveMessage('設定已儲存');
+    } catch {
+      showSaveMessage('儲存失敗，瀏覽器可能已停用或用盡本機儲存空間');
+    }
   };
 
   const handleReset = () => {
-    localStorage.removeItem('doubanDataSource');
-    localStorage.removeItem('doubanProxyUrl');
-    localStorage.removeItem('doubanImageProxyType');
-    localStorage.removeItem('doubanImageProxyUrl');
-    localStorage.removeItem('enableOptimization');
-    localStorage.removeItem('defaultAggregateSearch');
-    localStorage.removeItem('defaultAggregateResults');
-    clearStreamingSearchPreference(localStorage);
-    localStorage.removeItem('iptvDirectConnect');
+    try {
+      localStorage.removeItem('doubanDataSource');
+      localStorage.removeItem('doubanProxyUrl');
+      localStorage.removeItem('doubanImageProxyType');
+      localStorage.removeItem('doubanImageProxyUrl');
+      localStorage.removeItem('enableOptimization');
+      localStorage.removeItem('defaultAggregateSearch');
+      localStorage.removeItem('defaultAggregateResults');
+      clearStreamingSearchPreference(localStorage);
+      localStorage.removeItem('iptvDirectConnect');
+    } catch {
+      // 清除失敗不該擋住畫面上的重設；下方仍會把狀態還原為預設值
+    }
     setDoubanSource('cmliussss-cdn-tencent');
     setProxyUrl('');
     setImageProxyType('cmliussss-cdn-tencent');

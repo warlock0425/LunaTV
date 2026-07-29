@@ -233,14 +233,16 @@ export async function deleteSkipConfig(
     const cachedConfigs = cacheManager.getCachedSkipConfigs() || {};
     const prevConfigs = { ...cachedConfigs };
 
-    // 立即更新快取
-    delete cachedConfigs[key];
-    cacheManager.cacheSkipConfigs(cachedConfigs);
+    // 立即更新快取。複製後再刪：getCachedSkipConfigs 回傳的是快取記憶體內的
+    // 活引用，就地 delete 會讓 memo 與實際儲存內容不一致。
+    const nextConfigs = { ...cachedConfigs };
+    delete nextConfigs[key];
+    cacheManager.cacheSkipConfigs(nextConfigs);
 
     // 觸發立即更新事件
     window.dispatchEvent(
       new CustomEvent('skipConfigsUpdated', {
-        detail: cachedConfigs,
+        detail: nextConfigs,
       })
     );
 

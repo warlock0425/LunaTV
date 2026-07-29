@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 interface ErrorInfo {
   id: string;
@@ -13,42 +13,53 @@ export function GlobalErrorIndicator() {
   const [isVisible, setIsVisible] = useState(false);
   const [isReplacing, setIsReplacing] = useState(false);
 
+  const replaceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 「目前是否已有錯誤」記在 ref 而非讀 state：setState 的 updater 必須是
+  // 純函式（React 可能重複呼叫），不能在裡面啟動計時器。
+  const hasErrorRef = useRef(false);
+
+  // 依賴刻意留空。原本掛在 [currentError] 上會讓每來一次錯誤就重新註冊一次
+  // 監聽，而且替換動畫的計時器沒有人負責清除。
   useEffect(() => {
-    // 監聽自定義錯誤事件
     const handleError = (event: CustomEvent) => {
       const { message } = event.detail;
-      const newError: ErrorInfo = {
+
+      // 已有錯誤時播放替換動畫
+      if (hasErrorRef.current) {
+        if (replaceTimerRef.current) clearTimeout(replaceTimerRef.current);
+        setIsReplacing(true);
+        replaceTimerRef.current = setTimeout(() => {
+          replaceTimerRef.current = null;
+          setIsReplacing(false);
+        }, 200);
+      }
+
+      hasErrorRef.current = true;
+      setCurrentError({
         id: Date.now().toString(),
         message,
         timestamp: Date.now(),
-      };
-
-      // 如果已有錯誤，開始替換動畫
-      if (currentError) {
-        setCurrentError(newError);
-        setIsReplacing(true);
-
-        // 動畫完成後恢復正常
-        setTimeout(() => {
-          setIsReplacing(false);
-        }, 200);
-      } else {
-        // 第一次顯示錯誤
-        setCurrentError(newError);
-      }
-
+      });
       setIsVisible(true);
     };
 
-    // 監聽錯誤事件
     window.addEventListener('globalError', handleError as EventListener);
 
     return () => {
       window.removeEventListener('globalError', handleError as EventListener);
+      if (replaceTimerRef.current) {
+        clearTimeout(replaceTimerRef.current);
+        replaceTimerRef.current = null;
+      }
     };
-  }, [currentError]);
+  }, []);
 
   const handleClose = () => {
+    if (replaceTimerRef.current) {
+      clearTimeout(replaceTimerRef.current);
+      replaceTimerRef.current = null;
+    }
+    hasErrorRef.current = false;
     setIsVisible(false);
     setCurrentError(null);
     setIsReplacing(false);
