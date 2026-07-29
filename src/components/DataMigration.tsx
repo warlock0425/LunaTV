@@ -236,8 +236,11 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
       a.style.left = '0';
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      // 延後釋放 blob URL。緊接在 click() 之後同步 revoke，部分瀏覽器
+      // （Firefox 尤其明顯）會在下載真正開始讀取 blob 之前就把它回收掉，
+      // 造成備份檔匯出失敗。
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
       showAlert({
         type: 'success',
