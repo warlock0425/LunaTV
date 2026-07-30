@@ -78,6 +78,12 @@ function localizeSearchResult(result: SearchResult): SearchResult {
   return result;
 }
 
+/** 上游標題的空白正規化：去首尾、把連續空白塌縮為單一半形空格 */
+function normalizeUpstreamTitle(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/\s+/g, ' ');
+}
+
 /** m3u8 連結判斷：容許帶查詢參數（如 xxx.m3u8?sign=...） */
 function isM3u8Link(url: string): boolean {
   return /\.m3u8($|\?)/i.test(url);
@@ -199,7 +205,7 @@ async function searchWithCache(
         return [
           {
             id: String(item.vod_id),
-            title: item.vod_name.trim().replace(/\s+/g, ' '),
+            title: normalizeUpstreamTitle(item.vod_name),
             poster: item.vod_pic,
             episodes,
             episodes_titles: titles,
@@ -420,7 +426,10 @@ export async function getDetailFromApi(
     }
     return localizeSearchResult({
       id: id.toString(),
-      title: videoDetail.vod_name ?? '',
+      // 與搜尋路徑一致地正規化空白。兩條路徑對同一部片回傳不同空白的標題，
+      // 會讓顯示、播放紀錄裡存的標題、以及依「標題完全相等」比對的客戶端
+      // （例如 OrionTV）出現對不上的情況。
+      title: normalizeUpstreamTitle(videoDetail.vod_name),
       poster: videoDetail.vod_pic,
       episodes,
       episodes_titles: titles,

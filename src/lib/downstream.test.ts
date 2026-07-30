@@ -550,3 +550,47 @@ describe('downstream detail 邊界情況', () => {
     );
   });
 });
+
+describe('downstream 標題空白正規化', () => {
+  const site = {
+    key: 'test',
+    api: 'https://example.test/api.php/provide/vod',
+    name: 'Test',
+  } as ApiSite;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedGetConfig.mockResolvedValue({
+      SiteConfig: { SearchDownstreamMaxPage: 1 },
+    } as Awaited<ReturnType<typeof getConfig>>);
+    mockedFetchSafeRemoteUrl.mockResolvedValue({
+      ok: true,
+      status: 200,
+    } as Response);
+  });
+
+  // 兩條路徑對同一部片若回傳不同空白的標題，會讓顯示、播放紀錄存的標題、
+  // 以及依「標題完全相等」比對的客戶端（如 OrionTV）對不上。
+  it('詳情路徑與搜尋路徑對同一標題產生一致結果', async () => {
+    const messy = '  鬼滅之刃   無限列車篇\t ';
+    const expected = '鬼滅之刃 無限列車篇';
+
+    mockedReadResponseJsonWithLimit.mockResolvedValue({
+      list: [
+        {
+          vod_id: '1',
+          vod_name: messy,
+          vod_play_url: '1$https://a.test/1.m3u8',
+        },
+      ],
+      pagecount: 1,
+    });
+    const detail = await getDetailFromApi(site, '1');
+    expect(detail.title).toBe(expected);
+
+    const results = await searchFromApi(site, 'whitespace-probe', [
+      'whitespace-probe',
+    ]);
+    expect(results[0]?.title).toBe(expected);
+  });
+});
