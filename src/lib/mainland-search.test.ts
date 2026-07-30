@@ -43,3 +43,50 @@ describe('mainland search query planner', () => {
     expect(queries).toContain('S等级作弊魔术师冒险记');
   });
 });
+
+/**
+ * 查詢計畫的 golden test。
+ *
+ * getMainlandSearchQueries 的輸出就是「實際送給陸源的查詢清單」——本 fork
+ * 與外界的真實契約。它依賴 chinese.ts 的 generateSearchVariants（500+ 行，
+ * 先前零測試）、opencc-mainland 的台灣詞彙對照、以及 regional-title-aliases
+ * 的人工別名表；上面任何一層改動都會改變這裡送出的字串。
+ *
+ * 清單的「內容與順序」都有意義：第一個查詢是命中率最高的那個，排序退化不會
+ * 讓任何逐項斷言失敗，但會實際降低搜尋成功率。因此用整體快照，讓任何變動
+ * 在 review 時被看見。要刻意變更時用 `pnpm test -- -u` 更新並檢視 diff。
+ */
+describe('查詢計畫 golden test', () => {
+  it.each([
+    ['別名表命中', '進擊的巨人'],
+    ['別名表＋季數', '鬼滅之刃 第二季'],
+    ['台譯與陸名完全不同', '間諜家家酒'],
+    ['台譯與陸名完全不同（海賊王／航海王）', '海賊王'],
+    // 逐字轉換會把「鍊」轉成「链」（鎖鍊之意）而非正確的「炼」。
+    // 正確的陸名必須靠 convertTaiwanToMainland 產生並排在第一位，
+    // 逐字轉換的結果只能當備援。這條測試就是在守住這個順序。
+    ['台灣詞彙對照優先於逐字轉換', '鋼之鍊金術師'],
+    ['僅需字元轉換', '葬送的芙莉蓮'],
+    ['副標題拆分', '咒術迴戰 懷玉玉折'],
+    ['全形冒號副標題', '刀劍神域：序列爭戰'],
+    ['純英文（不送陸源）', 'Breaking Bad'],
+    ['日文假名（不送陸源）', '進撃の巨人'],
+  ])('%s：%s', (_label, query) => {
+    expect(getMainlandSearchQueries(query)).toMatchSnapshot();
+  });
+
+  it('永遠不超過上限六個查詢', () => {
+    const long = '落第賢者的學院無雙第二回轉生，S等級作弊魔術師冒險記 第三季';
+    expect(getMainlandSearchQueries(long).length).toBeLessThanOrEqual(6);
+  });
+
+  it('鋼之鍊金術師：正確的陸名必須排在逐字轉換之前', () => {
+    const queries = getMainlandSearchQueries('鋼之鍊金術師');
+    const correct = queries.indexOf('钢之炼金术师');
+    const naive = queries.indexOf('钢之链金术师');
+
+    expect(correct).toBe(0);
+    // 逐字轉換版本可以存在（當備援），但不得排在正確版本之前
+    if (naive !== -1) expect(naive).toBeGreaterThan(correct);
+  });
+});

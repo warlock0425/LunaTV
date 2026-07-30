@@ -123,6 +123,8 @@ const EXCLUDED_FILES = [
   'DoubanSelector.tsx',
   // 斷言 toSimplified 的輸出，預期值本來就必須是簡體
   'douban-to-simplified.test.ts',
+  // 斷言繁簡轉換與變體生成，輸入與預期值兩邊都必須出現簡體字面量
+  'chinese.test.ts',
 ];
 
 files.forEach((file) => {

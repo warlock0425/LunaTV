@@ -1,0 +1,121 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`generateSearchVariants golden test 僅需字元轉換：葬送的芙莉蓮 1`] = `
+[
+  "葬送的芙莉蓮",
+  "葬送的芙莉莲",
+]
+`;
+
+exports[`generateSearchVariants golden test 全形英數：Ｄｒ．ＳＴＯＮＥ 1`] = `
+[
+  "Ｄｒ．ＳＴＯＮＥ",
+  "Dr．STONE",
+  "Dr.STONE",
+  "dr.stone",
+  "ｄｒ．ｓｔｏｎｅ",
+]
+`;
+
+exports[`generateSearchVariants golden test 別名表命中（簡）：进击的巨人 1`] = `
+[
+  "进击的巨人",
+  "進擊的巨人",
+  "巨人",
+  "Attack on Titan",
+]
+`;
+
+exports[`generateSearchVariants golden test 別名表命中（繁）：進擊的巨人 1`] = `
+[
+  "進擊的巨人",
+  "进击的巨人",
+  "巨人",
+  "Attack on Titan",
+]
+`;
+
+exports[`generateSearchVariants golden test 別名表＋副標題：咒術迴戰 懷玉玉折 1`] = `
+[
+  "咒術迴戰 懷玉玉折",
+  "咒术回战 怀玉玉折",
+  "咒术回战怀玉玉折",
+  "咒術迴戰懷玉玉折",
+  "咒術迴戰",
+  "咒术",
+  "Jujutsu Kaisen",
+  "咒术回战",
+  "咒術",
+]
+`;
+
+exports[`generateSearchVariants golden test 別名表＋季數：鬼滅之刃 第二季 1`] = `
+[
+  "鬼滅之刃 第二季",
+  "鬼灭之刃 第二季",
+  "鬼灭之刃第二季",
+  "鬼滅之刃2",
+  "鬼滅之刃第二季",
+  "鬼滅之刃",
+  "鬼灭",
+  "Demon Slayer",
+  "鬼灭之刃",
+  "鬼滅",
+]
+`;
+
+exports[`generateSearchVariants golden test 台譯與陸名不同：海賊王 1`] = `
+[
+  "海賊王",
+  "海贼王",
+  "航海王",
+  "One Piece",
+]
+`;
+
+exports[`generateSearchVariants golden test 台譯與陸名完全不同：間諜家家酒 1`] = `
+[
+  "間諜家家酒",
+  "间谍家家酒",
+  "间谍过家家",
+  "Spy x Family",
+]
+`;
+
+exports[`generateSearchVariants golden test 尾綴數字轉季數：哈利波特2 1`] = `
+[
+  "哈利波特2",
+  "哈利波特第二季",
+]
+`;
+
+exports[`generateSearchVariants golden test 日文假名：ほっかいどうぶつ 1`] = `
+[
+  "ほっかいどうぶつ",
+  "北海道動物",
+  "北海道动物",
+  "ほっかいどうぶつ学園",
+  "北海道動物學園",
+  "北海道动物学园",
+  "Hokkaido Animals",
+  "Hokkaido Doubutsu",
+]
+`;
+
+exports[`generateSearchVariants golden test 空白＋季數合併：鋼之鍊金術師 第一季 1`] = `
+[
+  "鋼之鍊金術師 第一季",
+  "钢之链金术师 第一季",
+  "钢之链金术师第一季",
+  "鋼之鍊金術師1",
+  "鋼之鍊金術師第一季",
+]
+`;
+
+exports[`generateSearchVariants golden test 純英文：Breaking Bad 1`] = `
+[
+  "Breaking Bad",
+  "BreakingBad",
+  "breaking bad",
+]
+`;
