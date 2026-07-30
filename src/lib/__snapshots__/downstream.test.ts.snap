@@ -1,0 +1,109 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`上游解析 golden test 搜尋結果的完整解析輸出 1`] = `
+[
+  {
+    "class": "動作,冒險",
+    "desc": "簡介裡有 
+HTML
+ 標籤",
+    "douban_id": 12345,
+    "episodes": [
+      "https://b.example.test/1.m3u8",
+      "https://b.example.test/2.m3u8",
+      "https://b.example.test/3.m3u8",
+    ],
+    "episodes_titles": [
+      "1",
+      "2",
+      "3",
+    ],
+    "id": "4801",
+    "poster": "https://img.example.test/a.jpg",
+    "source": "goldensrc",
+    "source_name": "黃金測試源",
+    "title": "黃金劇 第一季",
+    "type_name": "動漫",
+    "year": "2024",
+  },
+  {
+    "class": undefined,
+    "desc": "",
+    "douban_id": undefined,
+    "episodes": [
+      "https://a.example.test/x.m3u8",
+    ],
+    "episodes_titles": [
+      "1",
+    ],
+    "id": "4802",
+    "poster": "",
+    "source": "goldensrc",
+    "source_name": "黃金測試源",
+    "title": "數字年份劇",
+    "type_name": undefined,
+    "year": "2019",
+  },
+  {
+    "class": undefined,
+    "desc": "",
+    "douban_id": undefined,
+    "episodes": [
+      "https://a.example.test/y.m3u8?sign=abc",
+    ],
+    "episodes_titles": [
+      "1",
+    ],
+    "id": "4803",
+    "poster": "",
+    "source": "goldensrc",
+    "source_name": "黃金測試源",
+    "title": "無年份劇",
+    "type_name": undefined,
+    "year": "unknown",
+  },
+]
+`;
+
+exports[`上游解析 golden test 詳情在無播放欄位時退回從簡介掃 m3u8 1`] = `
+{
+  "class": undefined,
+  "desc": "看這裡 https://a.example.test/c1.m3u8 或 https://a.example.test/c2.m3u8",
+  "douban_id": undefined,
+  "episodes": [
+    "https://a.example.test/c1.m3u8",
+    "https://a.example.test/c2.m3u8",
+  ],
+  "episodes_titles": [],
+  "id": "4802",
+  "poster": undefined,
+  "source": "goldensrc",
+  "source_name": "黃金測試源",
+  "title": "簡介夾帶位址",
+  "type_name": undefined,
+  "year": "unknown",
+}
+`;
+
+exports[`上游解析 golden test 詳情的完整解析輸出 1`] = `
+{
+  "class": "劇情",
+  "desc": "詳情簡介 & 實體編碼",
+  "douban_id": 999,
+  "episodes": [
+    "https://a.example.test/d1.m3u8",
+    "https://a.example.test/d2.m3u8?token=zz",
+  ],
+  "episodes_titles": [
+    "第1集",
+    "第2集",
+  ],
+  "id": "4801",
+  "poster": "https://img.example.test/d.jpg",
+  "source": "goldensrc",
+  "source_name": "黃金測試源",
+  "title": "黃金劇 詳情",
+  "type_name": "電視劇",
+  "year": "2023",
+}
+`;

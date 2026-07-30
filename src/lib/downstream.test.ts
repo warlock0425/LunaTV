@@ -594,3 +594,134 @@ describe('downstream 標題空白正規化', () => {
     expect(results[0]?.title).toBe(expected);
   });
 });
+
+/**
+ * 上游解析的 golden test。
+ *
+ * 為什麼要斷言「整個物件」而不是挑欄位：v2.8.3 那次我把 year 的哨兵值從
+ * 'unknown' 改成 ''，618 個測試全綠——因為當時沒有任何一條測試斷言 year。
+ * 這類「假設漂移」是型別檢查與逐欄位斷言都攔不到的：測試把跟程式碼同一套
+ * 假設寫死，程式改了假設，測試就跟著一起改。
+ *
+ * 改成整體快照後，任何欄位的語意變動都會以 diff 的形式浮出來，即使沒人
+ * 特別關心那個欄位。要刻意變更時用 `pnpm test -- -u` 更新，並在 review
+ * 時把 diff 看過一遍。
+ *
+ * 刻意不使用真實片源回應當 fixture：本 repo 因法律考量不得含片源資訊
+ * （2026-07-16 已為此重置整個歷史，config.json 亦永不進版控）。下方樣本
+ * 涵蓋的邊界情況比真實 happy-path 回應更完整。
+ */
+describe('上游解析 golden test', () => {
+  const site = {
+    key: 'goldensrc',
+    api: 'https://example.test/api.php/provide/vod',
+    name: '黃金測試源',
+  } as ApiSite;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedGetConfig.mockResolvedValue({
+      SiteConfig: { SearchDownstreamMaxPage: 1 },
+    } as Awaited<ReturnType<typeof getConfig>>);
+    mockedFetchSafeRemoteUrl.mockResolvedValue({
+      ok: true,
+      status: 200,
+    } as Response);
+  });
+
+  it('搜尋結果的完整解析輸出', async () => {
+    mockedReadResponseJsonWithLimit.mockResolvedValue({
+      pagecount: 1,
+      list: [
+        {
+          // 一般情況：多播放組，取集數最多的那一組
+          vod_id: 4801,
+          vod_name: '  黃金劇   第一季 ',
+          vod_pic: 'https://img.example.test/a.jpg',
+          vod_play_url: [
+            '1$https://a.example.test/1.m3u8#2$https://a.example.test/2.m3u8',
+            '1$https://b.example.test/1.m3u8#2$https://b.example.test/2.m3u8#3$https://b.example.test/3.m3u8',
+          ].join('$$$'),
+          vod_class: '動作,冒險',
+          vod_year: '2024-05-01',
+          vod_content: '<p>簡介裡有 <b>HTML</b> 標籤</p>',
+          type_name: '動漫',
+          vod_douban_id: 12345,
+        },
+        {
+          // vod_year 為數字（曾讓整批解析失敗）、無 class/desc/douban_id
+          vod_id: '4802',
+          vod_name: '數字年份劇',
+          vod_pic: '',
+          vod_play_url: '1$https://a.example.test/x.m3u8',
+          vod_year: 2019,
+        },
+        {
+          // vod_year 為空字串 → 應維持哨兵值 unknown
+          vod_id: '4803',
+          vod_name: '無年份劇',
+          vod_pic: '',
+          vod_play_url: '1$https://a.example.test/y.m3u8?sign=abc',
+          vod_year: '',
+        },
+        // 以下全部應被丟棄，但不得影響上面三筆
+        { vod_name: '缺 id', vod_play_url: '1$https://a.example.test/z.m3u8' },
+        { vod_id: '4804', vod_play_url: '1$https://a.example.test/z.m3u8' },
+        {
+          vod_id: '4805',
+          vod_name: '   ',
+          vod_play_url: '1$https://a.example.test/z.m3u8',
+        },
+        {
+          vod_id: '4806',
+          vod_name: '無可播位址',
+          vod_play_url: '1$https://a.example.test/z.mp4',
+        },
+        { vod_id: '4807', vod_name: '完全沒有播放欄位' },
+      ],
+    });
+
+    const results = await searchFromApi(site, 'golden-search-probe', [
+      'golden-search-probe',
+    ]);
+
+    expect(results).toMatchSnapshot();
+  });
+
+  it('詳情的完整解析輸出', async () => {
+    mockedReadResponseJsonWithLimit.mockResolvedValue({
+      list: [
+        {
+          vod_name: '黃金劇  詳情',
+          vod_pic: 'https://img.example.test/d.jpg',
+          vod_play_url: [
+            '第1集$https://a.example.test/d1.m3u8',
+            '第2集$https://a.example.test/d2.m3u8?token=zz',
+            '預告$https://a.example.test/trailer.mp4',
+          ].join('#'),
+          vod_class: '劇情',
+          vod_year: '2023',
+          vod_content: '詳情簡介 &amp; 實體編碼',
+          type_name: '電視劇',
+          vod_douban_id: 999,
+        },
+      ],
+    });
+
+    await expect(getDetailFromApi(site, '4801')).resolves.toMatchSnapshot();
+  });
+
+  it('詳情在無播放欄位時退回從簡介掃 m3u8', async () => {
+    mockedReadResponseJsonWithLimit.mockResolvedValue({
+      list: [
+        {
+          vod_name: '簡介夾帶位址',
+          vod_content:
+            '看這裡 https://a.example.test/c1.m3u8 或 https://a.example.test/c2.m3u8',
+        },
+      ],
+    });
+
+    await expect(getDetailFromApi(site, '4802')).resolves.toMatchSnapshot();
+  });
+});
