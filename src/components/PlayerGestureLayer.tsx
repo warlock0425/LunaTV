@@ -55,6 +55,19 @@ export default function PlayerGestureLayer({
     const container = containerRef.current;
     if (!container) return;
 
+    // 亮度是直接寫在容器的 inline style 上，會比本元件活得久——換源時本層會
+    // 卸載重掛，容器卻是同一個。掛載時從 DOM 讀回實際亮度，否則內部狀態會
+    // 重置成 1.0，指示器顯示的百分比與畫面實際亮度對不上，下一次調整還會跳。
+    const appliedBrightness = container.style.filter.match(
+      /brightness\(([\d.]+)\)/
+    );
+    if (appliedBrightness) {
+      const parsed = Number.parseFloat(appliedBrightness[1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        brightnessRef.current = parsed;
+      }
+    }
+
     const handleTouchStart = (e: TouchEvent) => {
       // 忽略控制列的觸控
       if (
@@ -212,37 +225,44 @@ export default function PlayerGestureLayer({
     };
   }, [artRef, containerRef]);
 
-  const isFirstPlay = useRef(true);
-  const isFirstPause = useRef(true);
-
+  /**
+   * 播放／暫停指示器。
+   *
+   * 刻意監聽「容器的捕獲階段」而不是 artplayer 實例：換集時播放器會被銷毀重建，
+   * 但本層不會卸載（isVideoLoading 只在換源時才轉 true），綁在舊實例上的
+   * art.on('play') 會直接失效——換過一次集之後指示器就再也不會出現。
+   * play / pause 是不冒泡的媒體事件，但捕獲階段仍會經過祖先節點，因此掛在
+   * 容器上可以涵蓋任何時候被重建的 video 元素。
+   */
   useEffect(() => {
-    const art = artRef.current;
-    if (!art) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    const onPlay = () => {
-      if (isFirstPlay.current) {
-        isFirstPlay.current = false;
-        return;
-      }
+    // 開頭自動播放與初始暫停不該彈指示器。以 currentTime 判斷而非一次性旗標，
+    // 這樣每個重建出來的播放器都適用。
+    const isAtStart = (event: Event) => {
+      const media = event.target as HTMLMediaElement | null;
+      return typeof media?.currentTime === 'number' && media.currentTime < 1;
+    };
+
+    const onPlay = (event: Event) => {
+      if (isAtStart(event)) return;
       showIndicator('play', '', 'center');
     };
 
-    const onPause = () => {
-      if (art.currentTime < 1 && isFirstPause.current) {
-        isFirstPause.current = false;
-        return;
-      }
+    const onPause = (event: Event) => {
+      if (isAtStart(event)) return;
       showIndicator('pause', '', 'center');
     };
 
-    art.on('play', onPlay);
-    art.on('pause', onPause);
+    container.addEventListener('play', onPlay, true);
+    container.addEventListener('pause', onPause, true);
 
     return () => {
-      art.off('play', onPlay);
-      art.off('pause', onPause);
+      container.removeEventListener('play', onPlay, true);
+      container.removeEventListener('pause', onPause, true);
     };
-  }, [artRef]);
+  }, [containerRef]);
 
   useEffect(() => {
     return () => {
