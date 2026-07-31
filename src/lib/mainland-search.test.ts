@@ -1,4 +1,5 @@
 import { getMainlandSearchQueries } from './mainland-search';
+import { extractSeason } from './titleParser';
 
 describe('mainland search query planner', () => {
   it('puts the simplified mainland query first', () => {
@@ -69,6 +70,11 @@ describe('查詢計畫 golden test', () => {
     ['僅需字元轉換', '葬送的芙莉蓮'],
     ['副標題拆分', '咒術迴戰 懷玉玉折'],
     ['全形冒號副標題', '刀劍神域：序列爭戰'],
+    // 帶明確季數的查詢：先前因「先剝季數再比對季數」而完全沒有備援，
+    // 這幾條鎖住修正後的備援清單，並確保每個備援都仍帶著同一個季數。
+    ['季數＋別名表', '間諜家家酒 第二季'],
+    ['季數用阿拉伯數字', '某劇 第2季'],
+    ['長片名＋季數', '石紀元 科學與未來 第三季'],
     ['純英文（不送陸源）', 'Breaking Bad'],
     ['日文假名（不送陸源）', '進撃の巨人'],
   ])('%s：%s', (_label, query) => {
@@ -88,5 +94,33 @@ describe('查詢計畫 golden test', () => {
     expect(correct).toBe(0);
     // 逐字轉換版本可以存在（當備援），但不得排在正確版本之前
     if (naive !== -1) expect(naive).toBeGreaterThan(correct);
+  });
+
+  /**
+   * 不變式：帶明確季數的查詢，每一個備援都必須帶著同一個季數。
+   *
+   * 放寬季數過濾會讓第二季的搜尋回退到第一季的查詢——使用者搜第二季卻拿到
+   * 第一季的結果，而且不會有任何錯誤。這條用多組輸入守住，避免日後為了
+   * 「多一點備援」而把過濾拿掉。
+   */
+  it.each([
+    ['鬼滅之刃 第二季', 2],
+    ['間諜家家酒 第二季', 2],
+    ['石紀元 科學與未來 第三季', 3],
+    ['葬送的芙莉蓮 第一季', 1],
+    ['某劇 第2季', 2],
+  ])('%s：每個備援都帶著第 %i 季', (query, season) => {
+    const queries = getMainlandSearchQueries(query);
+
+    expect(queries.length).toBeGreaterThan(0);
+    for (const generated of queries) {
+      expect(extractSeason(generated)).toBe(season);
+    }
+  });
+
+  it('無季數的查詢不受季數過濾影響', () => {
+    // 這幾個沒有季數，備援清單應該照舊涵蓋別名與短核心
+    expect(getMainlandSearchQueries('進擊的巨人')).toContain('巨人');
+    expect(getMainlandSearchQueries('海賊王')).toContain('航海王');
   });
 });

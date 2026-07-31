@@ -37,13 +37,17 @@ export function getMainlandSearchQueries(query: string): string[] {
     normalizeMainlandQuery(alias, true)
   );
   const generated = generateSearchVariants(query)
-    .map((variant) => normalizeMainlandQuery(variant))
+    // 季數比對必須在正規化「之前」做。normalizeMainlandQuery 預設會呼叫
+    // cleanQueryForApi 把季數剝掉，剝完再比對 extractSeason(variant) === season
+    // 必然不相等——結果是只要查詢帶明確季數，所有生成變體都被濾光，
+    // 該查詢完全沒有備援（例如「鬼滅之刃 第二季」只送得出一個查詢）。
+    .filter((variant) => season === null || extractSeason(variant) === season)
+    // 帶季數時保留 metadata，讓季數留在實際送出的查詢裡；不帶季數時維持
+    // 原本的行為（剝除季數等中繼資訊以提高片源命中率）。
+    .map((variant) => normalizeMainlandQuery(variant, season !== null))
     .filter(
       (variant) =>
-        variant &&
-        CJK_PATTERN.test(variant) &&
-        !KANA_PATTERN.test(variant) &&
-        (season === null || extractSeason(variant) === season)
+        variant && CJK_PATTERN.test(variant) && !KANA_PATTERN.test(variant)
     );
 
   const titleParts = query
