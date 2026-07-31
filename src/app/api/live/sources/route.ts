@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  // 第二道驗證：本端點會回傳完整 LiveConfig（含各直播源的 url 與 epg），
+  // 只靠 proxy 這一道防線，matcher 改動或 middleware 繞過類問題就會直接外洩。
+  const authInfo = await getVerifiedAuthInfo(request);
+  if (!authInfo) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   logger.debug('live sources called:', request.url);
   try {
     const config = await getConfig();

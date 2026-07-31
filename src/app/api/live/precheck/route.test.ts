@@ -2,6 +2,7 @@
 
 import { NextRequest } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import {
   fetchSafeRemoteUrl,
@@ -10,6 +11,7 @@ import {
 
 import { GET } from './route';
 
+jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({ getConfig: jest.fn() }));
 jest.mock('@/lib/url-safety', () => ({
   fetchSafeRemoteUrl: jest.fn(),
@@ -17,9 +19,18 @@ jest.mock('@/lib/url-safety', () => ({
   UnsafeRemoteUrlError: class extends Error {},
 }));
 
+const mockedGetVerifiedAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedGetConfig = jest.mocked(getConfig);
 const mockedFetch = jest.mocked(fetchSafeRemoteUrl);
 const mockedReadText = jest.mocked(readResponseTextWithLimit);
+
+function signedIn() {
+  mockedGetVerifiedAuth.mockResolvedValue({
+    username: 'localstorage',
+    signature: 'signed',
+    timestamp: Date.now(),
+  });
+}
 
 function request() {
   return new NextRequest(
@@ -30,9 +41,19 @@ function request() {
 describe('/api/live/precheck', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    signedIn();
     mockedGetConfig.mockResolvedValue({
       LiveConfig: [{ key: 'live', ua: 'Test UA' }],
     } as Awaited<ReturnType<typeof getConfig>>);
+  });
+
+  it('未登入時回 401，且不會對外發出請求', async () => {
+    mockedGetVerifiedAuth.mockResolvedValue(null);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(401);
+    expect(mockedFetch).not.toHaveBeenCalled();
   });
 
   it('rejects HTML instead of labelling it as m3u8', async () => {

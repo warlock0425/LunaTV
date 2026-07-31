@@ -1,5 +1,6 @@
 /** @jest-environment node */
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import {
   fetchSafeRemoteUrl,
@@ -9,6 +10,7 @@ import {
 
 import { GET } from './route';
 
+jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({ getConfig: jest.fn() }));
 jest.mock('@/lib/url-safety', () => {
   const actual = jest.requireActual('@/lib/url-safety');
@@ -19,6 +21,7 @@ jest.mock('@/lib/url-safety', () => {
   };
 });
 
+const mockedGetVerifiedAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedConfig = jest.mocked(getConfig);
 const mockedFetch = jest.mocked(fetchSafeRemoteUrl);
 const mockedReadBytes = jest.mocked(readResponseBytesWithLimit);
@@ -26,6 +29,11 @@ const mockedReadBytes = jest.mocked(readResponseBytesWithLimit);
 describe('live logo proxy', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedGetVerifiedAuth.mockResolvedValue({
+      username: 'localstorage',
+      signature: 'signed',
+      timestamp: Date.now(),
+    });
     mockedConfig.mockResolvedValue({
       LiveConfig: [],
     } as unknown as Awaited<ReturnType<typeof getConfig>>);
@@ -34,6 +42,19 @@ describe('live logo proxy', () => {
         headers: { 'Content-Type': 'image/png' },
       })
     );
+  });
+
+  it('未登入時回 401，且不會對外發出請求', async () => {
+    mockedGetVerifiedAuth.mockResolvedValue(null);
+
+    const response = await GET(
+      new Request(
+        'http://localhost/api/proxy/logo?url=https%3A%2F%2Fimg.example%2Fa.png'
+      )
+    );
+
+    expect(response.status).toBe(401);
+    expect(mockedFetch).not.toHaveBeenCalled();
   });
 
   it('returns 413 for a chunked image that exceeds the byte limit', async () => {

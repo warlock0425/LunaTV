@@ -174,7 +174,12 @@ const T2S_MAP: Record<string, string> = {
  */
 export function toSimplified(str: string): string {
   if (!str) return '';
-  const mapped = T2S_MAP[str];
+  // 用 hasOwnProperty 而非直接索引：str 來自查詢參數，值為 'constructor' 或
+  // 'toString' 時會取到原型鏈上的函式，讓這個宣告回傳 string 的函式實際回傳
+  // 一個函式，接著被拼進豆瓣的請求參數裡。
+  const mapped = Object.prototype.hasOwnProperty.call(T2S_MAP, str)
+    ? T2S_MAP[str]
+    : undefined;
   if (mapped) return mapped;
   try {
     return convertT2S(str) || str;

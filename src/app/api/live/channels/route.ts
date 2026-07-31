@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { isValidApiSource } from '@/lib/api-input-validation';
 import { getCachedLiveChannels } from '@/lib/live';
 
 export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
+  // 第二道驗證：與 /api/proxy/* 一致，不依賴 proxy 作為唯一防線
+  const authInfo = await getVerifiedAuthInfo(request);
+  if (!authInfo) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const sourceKey = searchParams.get('source');

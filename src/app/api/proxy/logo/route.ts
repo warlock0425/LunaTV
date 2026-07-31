@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import {
   isValidApiRemoteUrl,
   isValidApiSource,
@@ -20,6 +21,12 @@ const LOGO_TIMEOUT_MS = 15_000;
 const LOGO_MAX_BYTES = 10 * 1024 * 1024;
 
 export async function GET(request: Request) {
+  // 第二道驗證：同目錄的 key / m3u8 / segment 都有，唯獨這支漏掉
+  const authInfo = await getVerifiedAuthInfo(request);
+  if (!authInfo) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get('url');
   const source = searchParams.get('moontv-source');

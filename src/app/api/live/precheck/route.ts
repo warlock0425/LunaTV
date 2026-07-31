@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import {
   isValidApiRemoteUrl,
   isValidApiSource,
@@ -18,6 +19,13 @@ const PRECHECK_TIMEOUT_MS = 10000;
 const MAX_PRECHECK_MANIFEST_BYTES = 512 * 1024;
 
 export async function GET(request: NextRequest) {
+  // 第二道驗證：本端點會依請求參數對外發出請求，與 /api/proxy/* 同級，
+  // 不可只依賴 proxy 作為唯一防線
+  const authInfo = await getVerifiedAuthInfo(request);
+  if (!authInfo) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
   const source = searchParams.get('moontv-source');
