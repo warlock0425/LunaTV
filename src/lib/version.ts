@@ -6,6 +6,17 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.8.7',
+    date: '2026-07-31',
+    content: `
+- 安全：為 /api/live/sources、channels、epg、precheck 與 /api/proxy/logo 補上第二道 API 身份驗證，避免 middleware 被繞過時片源與節目資訊外洩。
+- 搜尋：修復帶明確季數查詢（如「鬼滅之刃 第二季」）時備援變體被誤過濾掉的問題，補充格式異體（如無空白、數字季數）作為備援。
+- 播放器：修復換集或播放器重建後，手勢層（播放/暫停指示器、亮度狀態）失效或與實體脫鉤的問題。
+- 穩健性：統一搜尋與詳情頁面的標題空白正規化，避免同部影片產生不同標題影響播放紀錄比對。
+- 測試：為繁簡轉換、查詢計畫與上游回應結構新增完整的 Golden 快照測試。
+    `.trim(),
+  },
+  {
     version: 'v2.8.6',
     date: '2026-07-29',
     content: `
