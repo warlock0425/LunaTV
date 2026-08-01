@@ -6,6 +6,17 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.8.8',
+    date: '2026-08-01',
+    content: `
+- 安全：為圖片代理、豆瓣與 Bangumi 等六支對外抓取端點加上共用限流，避免有人無限次驅動伺服器對外抓取，耗盡頻寬或害本站 IP 被對方封鎖。
+- 安全：localstorage 模式改以來源位址計數——該模式下 Cookie 中的使用者名稱不在簽章保護範圍內，原本可藉由竄改它反覆重置限流額度。
+- 結構：新增 API 身份驗證覆蓋測試。往後任何端點漏掉第二道驗證、或認證層的路徑白名單被更動，CI 會直接擋下。
+- 修復：豆瓣別名查詢在代理參數為特定保留字時會組出無效網址而失敗，已修正。
+- 穩健性：Bangumi 的兩條對外請求補上回應大小上限，避免第三方回應過大時撐爆記憶體。
+    `.trim(),
+  },
+  {
     version: 'v2.8.7',
     date: '2026-07-31',
     content: `
