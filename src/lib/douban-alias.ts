@@ -34,13 +34,23 @@ export interface DoubanSearchResponse {
   items?: DoubanSearchItem[];
 }
 
+const DEFAULT_DOUBAN_SEARCH_PROXY = 'cmliussss-cdn-tencent';
+
 export function buildDoubanSearchUrl(
   query: string,
-  proxyType = 'cmliussss-cdn-tencent'
+  proxyType = DEFAULT_DOUBAN_SEARCH_PROXY
 ): string {
-  const host =
-    DOUBAN_SEARCH_HOSTS[proxyType] ||
-    DOUBAN_SEARCH_HOSTS['cmliussss-cdn-tencent'];
+  // 用 hasOwnProperty 而非直接索引：proxyType 來自查詢參數，值為 'constructor'
+  // 或 'toString' 時會取到原型鏈上的函式。那是個 truthy 值，會讓 || 的預設值
+  // 失效，宣告回傳 string 的表其實給出函式，最後拼成
+  // 「function Object() { [native code] }/rexxar/...」這種必然解析失敗的 URL。
+  // 與 douban.ts 的 toSimplified 是同一類問題（1ec87a9 已修那一處）。
+  const host = Object.prototype.hasOwnProperty.call(
+    DOUBAN_SEARCH_HOSTS,
+    proxyType
+  )
+    ? DOUBAN_SEARCH_HOSTS[proxyType]
+    : DOUBAN_SEARCH_HOSTS[DEFAULT_DOUBAN_SEARCH_PROXY];
   const params = new URLSearchParams({ q: query, count: '5' });
   return `${host}/rexxar/api/v2/search/subjects?${params.toString()}`;
 }

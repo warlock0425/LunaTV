@@ -22,6 +22,21 @@ describe('buildDoubanSearchUrl', () => {
       'm.douban.cmliussss.net'
     );
   });
+
+  // proxyType 直接來自查詢參數。這些 key 在原型鏈上有值且為 truthy，
+  // 直接索引會讓預設值失效，拼出必然解析失敗的網址。
+  it.each([
+    'constructor',
+    'toString',
+    'valueOf',
+    '__proto__',
+    'hasOwnProperty',
+  ])('原型鏈上的 key %s 一樣退回預設主機，且組得出合法網址', (proxyType) => {
+    const url = buildDoubanSearchUrl('魔戒', proxyType);
+
+    expect(url).toContain('m.douban.cmliussss.net');
+    expect(() => new URL(url)).not.toThrow();
+  });
 });
 
 describe('extractMainlandAliases', () => {

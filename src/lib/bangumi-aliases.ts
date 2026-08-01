@@ -1,4 +1,6 @@
 import { logger } from '@/lib/logger';
+import { readResponseJsonWithLimit } from '@/lib/response-limit';
+import { CURRENT_VERSION } from '@/lib/version';
 
 type BangumiInfoboxValue =
   string | number | Array<string | { v?: string; k?: string }>;
@@ -11,6 +13,18 @@ export type BangumiSubjectInfo = {
 
 const USEFUL_INFOBOX_KEYS = new Set(['中文名', '别名', '別名']);
 const BANGUMI_ALIAS_FETCH_TIMEOUT_MS = 5000;
+// 單一條目的中繼資料，正常只有數 KB；設 2MB 是為了讓第三方主機無法決定
+// 我方要吃下多少記憶體（部署目標是 1C1G）。
+const MAX_SUBJECT_RESPONSE_BYTES = 2 * 1024 * 1024;
+
+/**
+ * bgm.tv 的 API 規範要求帶可識別的 User-Agent。接到 CURRENT_VERSION 而非寫死，
+ * 否則每次發版都會漏改——這裡原本停在 2.0，calendar 那支停在 2.1.9。
+ */
+export const BANGUMI_USER_AGENT = `BerserkerTV/${CURRENT_VERSION.replace(
+  /^v/,
+  ''
+)} (+https://github.com/Berserker8888/LunaTV)`;
 
 function collectBangumiInfoValue(value: BangumiInfoboxValue): string[] {
   if (Array.isArray(value)) {
@@ -104,8 +118,7 @@ export async function fetchBangumiSubjectAliases(
         signal: controller.signal,
         headers: {
           Accept: 'application/json',
-          'User-Agent':
-            'BerserkerTV/2.0 (+https://github.com/Berserker8888/LunaTV)',
+          'User-Agent': BANGUMI_USER_AGENT,
         },
       }
     );
@@ -114,7 +127,10 @@ export async function fetchBangumiSubjectAliases(
       throw new Error(`Bangumi API returned ${response.status}`);
     }
 
-    const data = (await response.json()) as BangumiSubjectInfo;
+    const data = await readResponseJsonWithLimit<BangumiSubjectInfo>(
+      response,
+      MAX_SUBJECT_RESPONSE_BYTES
+    );
     return extractBangumiAliases(data);
   } catch (error) {
     logger.warn('取得 Bangumi 別名失敗:', error);
