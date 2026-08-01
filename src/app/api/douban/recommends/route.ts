@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { setBoundedMapValue } from '@/lib/bounded-map';
 import { getCacheTime } from '@/lib/config';
 import { fetchDoubanData, toSimplified } from '@/lib/douban';
@@ -35,6 +36,13 @@ const RECOMMENDS_CACHE_TTL = 60 * 1000; // 1 分鐘快取
 const MAX_RECOMMENDS_CACHE_ENTRIES = 200;
 
 export async function GET(request: NextRequest) {
+  const limited = await enforceRateLimit(request, {
+    namespace: 'douban-recommends',
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (limited) return limited;
+
   const { searchParams } = new URL(request.url);
 
   // 取得參數

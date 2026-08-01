@@ -18,6 +18,19 @@ import { getServerStorageType } from './storage-runtime';
  * 這裡對高權限端點補上第二道獨立驗證：只驗 HMAC 簽章與時效，不查
  * sessionVersion（那需要一次 Redis round-trip，留給 middleware 做），
  * 因此不會替管理端點增加 I/O 延遲。
+ *
+ * ⚠️ 回傳的 AuthInfo 中，**只有簽章 subject 對應的欄位可信**：
+ * 多使用者模式的 subject 是 authInfo.username，改它會驗不過，可以信任；
+ * localstorage 模式的 subject 是下面那個字面值 'localstorage'，此時
+ * `username`（以及 `role` 等其他欄位）都不在簽章範圍內，使用者可以任意
+ * 改動而簽章照樣通過。
+ *
+ * 目前沒有實際危害：權限判斷一律拿 username 去 config.UserConfig.Users
+ * 查 DB 再看 role（沒有任何一處信任 cookie 的 role），而 localstorage 模式
+ * 只有一個主體。但「localstorage 只會有一個人」是個沒寫在型別裡的假設——
+ * 若哪天該模式支援多使用者，讀 authInfo.username 做授權就會變成提權。
+ * 需要可信的使用者身分請改用 requireActiveUser（它在該模式下會把 username
+ * 硬寫成 'localstorage'）。限流的身分判斷見 api-rate-limit.ts。
  */
 export async function getVerifiedAuthInfo(
   request: Request

@@ -1,3 +1,5 @@
+/** @jest-environment node */
+
 import { fetchBangumiSubjectAliases } from '@/lib/bangumi-aliases';
 import { db } from '@/lib/db';
 
@@ -34,9 +36,9 @@ const mockedDb = db as unknown as {
 };
 
 function requestFor(id: string) {
-  return {
-    url: `http://localhost/api/bangumi/aliases?id=${id}`,
-  } as Request;
+  // 用真的 Request：route 會讀 headers 做限流，`{ url } as Request` 這種
+  // 只騙過型別的假物件會在執行期炸掉。
+  return new Request(`http://localhost/api/bangumi/aliases?id=${id}`);
 }
 
 describe('/api/bangumi/aliases', () => {

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { setBoundedMapValue } from '@/lib/bounded-map';
 import { getCacheTime } from '@/lib/config';
 import { fetchDoubanData, toSimplified } from '@/lib/douban';
@@ -24,6 +25,13 @@ const MAX_DOUBAN_CACHE_ENTRIES = 200;
 const MAX_TOP250_RESPONSE_BYTES = 5 * 1024 * 1024;
 
 export async function GET(request: Request) {
+  const limited = await enforceRateLimit(request, {
+    namespace: 'douban',
+    limit: 120,
+    windowSeconds: 60,
+  });
+  if (limited) return limited;
+
   const { searchParams } = new URL(request.url);
 
   // 取得參數

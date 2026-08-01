@@ -20,7 +20,7 @@ if not current then
 end
 return redis.call('INCR', KEYS[1])
 `;
-const CONSUME_LOGIN_ATTEMPT_SCRIPT = `
+const CONSUME_RATE_LIMIT_SCRIPT = `
 local count = redis.call('INCR', KEYS[1])
 local ttl = redis.call('TTL', KEYS[1])
 if ttl < 0 then
@@ -105,16 +105,28 @@ export async function revokeUserSessions(username: string): Promise<number> {
   return next;
 }
 
-export async function consumeLoginAttempt(
+function rateLimitKey(namespace: string, identity: string): string {
+  return `security:${namespace}:${identity}`;
+}
+
+/**
+ * 通用計數式限流：在 windowSeconds 內累計 identity 的次數，超過 limit 即 blocked。
+ *
+ * 與登入限流共用同一套 Redis / Kvrocks / Upstash / 記憶體後備，namespace 只是
+ * key 前綴——`login` 保留給既有的登入鎖定，其餘呼叫端請用自己的 namespace，
+ * 避免不同用途互相消耗同一個計數器。
+ */
+export async function consumeRateLimit(
+  namespace: string,
   identity: string,
   limit: number,
   windowSeconds: number
 ): Promise<{ blocked: boolean; retryAfter: number }> {
-  const key = `security:login:${identity}`;
+  const key = rateLimitKey(namespace, identity);
   const upstash = getUpstashClient();
   if (upstash) {
     const [rawCount, rawTtl] = (await upstash.eval(
-      CONSUME_LOGIN_ATTEMPT_SCRIPT,
+      CONSUME_RATE_LIMIT_SCRIPT,
       [key],
       [String(windowSeconds)]
     )) as [number, number];
@@ -124,7 +136,7 @@ export async function consumeLoginAttempt(
   }
   const redis = await getRedisClient();
   if (redis) {
-    const [rawCount, rawTtl] = (await redis.eval(CONSUME_LOGIN_ATTEMPT_SCRIPT, {
+    const [rawCount, rawTtl] = (await redis.eval(CONSUME_RATE_LIMIT_SCRIPT, {
       keys: [key],
       arguments: [String(windowSeconds)],
     })) as [number, number];
@@ -148,8 +160,11 @@ export async function consumeLoginAttempt(
   };
 }
 
-export async function clearLoginAttempts(identity: string): Promise<void> {
-  const key = `security:login:${identity}`;
+export async function clearRateLimit(
+  namespace: string,
+  identity: string
+): Promise<void> {
+  const key = rateLimitKey(namespace, identity);
   const upstash = getUpstashClient();
   if (upstash) {
     await upstash.del(key);
@@ -161,4 +176,16 @@ export async function clearLoginAttempts(identity: string): Promise<void> {
     return;
   }
   memoryLimits.delete(key);
+}
+
+export async function consumeLoginAttempt(
+  identity: string,
+  limit: number,
+  windowSeconds: number
+): Promise<{ blocked: boolean; retryAfter: number }> {
+  return consumeRateLimit('login', identity, limit, windowSeconds);
+}
+
+export async function clearLoginAttempts(identity: string): Promise<void> {
+  return clearRateLimit('login', identity);
 }

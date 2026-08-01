@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { setBoundedMapValue } from '@/lib/bounded-map';
 import {
   buildDoubanSearchUrl,
@@ -55,6 +56,15 @@ function jsonResponse(aliases: string[], primary: string | null) {
 }
 
 export async function GET(request: Request) {
+  // 只在搜尋完全沒結果時才會被呼叫，正常使用量極低；額度抓得比其他豆瓣端點緊，
+  // 因為每次快取未命中都是一次對豆瓣的搜尋請求（實測連續請求會被對方擋）。
+  const limited = await enforceRateLimit(request, {
+    namespace: 'douban-alias',
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (limited) return limited;
+
   const { searchParams } = new URL(request.url);
   const rawQuery = (searchParams.get('q') || '').trim();
   const proxyType = searchParams.get('proxyType') || 'cmliussss-cdn-tencent';

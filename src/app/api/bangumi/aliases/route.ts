@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { isValidApiNumericId } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import {
   BANGUMI_ALIAS_CACHE_TTL_MS,
   isFreshBangumiAliasCacheEntry,
@@ -29,6 +30,13 @@ function jsonAliases(aliases: string[], cache = true) {
 }
 
 export async function GET(request: Request) {
+  const limited = await enforceRateLimit(request, {
+    namespace: 'bangumi-aliases',
+    limit: 60,
+    windowSeconds: 60,
+  });
+  if (limited) return limited;
+
   const { searchParams } = new URL(request.url);
   const id = (searchParams.get('id') || '').trim();
 

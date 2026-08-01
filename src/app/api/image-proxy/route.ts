@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import {
   fetchSafeRemoteUrl,
   getSafeImageContentType,
@@ -12,8 +13,19 @@ import {
 export const runtime = 'nodejs';
 const IMAGE_PROXY_TIMEOUT_MS = 15_000;
 const IMAGE_PROXY_MAX_BYTES = 20 * 1024 * 1024;
+// 每個海報一次請求，虛擬清單快速捲動時短時間內就會累積上百次；600/分鐘
+// 遠高於任何人為瀏覽速度，只擋腳本式的無限抓取。
+const IMAGE_PROXY_RATE_LIMIT = 600;
+const IMAGE_PROXY_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: Request) {
+  const limited = await enforceRateLimit(request, {
+    namespace: 'image-proxy',
+    limit: IMAGE_PROXY_RATE_LIMIT,
+    windowSeconds: IMAGE_PROXY_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
+
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get('url');
 
