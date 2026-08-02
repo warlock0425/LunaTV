@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.0',
+    date: '2026-08-02',
+    content: `
+- 修復：在收藏或調整略過設定後的一兩秒內，背景同步可能用舊資料覆蓋，導致剛存下的收藏或設定無聲消失、重整頁面後不見。
+- 測試：為收藏、略過設定與搜尋歷史補上會造成資料靜默遺失的路徑測試。
+    `.trim(),
+  },
+  {
     version: 'v2.8.9',
     date: '2026-08-02',
     content: `
