@@ -24,6 +24,7 @@ import { getProxiedImageUrl, processImageUrl } from '@/lib/utils';
 import { calculateWatchStats, formatWatchTime } from '@/lib/watch-stats';
 
 import PageLayout from '@/components/PageLayout';
+import { useToast } from '@/components/ToastProvider';
 
 type RecordEntry = PlayRecord & { key: string; source: string; id: string };
 
@@ -78,17 +79,21 @@ export default function HistoryPage() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const { toast } = useToast();
 
   const loadRecords = useCallback(async () => {
     try {
       const all = await getAllPlayRecords();
       setRecords(normalizeRecordEntries(all));
     } catch (e) {
+      // 沒有這行提示的話，載入失敗與「真的沒有紀錄」在畫面上長得一模一樣，
+      // 使用者只會以為自己的觀看紀錄不見了。
       console.error('載入觀看記錄失敗:', e);
+      toast('載入觀看記錄失敗，請重新整理頁面', 'error');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     // 掛載時抓取資料：setState 皆發生於 await 之後，規則對具名函式為保守誤判
@@ -150,6 +155,7 @@ export default function HistoryPage() {
       });
     } catch (e) {
       console.error('刪除記錄失敗:', e);
+      toast('刪除記錄失敗，請稍後再試', 'error');
     }
   };
 
@@ -183,6 +189,7 @@ export default function HistoryPage() {
       setSelectedKeys(new Set());
     } catch (e) {
       console.error('批量刪除失敗:', e);
+      toast('批量刪除失敗，請稍後再試', 'error');
     }
   };
 
@@ -194,6 +201,7 @@ export default function HistoryPage() {
       setSelectedKeys(new Set());
     } catch (e) {
       console.error('清除所有記錄失敗:', e);
+      toast('清除記錄失敗，請稍後再試', 'error');
     }
   };
 
