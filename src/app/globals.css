@@ -37,19 +37,8 @@ body {
   color: #1f2937;
 }
 
-html:not(.dark) body {
-  background: linear-gradient(
-    180deg,
-    #e6f3fb 0%,
-    #eaf3f7 18%,
-    #f7f7f3 38%,
-    #e9ecef 60%,
-    #dbe3ea 80%,
-    #d3dde6 100%
-  );
-  background-attachment: fixed;
-}
-
+/* 站台 forcedTheme='dark'，只保留深色底。淺色漸層已移除以免誤導維護。 */
+html body,
 html.dark body {
   background-color: #050505;
   color: #f4f4f5;

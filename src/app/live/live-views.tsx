@@ -22,25 +22,10 @@ export function LiveLoadingView({
     <PageLayout activePath='/live'>
       <div className='flex items-center justify-center min-h-screen bg-transparent'>
         <div className='text-center max-w-md mx-auto px-6'>
-          {/* 動畫直播圖標 */}
           <div className='relative mb-8'>
-            <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-accent to-accent-deep rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
-              <div className='text-white text-4xl'>📺</div>
-              {/* 旋轉光環 */}
-              <div className='absolute -inset-2 bg-gradient-to-r from-accent to-accent-deep rounded-2xl opacity-20 animate-spin'></div>
-            </div>
-
-            {/* 浮動粒子效果 */}
-            <div className='absolute top-0 left-0 w-full h-full pointer-events-none'>
-              <div className='absolute top-2 left-2 w-2 h-2 bg-accent rounded-full animate-bounce'></div>
-              <div
-                className='absolute top-4 right-4 w-1.5 h-1.5 bg-red-400 rounded-full animate-bounce'
-                style={{ animationDelay: '0.5s' }}
-              ></div>
-              <div
-                className='absolute bottom-3 left-6 w-1 h-1 bg-red-300 rounded-full animate-bounce'
-                style={{ animationDelay: '1s' }}
-              ></div>
+            <div className='relative mx-auto w-20 h-20 bg-surface-panel rounded-2xl shadow-2xl flex items-center justify-center border border-accent/30'>
+              <Radio className='w-8 h-8 text-accent' aria-hidden />
+              <div className='absolute -inset-1 rounded-2xl border border-accent/15' />
             </div>
           </div>
 
@@ -73,7 +58,7 @@ export function LiveLoadingView({
             {/* 進度條 */}
             <div className='w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2 overflow-hidden'>
               <div
-                className='h-full bg-gradient-to-r from-accent to-accent-deep rounded-full transition-all duration-1000 ease-out'
+                className='h-full bg-accent rounded-full transition-all duration-1000 ease-out'
                 style={{
                   width:
                     loadingStage === 'loading'
@@ -104,21 +89,22 @@ export function UnsupportedTypeOverlay({ type }: { type: string }) {
     <div className='absolute inset-0 bg-black/90 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[600] transition-all duration-300'>
       <div className='text-center max-w-md mx-auto px-6'>
         <div className='relative mb-8'>
-          <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
-            <div className='text-white text-4xl'>⚠️</div>
-            <div className='absolute -inset-2 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl opacity-20 animate-pulse'></div>
+          <div className='relative mx-auto w-20 h-20 bg-surface-panel rounded-2xl shadow-2xl flex items-center justify-center border border-amber-500/40'>
+            <span className='text-amber-400 text-sm font-bold tracking-wide'>
+              N/A
+            </span>
           </div>
         </div>
         <div className='space-y-4'>
           <h3 className='text-xl font-semibold text-white'>
             暫不支援的直播流類型
           </h3>
-          <div className='bg-orange-500/20 border border-orange-500/30 rounded-lg p-4'>
-            <p className='text-orange-300 font-medium'>
+          <div className='bg-amber-500/15 border border-amber-500/30 rounded-lg p-4'>
+            <p className='text-amber-200 font-medium'>
               當前頻道直播流類型：
               <span className='text-white font-bold'>{type.toUpperCase()}</span>
             </p>
-            <p className='text-sm text-orange-200 mt-2'>
+            <p className='text-sm text-amber-100/80 mt-2'>
               目前僅支援 M3U8 格式的直播流
             </p>
           </div>
@@ -135,15 +121,15 @@ export function LiveVideoLoadingOverlay() {
     <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl overflow-hidden shadow-lg border border-white/0 dark:border-white/30 flex items-center justify-center z-[500] transition-all duration-300'>
       <div className='text-center max-w-md mx-auto px-6'>
         <div className='relative mb-8'>
-          <div className='relative mx-auto w-24 h-24 bg-gradient-to-r from-accent to-accent-deep rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 transition-transform duration-300'>
-            <div className='text-white text-4xl'>📺</div>
-            <div className='absolute -inset-2 bg-gradient-to-r from-accent to-accent-deep rounded-2xl opacity-20 animate-spin'></div>
+          <div className='relative mx-auto w-20 h-20 bg-surface-panel rounded-2xl shadow-2xl flex items-center justify-center border border-accent/30'>
+            <div
+              className='h-9 w-9 rounded-full border-2 border-accent/25 border-t-accent animate-spin'
+              aria-hidden
+            />
           </div>
         </div>
         <div className='space-y-2'>
-          <p className='text-xl font-semibold text-white animate-pulse'>
-            🔄 IPTV 載入中...
-          </p>
+          <p className='text-lg font-semibold text-white'>IPTV 載入中…</p>
         </div>
       </div>
     </div>

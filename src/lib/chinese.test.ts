@@ -2,6 +2,7 @@ import {
   cleanQueryForApi,
   generateNumberVariant,
   generateSearchVariants,
+  shouldPreserveSourceDisplayName,
   toDisplayLanguage,
   toSearchSimplified,
 } from './chinese';
@@ -106,6 +107,17 @@ describe('toSearchSimplified', () => {
 describe('toDisplayLanguage', () => {
   it('把陸源回傳的簡體詞彙轉為台灣用語', () => {
     expect(toDisplayLanguage('这是简体的缓存设置')).toBe('這是簡體的快取設定');
+  });
+
+  it('🎬 前綴片源名稱維持原文（簡體、符號、emoji 都不動）', () => {
+    expect(shouldPreserveSourceDisplayName('🎬iKun资源')).toBe(true);
+    expect(shouldPreserveSourceDisplayName('🎬某某资源')).toBe(true);
+    expect(shouldPreserveSourceDisplayName('电影天堂资源')).toBe(false);
+    expect(toDisplayLanguage('🎬iKun资源')).toBe('🎬iKun资源');
+    expect(toDisplayLanguage('🎬某某资源')).toBe('🎬某某资源');
+    expect(toDisplayLanguage('  🎬测试源 ')).toBe('  🎬测试源 ');
+    // 沒有 🎬 前綴的仍會轉繁體／台灣用語
+    expect(toDisplayLanguage('电影天堂资源')).toBe('電影天堂資源');
   });
 });
 

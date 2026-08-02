@@ -20,6 +20,7 @@ import { useClientValue } from '@/hooks/useClientMount';
 import EpgScrollableRow from '@/components/EpgScrollableRow';
 import PageLayout from '@/components/PageLayout';
 import PageLoading from '@/components/PageLoading';
+import { useToast } from '@/components/ToastProvider';
 
 import { cleanEpgData } from './live-epg-utils';
 import { LiveChannel, LiveSource } from './live-types';
@@ -47,8 +48,9 @@ function LivePageClient() {
   const [loadingStage, setLoadingStage] = useState<
     'loading' | 'fetching' | 'ready'
   >('fetching');
-  const [loadingMessage, setLoadingMessage] = useState('正在取得直播源...');
+  const [loadingMessage, setLoadingMessage] = useState('正在取得直播源…');
   const [playbackError, setPlaybackError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -227,13 +229,14 @@ function LivePageClient() {
       }
 
       setLoadingStage('ready');
-      setLoadingMessage('✨ 準備就緒...');
+      setLoadingMessage('準備就緒…');
       setLoading(false);
     } catch (err) {
       console.error('取得直播源失敗:', err);
-      // 不設定錯誤，而是顯示空狀態
+      // 空列表與「載入失敗」畫面相同；必須明確提示，否則使用者會以為沒有直播源
       setLiveSources([]);
       setLoading(false);
+      toast('取得直播源失敗，請稍後再試', 'error');
     } finally {
       // 移除 URL 搜尋參數中的 source 和 id
       const newSearchParams = new URLSearchParams(searchParams.toString());
@@ -399,10 +402,10 @@ function LivePageClient() {
         return;
       }
       console.error('取得頻道列表失敗:', err);
-      // 不設定錯誤，而是設定空頻道列表
       setCurrentChannels([]);
       setGroupedChannels({});
       setFilteredChannels([]);
+      toast('取得頻道列表失敗，請稍後再試或換一個直播源', 'error');
 
       // 更新直播源的頻道數為 0
       setLiveSources((prevSources) =>
@@ -440,7 +443,7 @@ function LivePageClient() {
       await fetchChannels(source);
     } catch (err) {
       console.error('切換直播源失敗:', err);
-      // 不設定錯誤，保持當前狀態
+      toast('切換直播源失敗，請稍後再試', 'error');
     } finally {
       if (switchRequestId === sourceSwitchRequestIdRef.current) {
         // 切換完成，解鎖頻道切換器

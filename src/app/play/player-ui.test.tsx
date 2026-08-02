@@ -43,12 +43,12 @@ describe('SkipButton', () => {
 describe('VideoLoadingOverlay', () => {
   it('換源階段顯示切換訊息', () => {
     render(<VideoLoadingOverlay stage='sourceChanging' />);
-    expect(screen.getByText('🔄 切換播放源...')).toBeInTheDocument();
+    expect(screen.getByText('切換播放源…')).toBeInTheDocument();
   });
 
   it('初始化階段顯示加載訊息', () => {
     render(<VideoLoadingOverlay stage='initing' />);
-    expect(screen.getByText('🔄 影片載入中...')).toBeInTheDocument();
+    expect(screen.getByText('影片載入中…')).toBeInTheDocument();
   });
 });
 

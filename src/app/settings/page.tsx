@@ -1,6 +1,12 @@
 'use client';
 
-import { ArrowLeft, Globe, Image as ImageIcon, Search } from 'lucide-react';
+import {
+  ArrowLeft,
+  ChevronDown,
+  Globe,
+  Image as ImageIcon,
+  Search,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
@@ -107,6 +113,7 @@ export default function SettingsPage() {
     isClient ? localStorage.getItem('iptvDirectConnect') === 'true' : false
   );
   const [saveMessage, setSaveMessage] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const saveMessageTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -215,139 +222,7 @@ export default function SettingsPage() {
       </div>
 
       <div className='pt-20 pb-20 px-4 sm:px-10 max-w-3xl mx-auto space-y-5'>
-        {/* 豆瓣資料代理 */}
-        <div className='bg-white dark:bg-zinc-900/60 backdrop-blur-sm rounded-2xl border border-zinc-200 dark:border-white/5 p-6'>
-          <div className='flex items-center gap-3 mb-5'>
-            <div className='w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center'>
-              <Globe className='w-5 h-5 text-accent' />
-            </div>
-            <div>
-              <h2 className='font-bold text-base'>豆瓣資料代理</h2>
-              <p className='text-xs text-zinc-500 mt-0.5'>
-                選擇取得豆瓣資料的方式
-              </p>
-            </div>
-          </div>
-
-          <div className='space-y-2'>
-            {DATA_PROXY_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${
-                  doubanSource === opt.value
-                    ? 'bg-accent/10 border border-accent/30'
-                    : 'bg-zinc-100 dark:bg-zinc-800/30 border border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800/50'
-                }`}
-              >
-                <input
-                  type='radio'
-                  name='doubanSource'
-                  value={opt.value}
-                  checked={doubanSource === opt.value}
-                  onChange={(e) => setDoubanSource(e.target.value)}
-                  className='hidden'
-                />
-                <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    doubanSource === opt.value
-                      ? 'border-accent'
-                      : 'border-zinc-300 dark:border-zinc-600'
-                  }`}
-                >
-                  {doubanSource === opt.value && (
-                    <div className='w-2 h-2 rounded-full bg-accent' />
-                  )}
-                </div>
-                <span className='text-sm text-zinc-700 dark:text-zinc-200'>
-                  {opt.label}
-                </span>
-              </label>
-            ))}
-          </div>
-
-          {doubanSource === 'custom' && (
-            <div className='mt-4'>
-              <label className='block text-xs text-zinc-500 mb-2'>
-                自定義代理 URL
-              </label>
-              <input
-                type='text'
-                value={proxyUrl}
-                onChange={(e) => setProxyUrl(e.target.value)}
-                placeholder='https://your-proxy.com/'
-                className='w-full rounded-xl border border-zinc-300 dark:border-zinc-800 py-3 px-4 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-accent/50 focus:border-accent/50 focus:outline-none bg-white dark:bg-black/40 text-sm transition-all'
-              />
-            </div>
-          )}
-        </div>
-
-        {/* 豆瓣圖片代理 */}
-        <div className='bg-white dark:bg-zinc-900/60 backdrop-blur-sm rounded-2xl border border-zinc-200 dark:border-white/5 p-6'>
-          <div className='flex items-center gap-3 mb-5'>
-            <div className='w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center'>
-              <ImageIcon className='w-5 h-5 text-accent' />
-            </div>
-            <div>
-              <h2 className='font-bold text-base'>豆瓣圖片代理</h2>
-              <p className='text-xs text-zinc-500 mt-0.5'>
-                選擇取得豆瓣圖片的方式
-              </p>
-            </div>
-          </div>
-
-          <div className='space-y-2'>
-            {IMAGE_PROXY_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${
-                  imageProxyType === opt.value
-                    ? 'bg-accent/10 border border-accent/30'
-                    : 'bg-zinc-100 dark:bg-zinc-800/30 border border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800/50'
-                }`}
-              >
-                <input
-                  type='radio'
-                  name='imageProxyType'
-                  value={opt.value}
-                  checked={imageProxyType === opt.value}
-                  onChange={(e) => setImageProxyType(e.target.value)}
-                  className='hidden'
-                />
-                <div
-                  className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
-                    imageProxyType === opt.value
-                      ? 'border-accent'
-                      : 'border-zinc-300 dark:border-zinc-600'
-                  }`}
-                >
-                  {imageProxyType === opt.value && (
-                    <div className='w-2 h-2 rounded-full bg-accent' />
-                  )}
-                </div>
-                <span className='text-sm text-zinc-700 dark:text-zinc-200'>
-                  {opt.label}
-                </span>
-              </label>
-            ))}
-          </div>
-
-          {imageProxyType === 'custom' && (
-            <div className='mt-4'>
-              <label className='block text-xs text-zinc-500 mb-2'>
-                自定義代理 URL
-              </label>
-              <input
-                type='text'
-                value={imageProxyUrl}
-                onChange={(e) => setImageProxyUrl(e.target.value)}
-                placeholder='https://your-proxy.com/'
-                className='w-full rounded-xl border border-zinc-300 dark:border-zinc-800 py-3 px-4 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-accent/50 focus:border-accent/50 focus:outline-none bg-white dark:bg-black/40 text-sm transition-all'
-              />
-            </div>
-          )}
-        </div>
-
-        {/* 開關設定 */}
+        {/* 常用：搜尋與播放 */}
         <div className='bg-white dark:bg-zinc-900/60 backdrop-blur-sm rounded-2xl border border-zinc-200 dark:border-white/5 p-6 divide-y divide-zinc-200 dark:divide-zinc-800/50'>
           <div className='flex items-center gap-3 mb-2'>
             <div className='w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center'>
@@ -355,7 +230,7 @@ export default function SettingsPage() {
             </div>
             <div>
               <h2 className='font-bold text-base'>搜尋與播放</h2>
-              <p className='text-xs text-zinc-500 mt-0.5'>應用程式偏好設定</p>
+              <p className='text-xs text-zinc-500 mt-0.5'>日常使用偏好</p>
             </div>
           </div>
 
@@ -388,15 +263,161 @@ export default function SettingsPage() {
           />
         </div>
 
+        {/* 進階：代理（預設收合，降低認知負荷） */}
+        <div className='bg-white dark:bg-zinc-900/60 backdrop-blur-sm rounded-2xl border border-zinc-200 dark:border-white/5 overflow-hidden'>
+          <button
+            type='button'
+            onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={showAdvanced}
+            className='w-full flex items-center justify-between gap-3 p-6 text-left hover:bg-zinc-50 dark:hover:bg-white/[0.02] transition-colors'
+          >
+            <div className='flex items-center gap-3 min-w-0'>
+              <div className='w-10 h-10 rounded-xl bg-accent/20 flex items-center justify-center flex-shrink-0'>
+                <Globe className='w-5 h-5 text-accent' />
+              </div>
+              <div className='min-w-0'>
+                <h2 className='font-bold text-base'>進階設定</h2>
+                <p className='text-xs text-zinc-500 mt-0.5'>
+                  豆瓣資料／圖片代理（多數情況無需調整）
+                </p>
+              </div>
+            </div>
+            <ChevronDown
+              className={`w-5 h-5 text-zinc-500 flex-shrink-0 transition-transform duration-200 ${
+                showAdvanced ? 'rotate-180' : ''
+              }`}
+              aria-hidden
+            />
+          </button>
+
+          {showAdvanced && (
+            <div className='px-6 pb-6 space-y-6 border-t border-zinc-200 dark:border-white/5 pt-5'>
+              <div>
+                <div className='flex items-center gap-2 mb-3'>
+                  <Globe className='w-4 h-4 text-accent' />
+                  <h3 className='font-semibold text-sm'>豆瓣資料代理</h3>
+                </div>
+                <div className='space-y-2'>
+                  {DATA_PROXY_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                        doubanSource === opt.value
+                          ? 'bg-accent/10 border border-accent/30'
+                          : 'bg-zinc-100 dark:bg-zinc-800/30 border border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      <input
+                        type='radio'
+                        name='doubanSource'
+                        value={opt.value}
+                        checked={doubanSource === opt.value}
+                        onChange={(e) => setDoubanSource(e.target.value)}
+                        className='hidden'
+                      />
+                      <div
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          doubanSource === opt.value
+                            ? 'border-accent'
+                            : 'border-zinc-300 dark:border-zinc-600'
+                        }`}
+                      >
+                        {doubanSource === opt.value && (
+                          <div className='w-2 h-2 rounded-full bg-accent' />
+                        )}
+                      </div>
+                      <span className='text-sm text-zinc-700 dark:text-zinc-200'>
+                        {opt.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                {doubanSource === 'custom' && (
+                  <div className='mt-4'>
+                    <label className='block text-xs text-zinc-500 mb-2'>
+                      自定義代理 URL
+                    </label>
+                    <input
+                      type='text'
+                      value={proxyUrl}
+                      onChange={(e) => setProxyUrl(e.target.value)}
+                      placeholder='https://your-proxy.com/'
+                      className='w-full rounded-xl border border-zinc-300 dark:border-zinc-800 py-3 px-4 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-accent/50 focus:border-accent/50 focus:outline-none bg-white dark:bg-black/40 text-sm transition-all'
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className='flex items-center gap-2 mb-3'>
+                  <ImageIcon className='w-4 h-4 text-accent' />
+                  <h3 className='font-semibold text-sm'>豆瓣圖片代理</h3>
+                </div>
+                <div className='space-y-2'>
+                  {IMAGE_PROXY_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 ${
+                        imageProxyType === opt.value
+                          ? 'bg-accent/10 border border-accent/30'
+                          : 'bg-zinc-100 dark:bg-zinc-800/30 border border-transparent hover:bg-zinc-200 dark:hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      <input
+                        type='radio'
+                        name='imageProxyType'
+                        value={opt.value}
+                        checked={imageProxyType === opt.value}
+                        onChange={(e) => setImageProxyType(e.target.value)}
+                        className='hidden'
+                      />
+                      <div
+                        className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                          imageProxyType === opt.value
+                            ? 'border-accent'
+                            : 'border-zinc-300 dark:border-zinc-600'
+                        }`}
+                      >
+                        {imageProxyType === opt.value && (
+                          <div className='w-2 h-2 rounded-full bg-accent' />
+                        )}
+                      </div>
+                      <span className='text-sm text-zinc-700 dark:text-zinc-200'>
+                        {opt.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                {imageProxyType === 'custom' && (
+                  <div className='mt-4'>
+                    <label className='block text-xs text-zinc-500 mb-2'>
+                      自定義代理 URL
+                    </label>
+                    <input
+                      type='text'
+                      value={imageProxyUrl}
+                      onChange={(e) => setImageProxyUrl(e.target.value)}
+                      placeholder='https://your-proxy.com/'
+                      className='w-full rounded-xl border border-zinc-300 dark:border-zinc-800 py-3 px-4 text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:ring-2 focus:ring-accent/50 focus:border-accent/50 focus:outline-none bg-white dark:bg-black/40 text-sm transition-all'
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* 儲存按鈕 */}
         <button
           onClick={handleSave}
-          className='w-full py-4 bg-gradient-to-r from-accent to-red-600 text-white font-bold rounded-xl shadow-lg shadow-red-500/25 hover:shadow-red-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 tracking-wide'
+          className='w-full py-4 bg-accent text-white font-bold rounded-xl shadow-lg shadow-accent/25 hover:bg-accent/90 hover:shadow-accent/35 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 tracking-wide'
         >
           儲存設定
         </button>
 
-        <p className='text-center text-xs text-zinc-600'>
+        <p className='text-center text-xs text-zinc-500'>
           這些設定儲存在本地瀏覽器中
         </p>
       </div>

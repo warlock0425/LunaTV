@@ -59,7 +59,7 @@ const NavLink = ({
       <Icon className='w-5 h-5' />
     </div>
     <span
-      className={`text-[10px] leading-tight text-center whitespace-nowrap font-medium transition-colors duration-300 ${
+      className={`text-[11px] leading-tight text-center whitespace-nowrap font-medium transition-colors duration-300 ${
         isActive
           ? 'text-zinc-100 dark:text-zinc-100 font-bold'
           : 'text-zinc-500 dark:text-zinc-400'

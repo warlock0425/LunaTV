@@ -784,7 +784,20 @@ const SORTED_SIMPLIFIED_TO_TRADITIONAL = Object.entries(
   SIMPLIFIED_TO_TRADITIONAL
 ).sort((a, b) => b[0].length - a[0].length);
 
+/**
+ * 名稱以 🎬 開頭的片源（如「🎬iKun资源」「🎬某某资源」）一律維持上游原文：
+ * 不做繁簡轉換、不改台灣用語、不動符號與 emoji。
+ * 其餘片源名稱仍走 toDisplayLanguage。
+ */
+export function shouldPreserveSourceDisplayName(name: string): boolean {
+  return /^\s*🎬/.test(name);
+}
+
 export function toDisplayLanguage(text: string): string {
+  // 🎬 前綴片源：簡體就是簡體，符號也不能動
+  if (shouldPreserveSourceDisplayName(text)) {
+    return text;
+  }
   let result = text;
   for (const [simp, trad] of SORTED_SIMPLIFIED_TO_TRADITIONAL) {
     result = result.split(simp).join(trad);

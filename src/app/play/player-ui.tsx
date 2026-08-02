@@ -39,18 +39,18 @@ export function VideoLoadingOverlay({
     <div className='absolute inset-0 bg-black/85 backdrop-blur-sm rounded-xl flex items-center justify-center z-[500] transition-all duration-300'>
       <div className='text-center max-w-md mx-auto px-6'>
         <div className='relative mb-8'>
-          <div className='relative mx-auto w-24 h-24 bg-surface-panel rounded-2xl shadow-2xl flex items-center justify-center border border-accent/30'>
-            <div className='text-white text-4xl'>🎬</div>
-            <div className='absolute -inset-1 rounded-2xl border border-accent/20' />
+          <div className='relative mx-auto w-20 h-20 bg-surface-panel rounded-2xl shadow-2xl flex items-center justify-center border border-accent/30'>
+            <div
+              className='h-9 w-9 rounded-full border-2 border-accent/25 border-t-accent animate-spin'
+              aria-hidden
+            />
+            <div className='absolute -inset-1 rounded-2xl border border-accent/15' />
           </div>
         </div>
 
-        {/* 換源消息 */}
         <div className='space-y-2'>
-          <p className='text-xl font-semibold text-white animate-pulse'>
-            {stage === 'sourceChanging'
-              ? '🔄 切換播放源...'
-              : '🔄 影片載入中...'}
+          <p className='text-lg font-semibold text-white'>
+            {stage === 'sourceChanging' ? '切換播放源…' : '影片載入中…'}
           </p>
         </div>
       </div>
@@ -78,7 +78,7 @@ export function AutoNextCountdownOverlay({
         <div className='flex gap-3 justify-center'>
           <button
             onClick={onPlayNow}
-            className='px-5 py-2.5 bg-accent hover:bg-accent-deep text-white font-medium rounded-xl transition-colors text-sm'
+            className='px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-medium rounded-xl transition-colors text-sm'
           >
             立即播放
           </button>
