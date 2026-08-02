@@ -253,10 +253,10 @@ export function EpisodeCollapseToggle({
   );
 }
 
-/** 簡介超過這個字數就預設收合，避免長簡介把下方的選集操作區擠掉 */
+/** 簡介超過這個字數就預設收合，避免長簡介把下方操作區擠掉 */
 const DESC_COLLAPSE_LENGTH = 180;
 
-/** 影片詳情展示：預設收合，避免與頂部標題重複佔高；展開後才看簡介／封面 */
+/** 影片詳情：封面 + 標題 + 資訊 + 簡介（完整版型，不再用空蕩的收合列） */
 export function VideoDetailsPanel({
   detail,
   videoTitle,
@@ -275,15 +275,11 @@ export function VideoDetailsPanel({
   onToggleFavorite: () => void;
 }) {
   const [failedCover, setFailedCover] = useState<string | null>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
   const coverImgError = Boolean(videoCover && failedCover === videoCover);
 
-  const yearLabel = formatYear(detail?.year || videoYear);
-  const sourceLabel = detail?.source_name || '';
   const desc = detail?.desc?.trim() || '';
-  // 以「字元」而非「UTF-16 碼元」計數與截斷：簡介可能含 emoji 或 BMP 以外的
-  // 罕用字（代理對佔兩個碼元），用 slice 會把一個字劈成兩半、渲染出破字。
+  // 以「字元」計數與截斷，避免 emoji／罕用字被 slice 劈成破字
   const descChars = useMemo(() => Array.from(desc), [desc]);
   const descIsLong = descChars.length > DESC_COLLAPSE_LENGTH;
   const shownDesc =
@@ -292,142 +288,118 @@ export function VideoDetailsPanel({
       : desc;
 
   return (
-    <section className='rounded-xl border border-white/10 bg-zinc-900/40 overflow-hidden'>
-      {/* 精簡列：收藏／年份／片源常駐；完整詳情按需展開 */}
-      <div className='flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3'>
-        <button
-          type='button'
-          onClick={() => setPanelOpen((v) => !v)}
-          aria-expanded={panelOpen}
-          className='flex flex-1 items-center gap-2 min-w-0 text-left hover:opacity-90 transition-opacity'
-        >
-          <span className='text-sm font-semibold text-zinc-100 shrink-0'>
-            影片資訊
-          </span>
-          {yearLabel && (
-            <span className='text-xs text-zinc-400 tabular-nums shrink-0'>
-              {yearLabel}
+    <div className='grid grid-cols-1 md:grid-cols-4 gap-4 rounded-xl border border-white/10 bg-zinc-900/30'>
+      <div className='md:col-span-3'>
+        <div className='p-5 sm:p-6 flex flex-col min-h-0'>
+          <h2 className='text-xl sm:text-2xl font-bold mb-3 tracking-wide flex items-center flex-shrink-0 text-zinc-100'>
+            <span className='min-w-0 line-clamp-2'>
+              {videoTitle || '影片標題'}
             </span>
-          )}
-          {sourceLabel && (
-            <span
-              title={sourceLabel}
-              className='max-w-[8rem] sm:max-w-[14rem] truncate text-[11px] px-1.5 py-0.5 rounded border border-zinc-600/70 text-zinc-300'
+            <button
+              type='button'
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFavorite();
+              }}
+              className='ml-3 flex-shrink-0 hover:opacity-80 transition-opacity'
+              aria-label={favorited ? '取消收藏' : '加入收藏'}
             >
-              {sourceLabel}
-            </span>
+              <FavoriteIcon filled={favorited} />
+            </button>
+          </h2>
+
+          <div className='flex flex-wrap items-center gap-2 sm:gap-3 text-sm mb-4 text-zinc-400 flex-shrink-0'>
+            {detail?.class && (
+              <span className='text-accent font-semibold'>{detail.class}</span>
+            )}
+            {formatYear(detail?.year || videoYear) && (
+              <span className='tabular-nums'>
+                {formatYear(detail?.year || videoYear)}
+              </span>
+            )}
+            {detail?.source_name && (
+              <span
+                title={detail.source_name}
+                className='max-w-[12rem] sm:max-w-full truncate border border-zinc-600/70 px-2 py-0.5 rounded text-xs text-zinc-300'
+              >
+                {detail.source_name}
+              </span>
+            )}
+            {detail?.type_name && <span>{detail.type_name}</span>}
+          </div>
+
+          {desc && (
+            <div className='text-sm sm:text-base leading-relaxed text-zinc-300 flex-1 min-h-0'>
+              <p style={{ whiteSpace: 'pre-line' }}>{shownDesc}</p>
+              {descIsLong && (
+                <button
+                  type='button'
+                  onClick={() => setDescExpanded((v) => !v)}
+                  className='mt-2 text-sm font-medium text-accent hover:text-accent/80 transition-colors'
+                >
+                  {descExpanded ? '收合簡介' : '展開全部簡介'}
+                </button>
+              )}
+            </div>
           )}
-          {detail?.class && (
-            <span className='hidden sm:inline text-xs text-accent font-medium truncate'>
-              {detail.class}
-            </span>
-          )}
-          <span className='ml-auto text-xs font-medium text-accent shrink-0'>
-            {panelOpen ? '收合' : '展開'}
-          </span>
-        </button>
-        <button
-          type='button'
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite();
-          }}
-          className='flex-shrink-0 hover:opacity-80 transition-opacity p-1'
-          aria-label={favorited ? '取消收藏' : '加入收藏'}
-        >
-          <FavoriteIcon filled={favorited} />
-        </button>
+        </div>
       </div>
 
-      {panelOpen && (
-        <div className='border-t border-white/10 grid grid-cols-1 md:grid-cols-4 gap-4 p-4 sm:p-5'>
-          <div className='md:col-span-3 min-w-0'>
-            {/* 不再用巨大 h1 重覆頂部片名，改以次要標題呈現 */}
-            <p
-              className='text-base sm:text-lg font-semibold text-zinc-200 mb-3 line-clamp-2'
-              title={videoTitle || undefined}
-            >
-              {videoTitle || '影片標題'}
-            </p>
-
-            <div className='flex flex-wrap items-center gap-2 text-sm text-zinc-400 mb-3'>
-              {detail?.type_name && <span>{detail.type_name}</span>}
-              {detail?.class && (
-                <span className='sm:hidden text-accent'>{detail.class}</span>
-              )}
-            </div>
-
-            {desc && (
-              <div className='text-sm leading-relaxed text-zinc-300'>
-                <p style={{ whiteSpace: 'pre-line' }}>{shownDesc}</p>
-                {descIsLong && (
-                  <button
-                    type='button'
-                    onClick={() => setDescExpanded((v) => !v)}
-                    className='mt-2 text-sm font-medium text-accent hover:text-accent/80 transition-colors'
+      <div className='hidden md:block md:col-span-1 md:order-first'>
+        <div className='p-5 pr-2'>
+          <div className='relative bg-zinc-800 aspect-[2/3] flex items-center justify-center rounded-xl overflow-hidden ring-1 ring-white/10 max-w-[200px]'>
+            {videoCover && !coverImgError ? (
+              <>
+                <img
+                  src={processImageUrl(videoCover)}
+                  alt={videoTitle}
+                  className='w-full h-full object-cover'
+                  referrerPolicy='no-referrer'
+                  onError={(e) => {
+                    const img = e.currentTarget;
+                    if (!img.dataset.retried && videoCover) {
+                      img.dataset.retried = 'true';
+                      img.src = getProxiedImageUrl(videoCover);
+                      return;
+                    }
+                    setFailedCover(videoCover);
+                  }}
+                />
+                {videoDoubanId !== 0 && (
+                  <a
+                    href={`https://movie.douban.com/subject/${videoDoubanId.toString()}`}
+                    target='_blank'
+                    rel='noopener noreferrer'
+                    className='absolute top-3 left-3'
+                    aria-label='在豆瓣開啟'
                   >
-                    {descExpanded ? '收合簡介' : '展開全部簡介'}
-                  </button>
+                    <div className='bg-accent text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-accent/90 hover:scale-[1.05] transition-all'>
+                      <svg
+                        width='16'
+                        height='16'
+                        viewBox='0 0 24 24'
+                        fill='none'
+                        stroke='currentColor'
+                        strokeWidth='2'
+                        strokeLinecap='round'
+                        strokeLinejoin='round'
+                        aria-hidden
+                      >
+                        <path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'></path>
+                        <path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'></path>
+                      </svg>
+                    </div>
+                  </a>
                 )}
-              </div>
+              </>
+            ) : (
+              <span className='text-zinc-500 text-xs px-2 text-center'>
+                {coverImgError ? '封面載入失敗' : '無封面'}
+              </span>
             )}
           </div>
-
-          <div className='md:col-span-1 md:order-first'>
-            <div className='relative mx-auto w-28 sm:w-full max-w-[160px] bg-zinc-800 aspect-[2/3] flex items-center justify-center rounded-xl overflow-hidden ring-1 ring-white/10'>
-              {videoCover && !coverImgError ? (
-                <>
-                  <img
-                    src={processImageUrl(videoCover)}
-                    alt={videoTitle}
-                    className='w-full h-full object-cover'
-                    referrerPolicy='no-referrer'
-                    onError={(e) => {
-                      const img = e.currentTarget;
-                      if (!img.dataset.retried && videoCover) {
-                        img.dataset.retried = 'true';
-                        img.src = getProxiedImageUrl(videoCover);
-                        return;
-                      }
-                      setFailedCover(videoCover);
-                    }}
-                  />
-                  {videoDoubanId !== 0 && (
-                    <a
-                      href={`https://movie.douban.com/subject/${videoDoubanId.toString()}`}
-                      target='_blank'
-                      rel='noopener noreferrer'
-                      className='absolute top-2 left-2'
-                      aria-label='在豆瓣開啟'
-                    >
-                      <div className='bg-accent text-white text-xs font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md hover:bg-accent/90 hover:scale-[1.05] transition-all'>
-                        <svg
-                          width='16'
-                          height='16'
-                          viewBox='0 0 24 24'
-                          fill='none'
-                          stroke='currentColor'
-                          strokeWidth='2'
-                          strokeLinecap='round'
-                          strokeLinejoin='round'
-                          aria-hidden
-                        >
-                          <path d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'></path>
-                          <path d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'></path>
-                        </svg>
-                      </div>
-                    </a>
-                  )}
-                </>
-              ) : (
-                <span className='text-zinc-500 text-xs px-2 text-center'>
-                  {coverImgError ? '封面載入失敗' : '無封面'}
-                </span>
-              )}
-            </div>
-          </div>
         </div>
-      )}
-    </section>
+      </div>
+    </div>
   );
 }

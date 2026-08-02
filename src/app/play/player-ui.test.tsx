@@ -21,23 +21,21 @@ describe('VideoDetailsPanel 年份顯示', () => {
     onToggleFavorite: jest.fn(),
   };
 
-  // downstream 抓不到年份時填的是字串 'unknown'，非空字串會通過 truthy 檢查
   it('不把 unknown 哨兵值顯示給使用者', () => {
     render(<VideoDetailsPanel {...baseProps} videoYear='unknown' />);
     expect(screen.queryByText('unknown')).not.toBeInTheDocument();
   });
 
-  it('正常年份在精簡列仍然顯示（不必展開）', () => {
+  it('正常年份仍然顯示', () => {
     render(<VideoDetailsPanel {...baseProps} videoYear='2026' />);
     expect(screen.getByText('2026')).toBeInTheDocument();
   });
 });
 
 /**
- * 面板預設收合，避免與頂部標題重複佔高。
- * 長簡介在展開面板後仍以「字元」截斷（避免 emoji 破字）。
+ * 長簡介預設截斷；以「字元」計算避免 emoji 破字。
  */
-describe('VideoDetailsPanel 面板與簡介收合', () => {
+describe('VideoDetailsPanel 簡介收合', () => {
   const baseProps = {
     videoTitle: '片名',
     videoYear: '2026',
@@ -47,25 +45,18 @@ describe('VideoDetailsPanel 面板與簡介收合', () => {
     onToggleFavorite: jest.fn(),
   };
 
-  const openPanel = () => {
-    fireEvent.click(screen.getByRole('button', { name: /影片資訊/ }));
-  };
-
   const renderWithDesc = (desc: string) =>
     render(<VideoDetailsPanel {...baseProps} detail={{ desc } as never} />);
 
-  it('預設收合時看不到簡介，展開後才出現', () => {
+  it('短簡介完整顯示，不出現展開按鈕', () => {
     renderWithDesc('短短的一句簡介');
-    expect(screen.queryByText('短短的一句簡介')).not.toBeInTheDocument();
-    openPanel();
     expect(screen.getByText('短短的一句簡介')).toBeInTheDocument();
     expect(screen.queryByText('展開全部簡介')).not.toBeInTheDocument();
   });
 
-  it('長簡介在面板內預設截斷，可再展開全文', () => {
+  it('長簡介預設收合，點擊後展開、再點收合', () => {
     const desc = '劇'.repeat(200);
     renderWithDesc(desc);
-    openPanel();
 
     expect(screen.queryByText(desc)).not.toBeInTheDocument();
     expect(screen.getByText(`${'劇'.repeat(180)}…`)).toBeInTheDocument();
@@ -80,7 +71,6 @@ describe('VideoDetailsPanel 面板與簡介收合', () => {
   it('含 emoji 的長簡介不會被截成破字', () => {
     const desc = '🎬'.repeat(200);
     renderWithDesc(desc);
-    openPanel();
 
     const shown = screen.getByText(/🎬/).textContent || '';
     const loneSurrogates = Array.from(shown).filter((ch) => {
