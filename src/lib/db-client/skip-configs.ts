@@ -96,14 +96,17 @@ export async function saveSkipConfig(
     const cachedConfigs = cacheManager.getCachedSkipConfigs() || {};
     const prevConfigs = { ...cachedConfigs };
 
-    // 立即更新快取
-    cachedConfigs[key] = config;
-    cacheManager.cacheSkipConfigs(cachedConfigs);
+    // 立即更新快取。複製後再寫：getCachedSkipConfigs 回傳的是快取記憶體內的活
+    // 引用，就地寫入會連帶改掉 getAllSkipConfigs 背景同步時所持有的比較基準，
+    // 導致同步用還沒有這筆設定的舊資料覆蓋快取。
+    // （delete 路徑在 d4ef76f 已因同樣理由改成複製後再刪。）
+    const nextConfigs = { ...cachedConfigs, [key]: config };
+    cacheManager.cacheSkipConfigs(nextConfigs);
 
     // 觸發立即更新事件
     window.dispatchEvent(
       new CustomEvent('skipConfigsUpdated', {
-        detail: cachedConfigs,
+        detail: nextConfigs,
       })
     );
 

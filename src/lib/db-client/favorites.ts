@@ -92,16 +92,20 @@ export async function saveFavorite(
 
   // 數據庫存儲模式：乐觀更新策略（包括 redis 和 upstash）
   if (STORAGE_TYPE !== 'localstorage') {
-    // 立即更新快取
+    // 立即更新快取。複製後再寫：getCachedFavorites 回傳的是快取記憶體內的活引用，
+    // 就地寫入會連帶改掉 getAllFavorites 背景同步時所持有的比較基準——那份基準
+    // 一旦含有剛存下的收藏，isSameCachedData 就會判定與伺服器資料不同，於是用
+    // 還沒有這筆收藏的舊資料覆蓋快取，使用者剛按的收藏無聲消失。
+    // （delete 路徑在 d4ef76f 已因同樣理由改成複製後再刪。）
     const cachedFavorites = cacheManager.getCachedFavorites() || {};
     const prevFavorites = { ...cachedFavorites };
-    cachedFavorites[key] = favorite;
-    cacheManager.cacheFavorites(cachedFavorites);
+    const nextFavorites = { ...cachedFavorites, [key]: favorite };
+    cacheManager.cacheFavorites(nextFavorites);
 
     // 触發立即更新事件
     window.dispatchEvent(
       new CustomEvent('favoritesUpdated', {
-        detail: cachedFavorites,
+        detail: nextFavorites,
       })
     );
 
