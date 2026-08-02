@@ -74,6 +74,46 @@ async function withRetry<T>(
   throw new Error('Max retries exceeded');
 }
 
+/**
+ * 毀損資料的容錯讀取。
+ *
+ * @upstash/redis 反序列化失敗時「回傳原始字串」而不是拋錯——hgetall 的
+ * deserialize 與其餘指令共用的 parseResponse 都是 catch 之後回傳原值。因此
+ * 直接 `as T` 會讓一筆毀損欄位變成偽裝成物件的字串，靜默流進 API 回應、
+ * 歷史頁與 cron 的集數更新（讀 .title / .total_episodes 全是 undefined）。
+ *
+ * BaseRedisStorage 對同一情境的處理是「跳過該欄位並警告」，並有回歸測試看守
+ * （見 redis-base.db.test.ts：單一毀損欄位不得讓整個讀取失敗）。這裡複製那個
+ * 「行為」，但不共用它的「實作」——parseHashEntries 吃的是 JSON 字串，而
+ * Upstash 這側拿到的已經是反序列化後的值，形狀根本不同。硬要共用就得關掉
+ * automaticDeserialization，那會改動這個檔案裡每一條讀取路徑。
+ */
+function asStoredRecord<T>(value: unknown, label: string): T | null {
+  if (value === null || value === undefined) return null;
+  // typeof null === 'object'，陣列也不該被當成合法紀錄，兩者都要排除
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    console.warn(`略過毀損的資料: ${label}`);
+    return null;
+  }
+  return value as T;
+}
+
+function collectStoredRecords<T>(
+  all: Record<string, unknown> | null | undefined,
+  hashKey: string
+): Record<string, T> {
+  const result: Record<string, T> = {};
+  for (const [field, value] of Object.entries(all || {})) {
+    if (value === null || value === undefined) continue;
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      console.warn(`略過毀損的資料欄位: ${hashKey} / ${field}`);
+      continue;
+    }
+    result[field] = value as T;
+  }
+  return result;
+}
+
 export class UpstashRedisStorage implements IStorage {
   private client: Redis;
 
@@ -130,7 +170,10 @@ export class UpstashRedisStorage implements IStorage {
     const val = await withRetry(() =>
       this.client.hget(this.prHashKey(userName), key)
     );
-    return val ? (val as PlayRecord) : null;
+    return asStoredRecord<PlayRecord>(
+      val,
+      `${this.prHashKey(userName)} / ${key}`
+    );
   }
 
   async setPlayRecord(
@@ -149,14 +192,7 @@ export class UpstashRedisStorage implements IStorage {
     const all = await withRetry(() =>
       this.client.hgetall(this.prHashKey(userName))
     );
-    if (!all || Object.keys(all).length === 0) return {};
-    const result: Record<string, PlayRecord> = {};
-    for (const [field, value] of Object.entries(all)) {
-      if (value) {
-        result[field] = value as PlayRecord;
-      }
-    }
-    return result;
+    return collectStoredRecords<PlayRecord>(all, this.prHashKey(userName));
   }
 
   async deletePlayRecord(userName: string, key: string): Promise<void> {
@@ -176,7 +212,10 @@ export class UpstashRedisStorage implements IStorage {
     const val = await withRetry(() =>
       this.client.hget(this.favHashKey(userName), key)
     );
-    return val ? (val as Favorite) : null;
+    return asStoredRecord<Favorite>(
+      val,
+      `${this.favHashKey(userName)} / ${key}`
+    );
   }
 
   async setFavorite(
@@ -193,14 +232,7 @@ export class UpstashRedisStorage implements IStorage {
     const all = await withRetry(() =>
       this.client.hgetall(this.favHashKey(userName))
     );
-    if (!all || Object.keys(all).length === 0) return {};
-    const result: Record<string, Favorite> = {};
-    for (const [field, value] of Object.entries(all)) {
-      if (value) {
-        result[field] = value as Favorite;
-      }
-    }
-    return result;
+    return collectStoredRecords<Favorite>(all, this.favHashKey(userName));
   }
 
   async deleteFavorite(userName: string, key: string): Promise<void> {
@@ -339,7 +371,7 @@ export class UpstashRedisStorage implements IStorage {
 
   async getAdminConfig(): Promise<AdminConfig | null> {
     const val = await withRetry(() => this.client.get(this.adminConfigKey()));
-    return val ? (val as AdminConfig) : null;
+    return asStoredRecord<AdminConfig>(val, this.adminConfigKey());
   }
 
   async setAdminConfig(config: AdminConfig): Promise<void> {
@@ -363,7 +395,10 @@ export class UpstashRedisStorage implements IStorage {
     const val = await withRetry(() =>
       this.client.hget(this.skipHashKey(userName), this.skipField(source, id))
     );
-    return val ? (val as SkipConfig) : null;
+    return asStoredRecord<SkipConfig>(
+      val,
+      `${this.skipHashKey(userName)} / ${this.skipField(source, id)}`
+    );
   }
 
   async setSkipConfig(
@@ -395,14 +430,7 @@ export class UpstashRedisStorage implements IStorage {
     const all = await withRetry(() =>
       this.client.hgetall(this.skipHashKey(userName))
     );
-    if (!all || Object.keys(all).length === 0) return {};
-    const configs: { [key: string]: SkipConfig } = {};
-    for (const [field, value] of Object.entries(all)) {
-      if (value) {
-        configs[field] = value as SkipConfig;
-      }
-    }
-    return configs;
+    return collectStoredRecords<SkipConfig>(all, this.skipHashKey(userName));
   }
 
   // ---------- 數據遷移：旧扁平 key → Hash 結构 ----------
@@ -580,7 +608,10 @@ export class UpstashRedisStorage implements IStorage {
     const value = await withRetry(() =>
       this.client.hget(this.bangumiAliasHashKey(), bangumiId)
     );
-    return value ? (value as BangumiAliasCacheEntry) : null;
+    return asStoredRecord<BangumiAliasCacheEntry>(
+      value,
+      `${this.bangumiAliasHashKey()} / ${bangumiId}`
+    );
   }
 
   async setBangumiAliasCache(
