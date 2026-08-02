@@ -67,7 +67,8 @@ export function getWatchProgress(record: {
   const total = Number(record.total_time) || 0;
   if (total <= 0) return 0;
   const played = Number(record.play_time) || 0;
-  return Math.min(100, Math.max(0, (played / total) * 100));
+  // 顯示用整數百分比；避免 Hero 出現 43.076923…% 這種浮點字串
+  return Math.min(100, Math.max(0, Math.round((played / total) * 100)));
 }
 
 export const DETAIL_CACHE_KEYS = [

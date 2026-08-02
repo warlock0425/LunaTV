@@ -2,6 +2,7 @@ import type { SearchResult } from '@/lib/types';
 
 import {
   clampEpisodeIndex,
+  formatEpisodeBadge,
   formatEpisodeUpdateMessage,
   getEpisodeCount,
   getEpisodeUrl,
@@ -31,6 +32,24 @@ function makeDetail(
     class: overrides.class,
   };
 }
+
+describe('formatEpisodeBadge', () => {
+  it('純數字集標題改寫成「第 N 集」', () => {
+    expect(formatEpisodeBadge('4', 3)).toBe('第 4 集');
+    expect(formatEpisodeBadge('04', 0)).toBe('第 4 集');
+  });
+
+  it('已是「第 N 集」格式時正規化空白', () => {
+    expect(formatEpisodeBadge('第4集', 0)).toBe('第 4 集');
+    expect(formatEpisodeBadge('第 12 集', 11)).toBe('第 12 集');
+  });
+
+  it('有意義的集標題保留，缺漏時用索引後備', () => {
+    expect(formatEpisodeBadge('終焉的起點', 0)).toBe('終焉的起點');
+    expect(formatEpisodeBadge('', 2)).toBe('第 3 集');
+    expect(formatEpisodeBadge(null, 0)).toBe('第 1 集');
+  });
+});
 
 describe('play page detail merge helpers', () => {
   it('counts and clamps episode indexes safely', () => {

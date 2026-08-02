@@ -43,6 +43,11 @@ describe('getWatchProgress', () => {
     expect(getWatchProgress({ play_time: 9999, total_time: 100 })).toBe(100);
     expect(getWatchProgress({ play_time: -50, total_time: 100 })).toBe(0);
   });
+
+  it('回傳整數百分比（避免 UI 顯示過長浮點）', () => {
+    // 560/1300 ≈ 43.0769… → 43
+    expect(getWatchProgress({ play_time: 560, total_time: 1300 })).toBe(43);
+  });
 });
 
 describe('resolveRecordPlayTarget', () => {

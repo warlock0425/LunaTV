@@ -25,18 +25,17 @@ describe('VideoDetailsPanel 年份顯示', () => {
     expect(screen.queryByText('unknown')).not.toBeInTheDocument();
   });
 
-  it('正常年份仍然顯示', () => {
+  it('正常年份在精簡列仍然顯示（不必展開）', () => {
     render(<VideoDetailsPanel {...baseProps} videoYear='2026' />);
     expect(screen.getByText('2026')).toBeInTheDocument();
   });
 });
 
 /**
- * 長簡介預設收合，避免把下方的選集操作區擠掉。
- * 截斷以「字元」計算——emoji 與 BMP 以外的罕用字佔兩個 UTF-16 碼元，
- * 用 slice 會把一個字劈成兩半、渲染出破字。
+ * 面板預設收合，避免與頂部標題重複佔高。
+ * 長簡介在展開面板後仍以「字元」截斷（避免 emoji 破字）。
  */
-describe('VideoDetailsPanel 簡介收合', () => {
+describe('VideoDetailsPanel 面板與簡介收合', () => {
   const baseProps = {
     videoTitle: '片名',
     videoYear: '2026',
@@ -46,21 +45,26 @@ describe('VideoDetailsPanel 簡介收合', () => {
     onToggleFavorite: jest.fn(),
   };
 
+  const openPanel = () => {
+    fireEvent.click(screen.getByRole('button', { name: /影片資訊/ }));
+  };
+
   const renderWithDesc = (desc: string) =>
     render(<VideoDetailsPanel {...baseProps} detail={{ desc } as never} />);
 
-  it('短簡介完整顯示，不出現展開按鈕', () => {
+  it('預設收合時看不到簡介，展開後才出現', () => {
     renderWithDesc('短短的一句簡介');
-
+    expect(screen.queryByText('短短的一句簡介')).not.toBeInTheDocument();
+    openPanel();
     expect(screen.getByText('短短的一句簡介')).toBeInTheDocument();
     expect(screen.queryByText('展開全部簡介')).not.toBeInTheDocument();
   });
 
-  it('長簡介預設收合，點擊後展開、再點收合', () => {
+  it('長簡介在面板內預設截斷，可再展開全文', () => {
     const desc = '劇'.repeat(200);
     renderWithDesc(desc);
+    openPanel();
 
-    // 收合時顯示的是截斷版本（帶省略號），不是原文
     expect(screen.queryByText(desc)).not.toBeInTheDocument();
     expect(screen.getByText(`${'劇'.repeat(180)}…`)).toBeInTheDocument();
 
@@ -72,14 +76,11 @@ describe('VideoDetailsPanel 簡介收合', () => {
   });
 
   it('含 emoji 的長簡介不會被截成破字', () => {
-    // 每個 🎬 佔兩個 UTF-16 碼元；用 slice(0,180) 會剛好切在代理對中間
     const desc = '🎬'.repeat(200);
     renderWithDesc(desc);
+    openPanel();
 
     const shown = screen.getByText(/🎬/).textContent || '';
-
-    // Array.from 以「碼點」迭代：合法代理對會併成一個元素，只有落單的代理
-    // 字元才會單獨出現在 U+D800–U+DFFF 區間。
     const loneSurrogates = Array.from(shown).filter((ch) => {
       const code = ch.codePointAt(0) ?? 0;
       return code >= 0xd800 && code <= 0xdfff;

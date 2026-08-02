@@ -156,6 +156,34 @@ export function getEpisodeUrl(
   return detail.episodes[index] || '';
 }
 
+/**
+ * 播放頁頂部集數徽章文案。
+ * 上游常把集數標題寫成純數字「4」，直接顯示會像亂碼；
+ * 有意義的集標題（非純數字）則原樣保留（可能截斷過長字串）。
+ */
+export function formatEpisodeBadge(
+  episodeTitle: string | undefined | null,
+  episodeIndex: number
+): string {
+  const fallback = `第 ${episodeIndex + 1} 集`;
+  const raw = (episodeTitle || '').trim();
+  if (!raw) return fallback;
+
+  if (/^\d{1,4}$/.test(raw)) {
+    return `第 ${Number(raw)} 集`;
+  }
+  // 「第4集」「第 4 集」統一成「第 4 集」
+  const numbered = raw.match(/^第\s*(\d{1,4})\s*集$/);
+  if (numbered) {
+    return `第 ${Number(numbered[1])} 集`;
+  }
+  // 過長的集標題在徽章裡放不下
+  if (raw.length > 16) {
+    return `${Array.from(raw).slice(0, 14).join('')}…`;
+  }
+  return raw;
+}
+
 export interface MergeFreshDetailOptions {
   /**
    * 預設 true：背景刷新時若目前這一集只是簽章 URL 輪替，保留舊 URL，

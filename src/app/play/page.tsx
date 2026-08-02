@@ -49,6 +49,7 @@ import { CustomHlsJsLoader } from './custom-hls-loader';
 import {
   clearCachedDetail,
   DEFAULT_SKIP_CONFIG,
+  formatEpisodeBadge,
   formatEpisodeUpdateMessage,
   getCachedDetail,
   getClientStorageType,
@@ -1515,8 +1516,9 @@ function PlayPageClient() {
         playsInline: true,
         autoPlayback: false,
         airplay: true,
-        theme: '#ff3e6c',
-        lang: 'zh-cn',
+        // 與站台 accent（tailwind accent / #00B4D8）對齊，避免播放器控制列粉紅脫節
+        theme: '#00B4D8',
+        lang: 'zh-tw',
         hotkey: false,
         fastForward: true,
         autoOrientation: true,
@@ -1991,20 +1993,18 @@ function PlayPageClient() {
       <div className='flex flex-col gap-3 py-4 px-5 lg:px-[3rem] 2xl:px-20'>
         {/* 第一行：影片標題 + 集數徽章（避免「片名 > 4」難讀） */}
         <div className='py-1 flex flex-wrap items-center gap-2 min-w-0 pr-16 md:pr-24'>
-          <h1 className='text-lg sm:text-xl font-semibold text-zinc-100 min-w-0 truncate'>
+          <h1
+            className='text-lg sm:text-xl font-semibold text-zinc-100 min-w-0 truncate'
+            title={videoTitle || '影片標題'}
+          >
             {videoTitle || '影片標題'}
           </h1>
           {totalEpisodes > 1 && (
-            <span
-              className='shrink-0 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-0.5 text-xs sm:text-sm font-semibold text-accent tabular-nums'
-              title={
-                detail?.episodes_titles?.[currentEpisodeIndex] ||
-                `第 ${currentEpisodeIndex + 1} 集`
-              }
-            >
-              {detail?.episodes_titles?.[currentEpisodeIndex]
-                ? detail.episodes_titles[currentEpisodeIndex]
-                : `第 ${currentEpisodeIndex + 1} 集`}
+            <span className='shrink-0 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-0.5 text-xs sm:text-sm font-semibold text-accent tabular-nums'>
+              {formatEpisodeBadge(
+                detail?.episodes_titles?.[currentEpisodeIndex],
+                currentEpisodeIndex
+              )}
             </span>
           )}
         </div>
@@ -2128,43 +2128,50 @@ function PlayPageClient() {
                 precomputedVideoInfo={precomputedVideoInfo}
               />
               {/* 自動連播 + 快捷鍵幫助 */}
-              <div className='flex items-center justify-between px-3 py-2 mt-2 bg-black/40 dark:bg-white/5 rounded-lg border border-white/5'>
+              <div className='flex items-center gap-3 px-3 py-2.5 mt-2 bg-black/40 dark:bg-white/5 rounded-lg border border-white/5'>
                 {totalEpisodes > 0 &&
                   currentEpisodeIndex >= totalEpisodes - 1 && (
                     <button
                       type='button'
                       disabled={isCheckingEpisodes}
                       onClick={handleCheckEpisodeUpdates}
-                      className='text-xs px-2 py-1 rounded bg-zinc-700/80 text-zinc-200 hover:bg-zinc-600 disabled:opacity-50'
+                      className='text-xs px-2.5 py-1.5 rounded-md bg-zinc-700/80 text-zinc-200 hover:bg-zinc-600 disabled:opacity-50 shrink-0'
                       title='向片源重新抓取最新集數'
                     >
                       {isCheckingEpisodes ? '檢查中…' : '檢查更新'}
                     </button>
                   )}
-                <label className='flex items-center gap-2 cursor-pointer select-none'>
-                  <span className='text-xs text-zinc-400'>自動連播</span>
-                  <div
-                    className={`relative w-8 h-4 rounded-full transition-colors cursor-pointer ${
-                      autoNext ? 'bg-accent' : 'bg-zinc-600'
-                    }`}
+                <div className='flex items-center gap-2 min-w-0'>
+                  <span className='text-xs text-zinc-400 shrink-0'>
+                    自動連播
+                  </span>
+                  <button
+                    type='button'
+                    role='switch'
+                    aria-checked={autoNext}
+                    aria-label='自動連播'
                     onClick={() => {
                       const newVal = !autoNext;
                       setAutoNext(newVal);
                       localStorage.setItem('enable_autonext', String(newVal));
                     }}
+                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 ${
+                      autoNext ? 'bg-accent' : 'bg-zinc-600'
+                    }`}
                   >
-                    <div
-                      className={`absolute top-0.5 left-0.5 w-3 h-3 bg-white rounded-full transition-transform ${
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
                         autoNext ? 'translate-x-4' : ''
                       }`}
                     />
-                  </div>
-                </label>
+                  </button>
+                </div>
                 <button
+                  type='button'
                   onClick={() => setShowShortcuts(!showShortcuts)}
-                  className='text-xs font-medium text-zinc-300 hover:text-white transition-colors'
+                  className='ml-auto text-xs font-medium text-zinc-400 hover:text-white transition-colors shrink-0 px-1 py-1'
                 >
-                  快捷鍵 ?
+                  快捷鍵
                 </button>
               </div>
             </div>
