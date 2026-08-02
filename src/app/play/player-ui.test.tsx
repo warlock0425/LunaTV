@@ -31,6 +31,65 @@ describe('VideoDetailsPanel 年份顯示', () => {
   });
 });
 
+/**
+ * 長簡介預設收合，避免把下方的選集操作區擠掉。
+ * 截斷以「字元」計算——emoji 與 BMP 以外的罕用字佔兩個 UTF-16 碼元，
+ * 用 slice 會把一個字劈成兩半、渲染出破字。
+ */
+describe('VideoDetailsPanel 簡介收合', () => {
+  const baseProps = {
+    videoTitle: '片名',
+    videoYear: '2026',
+    videoCover: '',
+    videoDoubanId: 0,
+    favorited: false,
+    onToggleFavorite: jest.fn(),
+  };
+
+  const renderWithDesc = (desc: string) =>
+    render(<VideoDetailsPanel {...baseProps} detail={{ desc } as never} />);
+
+  it('短簡介完整顯示，不出現展開按鈕', () => {
+    renderWithDesc('短短的一句簡介');
+
+    expect(screen.getByText('短短的一句簡介')).toBeInTheDocument();
+    expect(screen.queryByText('展開全部簡介')).not.toBeInTheDocument();
+  });
+
+  it('長簡介預設收合，點擊後展開、再點收合', () => {
+    const desc = '劇'.repeat(200);
+    renderWithDesc(desc);
+
+    // 收合時顯示的是截斷版本（帶省略號），不是原文
+    expect(screen.queryByText(desc)).not.toBeInTheDocument();
+    expect(screen.getByText(`${'劇'.repeat(180)}…`)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('展開全部簡介'));
+    expect(screen.getByText(desc)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('收合簡介'));
+    expect(screen.queryByText(desc)).not.toBeInTheDocument();
+  });
+
+  it('含 emoji 的長簡介不會被截成破字', () => {
+    // 每個 🎬 佔兩個 UTF-16 碼元；用 slice(0,180) 會剛好切在代理對中間
+    const desc = '🎬'.repeat(200);
+    renderWithDesc(desc);
+
+    const shown = screen.getByText(/🎬/).textContent || '';
+
+    // Array.from 以「碼點」迭代：合法代理對會併成一個元素，只有落單的代理
+    // 字元才會單獨出現在 U+D800–U+DFFF 區間。
+    const loneSurrogates = Array.from(shown).filter((ch) => {
+      const code = ch.codePointAt(0) ?? 0;
+      return code >= 0xd800 && code <= 0xdfff;
+    });
+
+    expect(loneSurrogates).toEqual([]);
+    expect(Array.from(shown.replace('…', ''))).toHaveLength(180);
+  });
+});
+
 describe('SkipButton', () => {
   it('顯示標籤並可點擊', () => {
     const onClick = jest.fn();

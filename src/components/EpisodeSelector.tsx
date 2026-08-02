@@ -583,20 +583,22 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                     onClick={() =>
                       !isCurrentSource && handleSourceClick(source)
                     }
-                    className={`group relative flex items-center gap-4 p-3 rounded-xl transition-all duration-300 cursor-pointer ${
+                    className={`group relative flex items-center gap-3 p-3 rounded-xl transition-all duration-300 cursor-pointer ${
                       isCurrentSource
-                        ? 'bg-zinc-800 border border-zinc-700/55'
-                        : 'bg-zinc-800/70 hover:bg-zinc-800 border border-zinc-700/40 hover:border-zinc-600/80'
+                        ? 'bg-accent/10 border border-accent/40 border-l-[3px] border-l-accent ring-1 ring-accent/20'
+                        : videoInfo?.hasError
+                          ? 'bg-zinc-800/40 border border-zinc-700/30 opacity-75'
+                          : 'bg-zinc-800/70 hover:bg-zinc-800 border border-zinc-700/40 hover:border-zinc-600/80'
                     }`}
                   >
-                    {/* 封面 */}
-                    <div className='w-14 h-20 sm:w-16 sm:h-24 bg-zinc-800 rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-white/5'>
+                    {/* 封面（縮小：換源時重點是片源名與測速，不是再讀一遍片名） */}
+                    <div className='w-12 h-[4.5rem] sm:w-14 sm:h-20 bg-zinc-800 rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-white/5'>
                       {source.episodes &&
                       source.episodes.length > 0 &&
                       !failedImages.has(sourceKey) ? (
                         <img
                           src={processImageUrl(source.poster)}
-                          alt={source.title}
+                          alt=''
                           className='w-full h-full object-cover'
                           referrerPolicy='no-referrer'
                           onError={(e) => {
@@ -614,38 +616,51 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                             });
                           }}
                         />
-                      ) : source.episodes && source.episodes.length > 0 ? (
-                        <div className='w-full h-full flex items-center justify-center bg-zinc-800'>
-                          <span className='text-zinc-200 text-[11px] font-medium text-center px-1 leading-tight'>
-                            {source.title}
-                          </span>
+                      ) : (
+                        <div className='w-full h-full flex items-center justify-center bg-zinc-800 text-[10px] text-zinc-500'>
+                          —
                         </div>
-                      ) : null}
+                      )}
                     </div>
 
-                    {/* 資訊區域 */}
-                    <div className='flex-1 min-w-0'>
-                      <div className='flex items-start justify-between gap-2 mb-1.5'>
-                        <h3 className='font-bold text-white text-[15px] sm:text-base truncate leading-tight group-hover:text-white transition-colors'>
-                          {source.title}
+                    {/* 資訊：主標 = 片源名；片名降為次要 */}
+                    <div className='flex-1 min-w-0 pr-1'>
+                      <div className='flex items-center justify-between gap-2 mb-1'>
+                        <h3
+                          className={`font-bold truncate leading-tight text-[15px] sm:text-base ${
+                            isCurrentSource ? 'text-accent' : 'text-white'
+                          }`}
+                          title={source.source_name || source.source}
+                        >
+                          {source.source_name || source.source}
                         </h3>
-                        {!isCurrentSource &&
-                          sourceKey === recommendedSourceKey && (
-                            <span className='shrink-0 rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent ring-1 ring-accent/40'>
-                              推薦
+                        <div className='flex items-center gap-1.5 shrink-0'>
+                          {isCurrentSource && (
+                            <span className='px-2 py-0.5 bg-accent text-white text-[10px] font-bold rounded-full shadow-lg'>
+                              播放中
                             </span>
                           )}
+                          {!isCurrentSource &&
+                            sourceKey === recommendedSourceKey && (
+                              <span className='rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-bold text-accent ring-1 ring-accent/40'>
+                                推薦
+                              </span>
+                            )}
+                        </div>
                       </div>
 
-                      <div className='flex items-center gap-2 mb-2'>
-                        <span className='text-[12px] px-2.5 py-1 bg-zinc-900/80 text-zinc-200 rounded-md font-medium border border-zinc-600/70 shadow-sm'>
-                          {source.source_name || source.source}
-                        </span>
+                      <div className='flex items-center gap-2 mb-1.5 min-w-0'>
                         {source.episodes.length > 1 && (
-                          <span className='text-[12px] text-zinc-300 font-medium'>
+                          <span className='text-[12px] text-zinc-400 font-medium shrink-0 tabular-nums'>
                             {source.episodes.length} 集
                           </span>
                         )}
+                        <span
+                          className='text-[11px] text-zinc-500 truncate'
+                          title={source.title}
+                        >
+                          {source.title}
+                        </span>
                       </div>
 
                       <div className='flex items-center gap-2 flex-wrap'>
@@ -653,7 +668,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                           <>
                             {videoInfo.quality !== '未知' && (
                               <span
-                                className={`px-2.5 py-1 rounded text-[12px] font-bold ${
+                                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
                                   ['4K', '2K'].includes(videoInfo.quality)
                                     ? 'bg-purple-500/20 text-purple-200 ring-1 ring-purple-400/40'
                                     : ['1080p', '720p'].includes(
@@ -666,63 +681,40 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                                 {videoInfo.quality}
                               </span>
                             )}
-                            <span className='text-[12px] text-emerald-300 font-medium'>
+                            <span className='text-[11px] text-emerald-300 font-medium tabular-nums'>
                               {videoInfo.loadSpeed}
                             </span>
-                            <span className='text-[12px] text-orange-300 font-medium'>
+                            <span className='text-[11px] text-orange-300 font-medium tabular-nums'>
                               {videoInfo.pingTime}ms
                             </span>
                           </>
                         )}
                         {videoInfo?.hasError && (
-                          <span className='px-2.5 py-1 rounded text-[12px] font-semibold bg-red-500/20 text-red-200 ring-1 ring-red-400/40'>
-                            無法連接
+                          <span className='px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/20 text-red-200 ring-1 ring-red-400/40'>
+                            無法連線
+                          </span>
+                        )}
+                        {!videoInfo && (
+                          <span className='text-[11px] text-zinc-500'>
+                            測速中…
                           </span>
                         )}
                         {videoInfo &&
                           !videoInfo.hasError &&
                           videoInfo.pingTime <= 1500 && (
-                            <span className='rounded bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-300'>
+                            <span className='rounded bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300'>
                               較穩定
                             </span>
                           )}
                         {videoInfo &&
                           !videoInfo.hasError &&
                           videoInfo.pingTime > 1500 && (
-                            <span className='rounded bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-300'>
+                            <span className='rounded bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-300'>
                               回應較慢
                             </span>
                           )}
                       </div>
                     </div>
-
-                    {/* 當前標記 */}
-                    {isCurrentSource && (
-                      <div className='absolute top-2 right-2'>
-                        <span className='px-2.5 py-0.5 bg-accent text-white text-[10px] font-bold rounded-full shadow-lg'>
-                          當前
-                        </span>
-                      </div>
-                    )}
-
-                    {/* 非當前源顯示箭頭提示 */}
-                    {!isCurrentSource && (
-                      <div className='absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200'>
-                        <svg
-                          className='w-5 h-5 text-zinc-200'
-                          fill='none'
-                          stroke='currentColor'
-                          viewBox='0 0 24 24'
-                        >
-                          <path
-                            strokeLinecap='round'
-                            strokeLinejoin='round'
-                            strokeWidth='2'
-                            d='M9 5l7 7-7 7'
-                          />
-                        </svg>
-                      </div>
-                    )}
                   </div>
                 );
               })}

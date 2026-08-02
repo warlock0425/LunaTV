@@ -180,6 +180,7 @@ export default function NetflixHome({
       });
     } catch (err) {
       console.error('刪除播放記錄錯誤:', err);
+      toast('刪除觀看紀錄失敗，請稍後再試', 'error');
     }
   };
 
@@ -264,8 +265,8 @@ export default function NetflixHome({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setShowSuggestions(true)}
-                placeholder='搜尋電影、電視劇、動漫...'
-                className='w-full md:w-96 h-11 pl-12 pr-4 bg-zinc-100 dark:bg-zinc-900/80 rounded-xl text-zinc-900 dark:text-white placeholder-zinc-600 dark:placeholder-zinc-300 border border-zinc-200 dark:border-white/10 focus:border-accent focus:outline-none transition-all duration-200'
+                placeholder='搜尋電影、電視劇、動漫…'
+                className='w-full md:w-[28rem] max-w-full h-11 pl-12 pr-4 bg-zinc-100 dark:bg-zinc-900/90 rounded-xl text-zinc-900 dark:text-white placeholder-zinc-500 dark:placeholder-zinc-400 border border-zinc-200 dark:border-white/10 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none transition-all duration-200'
               />
               <SearchSuggestions
                 query={searchQuery}
@@ -318,16 +319,20 @@ export default function NetflixHome({
               )}
 
               {remainingContinueWatching.length > 0 && (
-                <section className='mb-10'>
-                  <div className='flex items-center gap-3 mb-6 px-1'>
-                    <div className='flex items-center gap-2'>
-                      <CirclePlay className='w-6 h-6 text-accent' />
-                      <h3 className='text-xl font-bold text-zinc-900 dark:text-white tracking-wide'>
+                <section id='continue-watching' className='mb-10 scroll-mt-24'>
+                  <div className='flex items-center gap-3 mb-4 px-1'>
+                    <div className='flex items-center gap-2 min-w-0'>
+                      <CirclePlay className='w-5 h-5 text-accent shrink-0' />
+                      <h3 className='text-lg sm:text-xl font-bold text-white tracking-wide truncate'>
                         繼續觀看
                       </h3>
+                      <span className='text-xs text-zinc-500 tabular-nums shrink-0'>
+                        {remainingContinueWatching.length}
+                      </span>
                     </div>
                     <button
-                      className='ml-auto flex items-center gap-1.5 text-xs font-medium text-zinc-500 hover:text-red-500 dark:text-zinc-400 dark:hover:text-red-400 transition-colors bg-zinc-100 dark:bg-zinc-800/50 hover:bg-red-50 dark:hover:bg-red-500/10 px-3 py-1.5 rounded-full'
+                      type='button'
+                      className='ml-auto flex items-center gap-1.5 text-xs font-medium text-zinc-400 hover:text-red-400 transition-colors bg-zinc-800/50 hover:bg-red-500/10 px-3 py-1.5 rounded-full shrink-0'
                       onClick={handleClearAllRecords}
                     >
                       <Trash2 className='w-3.5 h-3.5' />
@@ -408,10 +413,11 @@ export default function NetflixHome({
                                   inline: 'center',
                                 })
                               }
+                              type='button'
                               className='w-full h-full text-left'
                             >
                               <div className='visual-box flex flex-col w-full h-full'>
-                                <div className='relative aspect-[2/3] w-full rounded-md overflow-hidden bg-zinc-800 transition-all border border-transparent group-hover:border-accent/80'>
+                                <div className='relative aspect-[2/3] w-full rounded-lg overflow-hidden bg-zinc-800 transition-all border border-white/5 group-hover:border-accent/70 group-hover:shadow-[0_0_20px_rgba(0,180,216,0.15)]'>
                                   <ContinueWatchingCover
                                     cover={item.cover}
                                     title={item.title || item.vod_name}
@@ -421,37 +427,47 @@ export default function NetflixHome({
                                       applyResolvedCover(item, poster)
                                     }
                                   />
-                                  <div className='absolute bottom-0 left-0 h-1.5 bg-black/40 w-full z-10'>
-                                    <div
-                                      className='h-full bg-accent'
-                                      style={{ width: `${progress}%` }}
-                                    />
+                                  {/* 懸停播放提示 */}
+                                  <div className='pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/35 transition-colors'>
+                                    <CirclePlay className='w-10 h-10 text-white opacity-0 group-hover:opacity-95 drop-shadow-lg transition-opacity' />
+                                  </div>
+                                  <div className='absolute bottom-0 left-0 right-0 z-10'>
+                                    <div className='h-1 bg-black/50 w-full'>
+                                      <div
+                                        className='h-full bg-accent shadow-[0_0_8px_rgba(0,180,216,0.55)]'
+                                        style={{
+                                          width: `${Math.max(progress, progress > 0 ? 3 : 0)}%`,
+                                        }}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
 
-                                <h3 className='text-white text-[14px] font-medium line-clamp-1 group-hover:text-accent transition-colors mt-2 tracking-wide w-full'>
+                                <h3 className='text-white text-[13px] sm:text-[14px] font-medium line-clamp-2 group-hover:text-accent transition-colors mt-2 tracking-wide w-full leading-snug min-h-[2.5rem]'>
                                   {item.title || item.vod_name}
                                 </h3>
 
                                 <div className='flex items-center justify-between w-full mt-1 gap-2'>
-                                  <span className='text-zinc-300 text-[12px] font-bold tracking-wide truncate'>
+                                  <span className='text-zinc-400 text-[11px] sm:text-[12px] font-semibold tracking-wide truncate tabular-nums'>
                                     {formatEpisodeLabel(item)}
                                   </span>
                                   <span
                                     title={displaySourceLabel}
-                                    className='truncate px-2 py-0.5 bg-accent/15 text-accent border border-accent/20 text-[11px] font-bold rounded-sm shrink-0'
+                                    className='max-w-[5.5rem] truncate px-1.5 py-0.5 bg-accent/12 text-accent border border-accent/20 text-[10px] font-bold rounded-sm shrink-0'
                                   >
                                     {displaySourceLabel}
                                   </span>
                                 </div>
                               </div>
                             </button>
-                            {/* 右上角 Hover 精緻手動刪除鈕 */}
+                            {/* 刪除：手機常顯、桌面 hover 顯 */}
                             <button
+                              type='button'
+                              aria-label='移除此紀錄'
                               onClick={(e) => handleDelete(e, item)}
-                              className='absolute top-3 right-3 w-6 h-6 rounded-full bg-black/80 text-zinc-200 flex items-center justify-center text-xs opacity-80 md:opacity-0 md:group-hover:opacity-100 hover:bg-red-600 hover:text-white transition-all duration-200 z-50 cursor-pointer shadow-md'
+                              className='absolute top-2 right-2 w-7 h-7 rounded-full bg-black/75 text-zinc-200 flex items-center justify-center opacity-90 md:opacity-0 md:group-hover:opacity-100 hover:bg-red-600 hover:text-white transition-all duration-200 z-50 cursor-pointer shadow-md'
                             >
-                              <X className='w-3 h-3' />
+                              <X className='w-3.5 h-3.5' />
                             </button>
                           </div>
                         );

@@ -929,15 +929,24 @@ function SearchPageClient() {
                   </div>
                 ) : (
                   <div className='flex flex-col items-center justify-center gap-3 px-6 py-16 text-center'>
-                    <div className='flex h-14 w-14 items-center justify-center rounded-full bg-zinc-200/70 dark:bg-zinc-800/70'>
-                      <Search className='h-6 w-6 text-zinc-500 dark:text-zinc-400' />
+                    <div className='flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-zinc-900/60'>
+                      <Search className='h-6 w-6 text-zinc-400' />
                     </div>
-                    <p className='text-base font-medium text-zinc-700 dark:text-zinc-200'>
+                    <p className='text-base font-medium text-zinc-100'>
                       找不到「{resolvedSearchQuery || searchQuery}」的結果
                     </p>
-                    <p className='max-w-sm text-sm leading-relaxed text-zinc-500 dark:text-zinc-400'>
+                    <p className='max-w-sm text-sm leading-relaxed text-zinc-500'>
                       可以試試更簡短的關鍵字、改用原文片名，或關閉上方的「聚合」以顯示各來源的個別結果。
                     </p>
+                    {viewMode === 'agg' && (
+                      <button
+                        type='button'
+                        onClick={() => setViewMode('all')}
+                        className='mt-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition hover:bg-accent/15'
+                      >
+                        關閉聚合再試一次
+                      </button>
+                    )}
                   </div>
                 )
               ) : (

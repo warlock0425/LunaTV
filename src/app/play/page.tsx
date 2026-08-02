@@ -1989,19 +1989,24 @@ function PlayPageClient() {
   return (
     <PageLayout activePath='/play'>
       <div className='flex flex-col gap-3 py-4 px-5 lg:px-[3rem] 2xl:px-20'>
-        {/* 第一行：影片標題 */}
-        <div className='py-1'>
-          <h1 className='text-xl font-semibold text-zinc-900 dark:text-zinc-100'>
+        {/* 第一行：影片標題 + 集數徽章（避免「片名 > 4」難讀） */}
+        <div className='py-1 flex flex-wrap items-center gap-2 min-w-0 pr-16 md:pr-24'>
+          <h1 className='text-lg sm:text-xl font-semibold text-zinc-100 min-w-0 truncate'>
             {videoTitle || '影片標題'}
-            {totalEpisodes > 1 && (
-              <span className='text-zinc-700 dark:text-zinc-300'>
-                {` > ${
-                  detail?.episodes_titles?.[currentEpisodeIndex] ||
-                  `第 ${currentEpisodeIndex + 1} 集`
-                }`}
-              </span>
-            )}
           </h1>
+          {totalEpisodes > 1 && (
+            <span
+              className='shrink-0 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-0.5 text-xs sm:text-sm font-semibold text-accent tabular-nums'
+              title={
+                detail?.episodes_titles?.[currentEpisodeIndex] ||
+                `第 ${currentEpisodeIndex + 1} 集`
+              }
+            >
+              {detail?.episodes_titles?.[currentEpisodeIndex]
+                ? detail.episodes_titles[currentEpisodeIndex]
+                : `第 ${currentEpisodeIndex + 1} 集`}
+            </span>
+          )}
         </div>
         {/* 第二行：播放器和選集 */}
         <div className='space-y-2'>

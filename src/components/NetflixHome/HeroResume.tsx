@@ -144,37 +144,43 @@ export function HeroResume({
 
             {progress > 0 && (
               <div className='mt-5 max-w-sm'>
-                <div className='h-1.5 w-full rounded-full bg-white/15 overflow-hidden'>
+                <div className='flex items-center justify-between text-xs text-zinc-400 mb-1.5 tabular-nums'>
+                  <span>{progress}% 已觀看</span>
+                  <span>{formatRemainingTime(playTime, totalTime)}</span>
+                </div>
+                <div className='h-2 w-full rounded-full bg-white/15 overflow-hidden'>
                   <div
-                    className='h-full rounded-full bg-accent'
-                    style={{ width: `${progress}%` }}
+                    className='h-full rounded-full bg-accent shadow-[0_0_12px_rgba(0,180,216,0.45)]'
+                    style={{ width: `${Math.max(progress, 2)}%` }}
                   />
                 </div>
-                <p className='mt-2 text-xs text-zinc-400 tabular-nums'>
-                  {formatRemainingTime(playTime, totalTime)}
-                </p>
               </div>
             )}
 
             <div className='mt-6 flex flex-wrap items-center gap-3'>
               <button
+                type='button'
                 onClick={() => router.push(playHref)}
-                className='flex items-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-bold text-white transition hover:brightness-110 active:scale-95'
+                className='flex items-center gap-2 rounded-lg bg-accent px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-accent/20 transition hover:bg-accent/90 active:scale-95'
               >
                 <CirclePlay className='w-5 h-5' />
                 繼續播放
               </button>
               <button
+                type='button'
                 onClick={() => router.push(playHref)}
-                className='flex items-center gap-2 rounded-lg bg-white/10 px-5 py-3 text-sm font-medium text-zinc-100 transition hover:bg-white/20 active:scale-95'
+                className='flex items-center gap-2 rounded-lg bg-white/10 px-5 py-3.5 text-sm font-medium text-zinc-100 border border-white/10 transition hover:bg-white/15 active:scale-95'
               >
                 <ListVideo className='w-5 h-5' />
                 選集
               </button>
               {othersCount > 0 && (
-                <span className='text-xs text-zinc-400 tabular-nums'>
+                <a
+                  href='#continue-watching'
+                  className='text-xs text-zinc-400 hover:text-accent tabular-nums transition-colors underline-offset-2 hover:underline'
+                >
                   另外還有 {othersCount} 部在追
-                </span>
+                </a>
               )}
               {onClearHistory && (
                 <button

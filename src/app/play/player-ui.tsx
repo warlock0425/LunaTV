@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { SearchResult } from '@/lib/types';
 import { formatYear, getProxiedImageUrl, processImageUrl } from '@/lib/utils';
@@ -18,11 +18,17 @@ export function SkipButton({
 }) {
   return (
     <button
+      type='button'
       onClick={onClick}
-      className='absolute bottom-16 right-4 z-[100] px-4 py-2 bg-black/70 hover:bg-black/90 text-white border border-white/20 rounded-lg shadow-lg backdrop-blur-sm transition-all text-sm font-medium flex items-center space-x-1'
+      className='absolute bottom-16 right-4 z-[100] min-h-11 px-4 py-2.5 bg-black/75 hover:bg-black/90 active:scale-[0.98] text-white border border-white/25 rounded-xl shadow-lg backdrop-blur-sm transition-all text-sm font-medium flex items-center gap-1.5'
     >
       <span>{label}</span>
-      <svg className='w-4 h-4' fill='currentColor' viewBox='0 0 24 24'>
+      <svg
+        className='w-4 h-4 opacity-90'
+        fill='currentColor'
+        viewBox='0 0 24 24'
+        aria-hidden
+      >
         <path d='M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z' />
       </svg>
     </button>
@@ -126,8 +132,9 @@ export function ShortcutsHelpPanel({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <button
+          type='button'
           onClick={onClose}
-          className='w-full mt-5 py-2.5 bg-accent hover:bg-accent-deep text-white font-medium rounded-xl transition-colors text-sm'
+          className='w-full mt-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-medium rounded-xl transition-colors text-sm'
         >
           關閉
         </button>
@@ -147,17 +154,20 @@ export function EpisodeCollapseToggle({
   return (
     <div className='hidden lg:flex justify-end'>
       <button
+        type='button'
         onClick={onToggle}
-        className='group relative flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white dark:bg-zinc-800/80 dark:hover:bg-zinc-800 backdrop-blur-sm border border-zinc-200/50 dark:border-zinc-700/50 shadow-sm hover:shadow-md transition-all duration-200'
-        title={collapsed ? '顯示選集面板' : '隱藏選集面板'}
+        className='group relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-800/90 hover:bg-zinc-800 backdrop-blur-sm border border-zinc-700/60 shadow-sm hover:border-accent/40 transition-all duration-200'
+        title={collapsed ? '顯示選集與換源' : '收合側欄以放大播放器'}
+        aria-expanded={!collapsed}
       >
         <svg
-          className={`w-3.5 h-3.5 text-zinc-700 dark:text-zinc-300 transition-transform duration-200 ${
+          className={`w-3.5 h-3.5 text-zinc-300 transition-transform duration-200 ${
             collapsed ? 'rotate-180' : 'rotate-0'
           }`}
           fill='none'
           stroke='currentColor'
           viewBox='0 0 24 24'
+          aria-hidden
         >
           <path
             strokeLinecap='round'
@@ -166,20 +176,22 @@ export function EpisodeCollapseToggle({
             d='M9 5l7 7-7 7'
           />
         </svg>
-        <span className='text-xs font-medium text-zinc-600 dark:text-zinc-300'>
-          {collapsed ? '顯示' : '隱藏'}
+        <span className='text-xs font-medium text-zinc-200'>
+          {collapsed ? '顯示選集' : '收合側欄'}
         </span>
-
-        {/* 精緻的狀態指示點 */}
         <div
-          className={`absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full transition-all duration-200 ${
+          className={`w-1.5 h-1.5 rounded-full transition-all duration-200 ${
             collapsed ? 'bg-orange-400 animate-pulse' : 'bg-accent'
           }`}
-        ></div>
+          aria-hidden
+        />
       </button>
     </div>
   );
 }
+
+/** 簡介超過這個字數就預設收合，避免長簡介把下方的選集操作區擠掉 */
+const DESC_COLLAPSE_LENGTH = 180;
 
 /** 影片詳情展示（標題/收藏/關鍵資訊/簡介/封面/豆瓣連結） */
 export function VideoDetailsPanel({
@@ -200,7 +212,18 @@ export function VideoDetailsPanel({
   onToggleFavorite: () => void;
 }) {
   const [failedCover, setFailedCover] = useState<string | null>(null);
+  const [descExpanded, setDescExpanded] = useState(false);
   const coverImgError = Boolean(videoCover && failedCover === videoCover);
+
+  const desc = detail?.desc?.trim() || '';
+  // 以「字元」而非「UTF-16 碼元」計數與截斷：簡介可能含 emoji 或 BMP 以外的
+  // 罕用字（代理對佔兩個碼元），用 slice 會把一個字劈成兩半、渲染出破字。
+  const descChars = useMemo(() => Array.from(desc), [desc]);
+  const descIsLong = descChars.length > DESC_COLLAPSE_LENGTH;
+  const shownDesc =
+    descIsLong && !descExpanded
+      ? `${descChars.slice(0, DESC_COLLAPSE_LENGTH).join('').trimEnd()}…`
+      : desc;
 
   return (
     <div className='grid grid-cols-1 md:grid-cols-4 gap-4'>
@@ -208,21 +231,23 @@ export function VideoDetailsPanel({
       <div className='md:col-span-3'>
         <div className='p-6 flex flex-col min-h-0'>
           {/* 標題 */}
-          <h1 className='text-3xl font-bold mb-2 tracking-wide flex items-center flex-shrink-0 text-center md:text-left w-full'>
+          <h1 className='text-2xl sm:text-3xl font-bold mb-2 tracking-wide flex items-center flex-shrink-0 text-center md:text-left w-full'>
             {videoTitle || '影片標題'}
             <button
+              type='button'
               onClick={(e) => {
                 e.stopPropagation();
                 onToggleFavorite();
               }}
               className='ml-3 flex-shrink-0 hover:opacity-80 transition-opacity'
+              aria-label={favorited ? '取消收藏' : '加入收藏'}
             >
               <FavoriteIcon filled={favorited} />
             </button>
           </h1>
 
           {/* 關鍵資訊行 */}
-          <div className='flex flex-wrap items-center gap-3 text-base mb-4 text-zinc-700 dark:text-zinc-300 flex-shrink-0'>
+          <div className='flex flex-wrap items-center gap-2 sm:gap-3 text-sm sm:text-base mb-4 text-zinc-700 dark:text-zinc-300 flex-shrink-0'>
             {detail?.class && (
               <span className='text-accent font-semibold'>{detail.class}</span>
             )}
@@ -232,20 +257,26 @@ export function VideoDetailsPanel({
             {detail?.source_name && (
               <span
                 title={detail.source_name}
-                className='max-w-full truncate border border-zinc-500/60 px-2 py-[1px] rounded'
+                className='max-w-[12rem] sm:max-w-full truncate border border-zinc-500/60 px-2 py-[1px] rounded text-xs sm:text-sm'
               >
                 {detail.source_name}
               </span>
             )}
             {detail?.type_name && <span>{detail.type_name}</span>}
           </div>
-          {/* 劇情簡介 */}
-          {detail?.desc && (
-            <div
-              className='mt-0 text-base leading-relaxed text-zinc-700 dark:text-zinc-300 overflow-y-auto pr-2 flex-1 min-h-0 scrollbar-hide'
-              style={{ whiteSpace: 'pre-line' }}
-            >
-              {detail.desc}
+          {/* 劇情簡介：過長時預設收合，避免擠掉選集操作區 */}
+          {desc && (
+            <div className='mt-0 text-sm sm:text-base leading-relaxed text-zinc-700 dark:text-zinc-300 flex-1 min-h-0'>
+              <p style={{ whiteSpace: 'pre-line' }}>{shownDesc}</p>
+              {descIsLong && (
+                <button
+                  type='button'
+                  onClick={() => setDescExpanded((v) => !v)}
+                  className='mt-2 text-sm font-medium text-accent hover:text-accent/80 transition-colors'
+                >
+                  {descExpanded ? '收合簡介' : '展開全部簡介'}
+                </button>
+              )}
             </div>
           )}
         </div>

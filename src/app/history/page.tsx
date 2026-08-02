@@ -332,10 +332,19 @@ export default function HistoryPage() {
         {stats && records.length > 0 && (
           <div className='mb-6'>
             <button
+              type='button'
               onClick={() => setShowStats(!showStats)}
+              aria-expanded={showStats}
               className='flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors mb-3'
             >
-              <span>{showStats ? '▼' : '▶'}</span>
+              <span
+                className={`inline-block transition-transform duration-200 ${
+                  showStats ? 'rotate-90' : ''
+                }`}
+                aria-hidden
+              >
+                ›
+              </span>
               觀看統計
             </button>
 
@@ -483,23 +492,33 @@ export default function HistoryPage() {
             ))}
           </div>
         ) : filteredRecords.length === 0 ? (
-          <div className='flex flex-col items-center justify-center py-24 text-zinc-500'>
-            <Clock className='w-16 h-16 mb-4 opacity-30' />
-            <p className='text-lg'>
+          <div className='flex flex-col items-center justify-center py-24 px-4 text-center'>
+            <div className='mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-zinc-900/60'>
+              <Clock className='w-8 h-8 text-zinc-500' aria-hidden />
+            </div>
+            <p className='text-lg font-medium text-zinc-200'>
               {searchQuery ? '找不到匹配的記錄' : '尚無觀看記錄'}
             </p>
-            <p className='text-sm mt-1'>
+            <p className='text-sm mt-2 max-w-sm text-zinc-500 leading-relaxed'>
               {searchQuery
-                ? '試試其他關鍵字'
-                : '開始觀看影片後，記錄會自動出現在這裡'}
+                ? '試試其他關鍵字，或清除搜尋後查看全部紀錄'
+                : '開始觀看後，進度會自動出現在這裡，方便接著看'}
             </p>
-            {!searchQuery && (
+            {!searchQuery ? (
               <Link
                 href='/search'
-                className='mt-5 rounded-full bg-accent px-5 py-2 text-sm font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-accent-deep'
+                className='mt-6 rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-accent/90'
               >
                 前往搜尋
               </Link>
+            ) : (
+              <button
+                type='button'
+                onClick={() => setSearchQuery('')}
+                className='mt-6 rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-white/10'
+              >
+                清除搜尋
+              </button>
             )}
           </div>
         ) : (
@@ -589,29 +608,31 @@ export default function HistoryPage() {
                       {record.year && <span>{record.year}</span>}
                     </div>
 
-                    {/* 進度 */}
-                    <div className='mt-1.5'>
-                      <div className='flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-0.5'>
+                    {/* 進度：加粗一點，方便一眼看出「看到哪」 */}
+                    <div className='mt-2'>
+                      <div className='flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400 mb-1'>
                         <span>
                           {record.index > 0 && record.total_episodes > 0
                             ? `第 ${record.index} / ${record.total_episodes} 集`
                             : record.total_episodes > 1
                               ? `${record.total_episodes} 集`
-                              : ''}
+                              : '進度'}
                         </span>
-                        <span>{progress}%</span>
+                        <span className='tabular-nums text-zinc-400'>
+                          {progress > 0 ? `${progress}%` : '未開始'}
+                          {record.play_time > 0
+                            ? ` · ${formatDuration(record.play_time)}`
+                            : ''}
+                        </span>
                       </div>
-                      <div className='w-full h-1 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden'>
+                      <div className='w-full h-1.5 bg-zinc-200 dark:bg-zinc-700/80 rounded-full overflow-hidden'>
                         <div
                           className='h-full bg-accent rounded-full transition-all'
-                          style={{ width: `${progress}%` }}
+                          style={{
+                            width: `${Math.max(progress, progress > 0 ? 2 : 0)}%`,
+                          }}
                         />
                       </div>
-                      {record.play_time > 0 && (
-                        <div className='text-[10px] text-zinc-400 mt-0.5 text-right'>
-                          看到 {formatDuration(record.play_time)}
-                        </div>
-                      )}
                     </div>
 
                     {/* 時間 */}
