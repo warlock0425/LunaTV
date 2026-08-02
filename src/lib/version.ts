@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.1',
+    date: '2026-08-02',
+    content: `
+- 顯示：名稱以 🎬 開頭的片源（如「🎬iKun资源」）維持上游原文，不做繁簡或用語轉換，簡體與符號原樣保留；其餘片源行為不變。
+- 介面：設定頁改為「常用／進階」分層（代理設定預設收合）；播放與直播載入畫面改為 spinner；直播源或頻道載入失敗改以 Toast 提示，避免與「沒有內容」混淆。
+- 體驗：觀看紀錄頁載入、刪除、清空失敗時改顯示錯誤提示（先前只有主控台訊息）。
+- 測試：以共用合約鎖住 Redis／Kvrocks 與 Upstash 兩套儲存後端的毀損資料容錯行為，避免兩邊再次漂移。
+    `.trim(),
+  },
+  {
     version: 'v2.9.0',
     date: '2026-08-02',
     content: `
