@@ -846,20 +846,41 @@ function SearchPageClient() {
         <div className='max-w-[95%] mx-auto mt-12 overflow-visible'>
           {showResults ? (
             <section className='mb-12'>
-              <div className='mb-4'>
-                <h1 className='text-xl font-bold text-zinc-800 dark:text-zinc-200'>
-                  搜尋結果
+              <div className='mb-4 space-y-2'>
+                <h1 className='text-xl font-bold text-zinc-800 dark:text-zinc-200 flex flex-wrap items-center gap-2'>
+                  <span>搜尋結果</span>
                   {totalSources > 0 && useFluidSearch && (
-                    <span className='ml-2 text-sm font-normal text-zinc-500 dark:text-zinc-400'>
-                      {completedSources}/{totalSources}
+                    <span className='text-sm font-normal text-zinc-500 dark:text-zinc-400 tabular-nums'>
+                      片源 {completedSources}/{totalSources}
+                      {isLoading ? ' 搜尋中…' : ' 完成'}
                     </span>
                   )}
                   {isLoading && useFluidSearch && (
-                    <span className='ml-2 inline-block align-middle'>
-                      <span className='inline-block h-3 w-3 border-2 border-zinc-300 border-t-accent rounded-full animate-spin'></span>
-                    </span>
+                    <span className='inline-block h-3.5 w-3.5 border-2 border-zinc-300 border-t-accent rounded-full animate-spin' />
                   )}
                 </h1>
+                {totalSources > 0 && useFluidSearch && (
+                  <div
+                    className='h-1 w-full max-w-md rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden'
+                    role='progressbar'
+                    aria-valuenow={completedSources}
+                    aria-valuemin={0}
+                    aria-valuemax={totalSources}
+                    aria-label='搜尋片源進度'
+                  >
+                    <div
+                      className='h-full bg-accent transition-all duration-300 ease-out'
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round(
+                            (completedSources / Math.max(totalSources, 1)) * 100
+                          )
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                )}
               </div>
               {/* 篩選列固定顯示：串流搜尋的結果逐批到達，若依結果數顯示會在
                   搜尋途中突然插入而推擠版面 */}
@@ -1032,16 +1053,41 @@ function SearchPageClient() {
               )}
             </section>
           ) : (
-            <section className='mb-12 flex flex-col items-center justify-center h-[50vh]'>
-              <div className='w-20 h-20 bg-zinc-100 dark:bg-surface-panel rounded-full flex items-center justify-center mb-6 shadow-inner'>
-                <Search className='w-10 h-10 text-zinc-300 dark:text-zinc-600' />
+            <section className='mb-12 flex flex-col items-center justify-center min-h-[42vh] px-4'>
+              <div className='w-16 h-16 bg-zinc-100 dark:bg-surface-panel rounded-2xl flex items-center justify-center mb-5 border border-zinc-200/60 dark:border-white/10'>
+                <Search className='w-8 h-8 text-zinc-400 dark:text-zinc-500' />
               </div>
-              <h2 className='text-xl font-bold text-zinc-800 dark:text-zinc-200 mb-2'>
+              <h2 className='text-xl font-bold text-zinc-800 dark:text-zinc-100 mb-2'>
                 探索影音世界
               </h2>
-              <p className='text-zinc-500 dark:text-zinc-400'>
-                輸入你想看的電影、電視劇或動漫名稱
+              <p className='text-sm text-zinc-500 dark:text-zinc-400 mb-6 text-center max-w-sm leading-relaxed'>
+                輸入片名搜尋；支援繁中與陸源譯名。點選下方熱門關鍵字可立刻開始。
               </p>
+              <div className='flex flex-wrap justify-center gap-2 max-w-lg'>
+                {[
+                  '進擊的巨人',
+                  '鬼滅之刃',
+                  '咒術迴戰',
+                  '葬送的芙莉蓮',
+                  '奧術',
+                  '吉伊卡哇',
+                ].map((kw) => (
+                  <button
+                    key={kw}
+                    type='button'
+                    onClick={() => {
+                      setSearchQuery(kw);
+                      setIsLoading(true);
+                      setShowResults(true);
+                      setShowSuggestions(false);
+                      router.push(`/search?q=${encodeURIComponent(kw)}`);
+                    }}
+                    className='rounded-full border border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-800/60 px-3.5 py-1.5 text-sm text-zinc-700 dark:text-zinc-200 hover:border-accent/40 hover:text-accent transition-colors'
+                  >
+                    {kw}
+                  </button>
+                ))}
+              </div>
             </section>
           )}
         </div>

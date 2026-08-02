@@ -3,6 +3,8 @@ import '@testing-library/jest-dom';
 
 import {
   AutoNextCountdownOverlay,
+  PlaybackSoftErrorOverlay,
+  PlayerEpisodeBadge,
   ShortcutsHelpPanel,
   SkipButton,
   VideoDetailsPanel,
@@ -109,6 +111,32 @@ describe('VideoLoadingOverlay', () => {
   it('初始化階段顯示加載訊息', () => {
     render(<VideoLoadingOverlay stage='initing' />);
     expect(screen.getByText('影片載入中…')).toBeInTheDocument();
+  });
+});
+
+describe('PlaybackSoftErrorOverlay', () => {
+  it('提供重試與換源', () => {
+    const onRetry = jest.fn();
+    const onSwitchSource = jest.fn();
+    render(
+      <PlaybackSoftErrorOverlay
+        message='測試錯誤'
+        onRetry={onRetry}
+        onSwitchSource={onSwitchSource}
+      />
+    );
+    expect(screen.getByText('測試錯誤')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('重新整理播放'));
+    fireEvent.click(screen.getByText('前往換源'));
+    expect(onRetry).toHaveBeenCalled();
+    expect(onSwitchSource).toHaveBeenCalled();
+  });
+});
+
+describe('PlayerEpisodeBadge', () => {
+  it('顯示集數標籤', () => {
+    render(<PlayerEpisodeBadge label='第 4 集' />);
+    expect(screen.getByText('第 4 集')).toBeInTheDocument();
   });
 });
 

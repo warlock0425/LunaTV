@@ -63,6 +63,8 @@ import { buildSkipSettings } from './player-skip-settings';
 import {
   AutoNextCountdownOverlay,
   EpisodeCollapseToggle,
+  PlaybackSoftErrorOverlay,
+  PlayerEpisodeBadge,
   ShortcutsHelpPanel,
   SkipButton,
   VideoDetailsPanel,
@@ -322,6 +324,10 @@ function PlayPageClient() {
   const [videoLoadingStage, setVideoLoadingStage] = useState<
     'initing' | 'sourceChanging'
   >('initing');
+  /** 播放中錯誤：留在播放頁，用蒙層提供重試／換源（不整頁踢出） */
+  const [playbackSoftError, setPlaybackSoftError] = useState<string | null>(
+    null
+  );
 
   // 用於追蹤初始化 loading setTimeout，元件卸載時清理
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1130,6 +1136,7 @@ function PlayPageClient() {
     try {
       // 換源等同手動介入，先中止進行中的自動連播倒數
       cancelAutoNextCountdown();
+      setPlaybackSoftError(null);
       // 顯示換源載入狀態
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
@@ -1580,7 +1587,9 @@ function PlayPageClient() {
                       logger.debug('無法恢復的錯誤');
                       hls.destroy();
                       setIsVideoLoading(false);
-                      setError('播放失敗，請嘗試換源或重新整理');
+                      setPlaybackSoftError(
+                        '播放失敗，可重新整理或換一個片源再試'
+                      );
                       break;
                   }
                 }
@@ -2089,6 +2098,41 @@ function PlayPageClient() {
                   <VideoLoadingOverlay stage={videoLoadingStage} />
                 )}
 
+                {/* 全螢幕時仍看得到集數 */}
+                {!isVideoLoading && !playbackSoftError && totalEpisodes > 1 && (
+                  <PlayerEpisodeBadge
+                    label={formatEpisodeBadge(
+                      detail?.episodes_titles?.[currentEpisodeIndex],
+                      currentEpisodeIndex
+                    )}
+                  />
+                )}
+
+                {playbackSoftError && (
+                  <PlaybackSoftErrorOverlay
+                    message={playbackSoftError}
+                    onRetry={() => {
+                      setPlaybackSoftError(null);
+                      window.location.reload();
+                    }}
+                    onSwitchSource={() => {
+                      setPlaybackSoftError(null);
+                      setIsEpisodeSelectorCollapsed(false);
+                      // 行動端選集在下方，桌面展開側欄；統一切到換源 tab 需 EpisodeSelector 支援
+                      // 先滾到側欄／選集區
+                      requestAnimationFrame(() => {
+                        document
+                          .getElementById('play-source-panel')
+                          ?.scrollIntoView({
+                            behavior: 'smooth',
+                            block: 'nearest',
+                          });
+                      });
+                    }}
+                    onDismiss={() => setPlaybackSoftError(null)}
+                  />
+                )}
+
                 {/* 自動連播倒數計時蒙層 */}
                 {showCountdownOverlay && autoNextCountdown > 0 && (
                   <AutoNextCountdownOverlay
@@ -2107,6 +2151,7 @@ function PlayPageClient() {
 
             {/* 選集和換源 - 在移動端始終顯示，在 lg 及以上可摺疊 */}
             <div
+              id='play-source-panel'
               className={`h-[300px] lg:h-full md:overflow-hidden transition-all duration-300 ease-in-out ${
                 isEpisodeSelectorCollapsed
                   ? 'md:col-span-1 lg:hidden lg:opacity-0 lg:scale-95'
@@ -2126,6 +2171,7 @@ function PlayPageClient() {
                 sourceSearchLoading={sourceSearchLoading}
                 sourceSearchError={sourceSearchError}
                 precomputedVideoInfo={precomputedVideoInfo}
+                preferSourcesTab={Boolean(playbackSoftError)}
               />
               {/* 自動連播 + 快捷鍵幫助 */}
               <div className='flex items-center gap-3 px-3 py-2.5 mt-2 bg-black/40 dark:bg-white/5 rounded-lg border border-white/5'>

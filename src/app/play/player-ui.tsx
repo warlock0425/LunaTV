@@ -35,6 +35,69 @@ export function SkipButton({
   );
 }
 
+/** 播放中可恢復的錯誤：不踢出整頁，在播放器上提供換源／重試 */
+export function PlaybackSoftErrorOverlay({
+  message,
+  onRetry,
+  onSwitchSource,
+  onDismiss,
+}: {
+  message: string;
+  onRetry: () => void;
+  onSwitchSource?: () => void;
+  onDismiss?: () => void;
+}) {
+  return (
+    <div className='absolute inset-0 z-[520] flex items-center justify-center bg-black/80 backdrop-blur-sm rounded-xl p-4'>
+      <div className='w-full max-w-sm text-center space-y-4'>
+        <p className='text-base font-semibold text-white'>播放出了問題</p>
+        <p className='text-sm text-zinc-300 leading-relaxed break-words'>
+          {message}
+        </p>
+        <div className='flex flex-col sm:flex-row gap-2 justify-center'>
+          <button
+            type='button'
+            onClick={onRetry}
+            className='px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors'
+          >
+            重新整理播放
+          </button>
+          {onSwitchSource && (
+            <button
+              type='button'
+              onClick={onSwitchSource}
+              className='px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-zinc-100 text-sm font-medium hover:bg-white/15 transition-colors'
+            >
+              前往換源
+            </button>
+          )}
+        </div>
+        {onDismiss && (
+          <button
+            type='button'
+            onClick={onDismiss}
+            className='text-xs text-zinc-500 hover:text-zinc-300 transition-colors'
+          >
+            關閉
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** 播放器內角標：全螢幕時仍看得到集數 */
+export function PlayerEpisodeBadge({ label }: { label: string }) {
+  if (!label) return null;
+  return (
+    <div className='pointer-events-none absolute top-3 left-3 z-[90] max-w-[70%]'>
+      <span className='inline-block truncate rounded-full border border-white/20 bg-black/55 px-2.5 py-1 text-xs font-semibold text-white shadow-lg backdrop-blur-sm'>
+        {label}
+      </span>
+    </div>
+  );
+}
+
 /** 換源/初始化載入蒙層 */
 export function VideoLoadingOverlay({
   stage,

@@ -9,7 +9,10 @@ import React, {
   useState,
 } from 'react';
 
-import { filterSourcesPreferHighQuality } from '@/lib/play-page-utils';
+import {
+  filterSourcesPreferHighQuality,
+  isPreferredDisplayQuality,
+} from '@/lib/play-page-utils';
 import { SearchResult } from '@/lib/types';
 import {
   getProxiedImageUrl,
@@ -39,6 +42,8 @@ export interface EpisodeSelectorProps {
   sourceSearchLoading?: boolean;
   sourceSearchError?: string | null;
   precomputedVideoInfo?: Map<string, VideoInfo>;
+  /** 為 true 時切到換源 tab（例如播放失敗後引導換源） */
+  preferSourcesTab?: boolean;
 }
 
 const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
@@ -55,6 +60,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   sourceSearchLoading = false,
   sourceSearchError = null,
   precomputedVideoInfo,
+  preferSourcesTab = false,
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
@@ -66,6 +72,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     new Set()
   );
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
+  /** 使用者手動展開較低畫質片源（有 1080p+ 時預設隱藏） */
+  const [showLowerQuality, setShowLowerQuality] = useState(false);
 
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
   const videoInfoMapRef = useRef<Map<string, VideoInfo>>(new Map());
@@ -114,8 +122,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     });
   }, [availableSources, currentSource, currentId, videoInfoMap]);
 
-  // 有 1080p+ 時隱藏 720p／480p；完全沒有高畫質才全部顯示
-  const displayAvailableSources = useMemo(
+  // 有 1080p+ 時隱藏 720p／480p；完全沒有高畫質、或使用者展開時才全部顯示
+  const preferredOnlySources = useMemo(
     () =>
       filterSourcesPreferHighQuality(sortedAvailableSources, {
         currentSource,
@@ -127,17 +135,27 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   const hiddenLowerQualityCount = Math.max(
     0,
-    sortedAvailableSources.length - displayAvailableSources.length
+    sortedAvailableSources.length - preferredOnlySources.length
   );
 
+  const displayAvailableSources = showLowerQuality
+    ? sortedAvailableSources
+    : preferredOnlySources;
+
   const recommendedSourceKey = useMemo(() => {
-    const source = displayAvailableSources.find(
+    const candidates = displayAvailableSources.filter(
       (candidate) =>
         !(
           candidate.source?.toString() === currentSource?.toString() &&
           candidate.id?.toString() === currentId?.toString()
         ) && !videoInfoMap.get(`${candidate.source}-${candidate.id}`)?.hasError
     );
+    // 推薦優先挑 1080p+（測過的），否則退回列表第一個可用源
+    const hd = candidates.find((candidate) => {
+      const info = videoInfoMap.get(`${candidate.source}-${candidate.id}`);
+      return info && isPreferredDisplayQuality(info.quality);
+    });
+    const source = hd || candidates[0];
     return source ? `${source.source}-${source.id}` : null;
   }, [currentId, currentSource, displayAvailableSources, videoInfoMap]);
 
@@ -146,6 +164,16 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       setActiveTab('episodes');
     }
   }, [totalEpisodes]);
+
+  // 播放失敗引導換源：render 期同步 tab，避免 effect 內 setState  cascading
+  const [prevPreferSourcesTab, setPrevPreferSourcesTab] =
+    useState(preferSourcesTab);
+  if (preferSourcesTab !== prevPreferSourcesTab) {
+    setPrevPreferSourcesTab(preferSourcesTab);
+    if (preferSourcesTab) {
+      setActiveTab('sources');
+    }
+  }
 
   const selectedValuePage = Math.min(
     Math.max(0, pageCount - 1),
@@ -589,10 +617,22 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                 </div>
               )}
               {hiddenLowerQualityCount > 0 && (
-                <p className='text-[11px] text-zinc-500 px-0.5 pb-0.5'>
-                  已優先顯示 1080p 以上片源（另隱藏 {hiddenLowerQualityCount}{' '}
-                  個較低畫質）
-                </p>
+                <div className='flex items-center justify-between gap-2 px-0.5 pb-1'>
+                  <p className='text-[11px] text-zinc-500'>
+                    {showLowerQuality
+                      ? '正在顯示全部畫質片源'
+                      : `已優先顯示 1080p 以上（另 ${hiddenLowerQualityCount} 個較低畫質）`}
+                  </p>
+                  <button
+                    type='button'
+                    onClick={() => setShowLowerQuality((v) => !v)}
+                    className='shrink-0 text-[11px] font-medium text-accent hover:text-accent/80 transition-colors'
+                  >
+                    {showLowerQuality
+                      ? '只看高畫質'
+                      : `顯示較低畫質 (${hiddenLowerQualityCount})`}
+                  </button>
+                </div>
               )}
               {displayAvailableSources.map((source) => {
                 const isCurrentSource =
