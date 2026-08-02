@@ -1,9 +1,67 @@
 import {
   calculateSourceScore,
+  filterSourcesPreferHighQuality,
   formatPlayerTime,
   getStableTitle,
+  isBelowPreferredDisplayQuality,
+  isPreferredDisplayQuality,
   parseLoadSpeedKBps,
 } from './play-page-utils';
+
+describe('畫質優先過濾（換源列表）', () => {
+  it('識別 1080p+ 與低畫質', () => {
+    expect(isPreferredDisplayQuality('1080p')).toBe(true);
+    expect(isPreferredDisplayQuality('4K')).toBe(true);
+    expect(isPreferredDisplayQuality('720p')).toBe(false);
+    expect(isBelowPreferredDisplayQuality('720p')).toBe(true);
+    expect(isBelowPreferredDisplayQuality('480p')).toBe(true);
+    expect(isBelowPreferredDisplayQuality('未知')).toBe(false);
+  });
+
+  it('有 1080p 時隱藏 720p／480p，保留當前、失敗與未測速', () => {
+    const sources = [
+      { source: 'a', id: '1' }, // 1080
+      { source: 'b', id: '2' }, // 720
+      { source: 'c', id: '3' }, // 480
+      { source: 'd', id: '4' }, // error
+      { source: 'e', id: '5' }, // pending
+      { source: 'f', id: '6' }, // current 720 — 仍應保留
+    ];
+    const info: Record<string, { quality: string; hasError?: boolean }> = {
+      'a-1': { quality: '1080p' },
+      'b-2': { quality: '720p' },
+      'c-3': { quality: '480p' },
+      'd-4': { quality: '錯誤', hasError: true },
+      'f-6': { quality: '720p' },
+    };
+    const result = filterSourcesPreferHighQuality(sources, {
+      currentSource: 'f',
+      currentId: '6',
+      getInfo: (k) => info[k],
+    });
+    expect(result.map((s) => `${s.source}-${s.id}`)).toEqual([
+      'a-1',
+      'd-4',
+      'e-5',
+      'f-6',
+    ]);
+  });
+
+  it('完全沒有 1080p+ 時不過濾', () => {
+    const sources = [
+      { source: 'a', id: '1' },
+      { source: 'b', id: '2' },
+    ];
+    const info = {
+      'a-1': { quality: '720p' },
+      'b-2': { quality: '480p' },
+    };
+    const result = filterSourcesPreferHighQuality(sources, {
+      getInfo: (k) => info[k as keyof typeof info],
+    });
+    expect(result).toHaveLength(2);
+  });
+});
 
 describe('play page pure helpers', () => {
   it('picks the first usable stable title', () => {

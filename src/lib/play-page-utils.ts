@@ -2,7 +2,80 @@ export type VideoTestResult = {
   quality: string;
   loadSpeed: string;
   pingTime: number;
+  hasError?: boolean;
 };
+
+/** 1080p 及以上：換源列表優先顯示的畫質 */
+export function isPreferredDisplayQuality(
+  quality: string | undefined | null
+): boolean {
+  if (!quality) return false;
+  const q = quality.trim();
+  return q === '4K' || q === '2K' || q === '1080p' || q === '1080P';
+}
+
+/**
+ * 明確低於 1080p 的畫質。有任一 1080p+ 可用源時，列表應隱藏這些。
+ * 「未知」不視為低畫質（測速未完成／無法解析時保守保留）。
+ */
+export function isBelowPreferredDisplayQuality(
+  quality: string | undefined | null
+): boolean {
+  if (!quality) return false;
+  const q = quality.trim();
+  return (
+    q === '720p' ||
+    q === '480p' ||
+    q === '360p' ||
+    q === '240p' ||
+    q === 'SD' ||
+    q === '錯誤'
+  );
+}
+
+export type SourceQualityInfo = {
+  quality: string;
+  hasError?: boolean;
+};
+
+/**
+ * 換源列表畫質過濾：
+ * - 若存在至少一個「測過且為 1080p+」的源 → 隱藏 720p／480p／SD 等
+ * - 目前正在播的源永遠保留
+ * - 尚未測速、連線失敗、畫質未知 → 保留（避免列表閃爍或以為沒源）
+ * - 若完全沒有 1080p+ → 全部保留
+ */
+export function filterSourcesPreferHighQuality<
+  T extends { source?: string | number; id?: string | number },
+>(
+  sources: T[],
+  options: {
+    currentSource?: string | number | null;
+    currentId?: string | number | null;
+    getInfo: (sourceKey: string) => SourceQualityInfo | undefined;
+  }
+): T[] {
+  const keyOf = (s: T) => `${s.source}-${s.id}`;
+  const isCurrent = (s: T) =>
+    s.source?.toString() === options.currentSource?.toString() &&
+    s.id?.toString() === options.currentId?.toString();
+
+  const hasPreferred = sources.some((s) => {
+    const info = options.getInfo(keyOf(s));
+    return !!info && !info.hasError && isPreferredDisplayQuality(info.quality);
+  });
+
+  if (!hasPreferred) return sources;
+
+  return sources.filter((s) => {
+    if (isCurrent(s)) return true;
+    const info = options.getInfo(keyOf(s));
+    if (!info) return true;
+    if (info.hasError) return true;
+    if (isBelowPreferredDisplayQuality(info.quality)) return false;
+    return true;
+  });
+}
 
 const UNKNOWN_SPEED_LABELS = new Set(['未知', '測量中...']);
 

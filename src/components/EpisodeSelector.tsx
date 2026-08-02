@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 
+import { filterSourcesPreferHighQuality } from '@/lib/play-page-utils';
 import { SearchResult } from '@/lib/types';
 import {
   getProxiedImageUrl,
@@ -113,8 +114,24 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     });
   }, [availableSources, currentSource, currentId, videoInfoMap]);
 
+  // 有 1080p+ 時隱藏 720p／480p；完全沒有高畫質才全部顯示
+  const displayAvailableSources = useMemo(
+    () =>
+      filterSourcesPreferHighQuality(sortedAvailableSources, {
+        currentSource,
+        currentId,
+        getInfo: (key) => videoInfoMap.get(key),
+      }),
+    [sortedAvailableSources, currentSource, currentId, videoInfoMap]
+  );
+
+  const hiddenLowerQualityCount = Math.max(
+    0,
+    sortedAvailableSources.length - displayAvailableSources.length
+  );
+
   const recommendedSourceKey = useMemo(() => {
-    const source = sortedAvailableSources.find(
+    const source = displayAvailableSources.find(
       (candidate) =>
         !(
           candidate.source?.toString() === currentSource?.toString() &&
@@ -122,7 +139,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         ) && !videoInfoMap.get(`${candidate.source}-${candidate.id}`)?.hasError
     );
     return source ? `${source.source}-${source.id}` : null;
-  }, [currentId, currentSource, sortedAvailableSources, videoInfoMap]);
+  }, [currentId, currentSource, displayAvailableSources, videoInfoMap]);
 
   useEffect(() => {
     if (!hasUserSelectedTabRef.current && totalEpisodes > 1) {
@@ -571,7 +588,13 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                   正在補充搜尋其他可用片源...
                 </div>
               )}
-              {sortedAvailableSources.map((source) => {
+              {hiddenLowerQualityCount > 0 && (
+                <p className='text-[11px] text-zinc-500 px-0.5 pb-0.5'>
+                  已優先顯示 1080p 以上片源（另隱藏 {hiddenLowerQualityCount}{' '}
+                  個較低畫質）
+                </p>
+              )}
+              {displayAvailableSources.map((source) => {
                 const isCurrentSource =
                   source.source?.toString() === currentSource?.toString() &&
                   source.id?.toString() === currentId?.toString();
