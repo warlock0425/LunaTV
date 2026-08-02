@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.3',
+    date: '2026-08-02',
+    content: `
+- 修復：首頁「接著看」進度百分比改為整數顯示（先前可能出現 43.0769…% 這類浮點）。
+- 播放頁：集數徽章若上游只給純數字，改顯示「第 N 集」；下方影片資訊預設收合，展開後再看簡介與封面，減少與頂部標題重複。
+- 播放頁：自動連播改為標準開關；播放器主題色對齊站台青色，控制列風格更一致。
+    `.trim(),
+  },
+  {
     version: 'v2.9.2',
     date: '2026-08-02',
     content: `
