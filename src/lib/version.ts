@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.8.9',
+    date: '2026-08-02',
+    content: `
+- 修復：Upstash 儲存後端在資料毀損時會靜默交出錯誤內容（收藏、播放紀錄、略過設定、站台設定皆受影響），現在改為跳過該筆並留下警告。使用 Redis／Kvrocks 的部署本來就有這層容錯，不受影響。
+- 安全：補上 Content-Security-Policy 的 object-src、base-uri、form-action 與 frame-ancestors 四項。刻意不設 default-src，因此不影響圖片、腳本與樣式的載入。
+    `.trim(),
+  },
+  {
     version: 'v2.8.8',
     date: '2026-08-01',
     content: `
