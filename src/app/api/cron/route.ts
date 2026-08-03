@@ -6,6 +6,7 @@ import { mapWithConcurrency } from '@/lib/concurrency';
 import {
   fetchSubscriptionConfigFile,
   getConfig,
+  getFreshConfig,
   refineConfig,
   setCachedConfig,
 } from '@/lib/config';
@@ -203,34 +204,39 @@ async function refreshAllLiveChannels(deadline: number) {
 }
 
 async function refreshConfig() {
-  const config = await getConfig();
-  if (
-    config &&
-    config.ConfigSubscription &&
-    config.ConfigSubscription.URL &&
-    config.ConfigSubscription.AutoUpdate
-  ) {
-    try {
-      const decodedContent = await fetchSubscriptionConfigFile(
-        config.ConfigSubscription.URL
-      );
-      // 草稿：不就地改 getConfig() 回傳的快取本體。存檔成功後才更新快取。
-      // 否則 save 失敗時，進程會一直提供從未持久化的設定，直到重啟。
-      const draft = structuredClone(config);
+  const peek = await getConfig();
+  if (!peek?.ConfigSubscription?.URL || !peek.ConfigSubscription.AutoUpdate) {
+    logger.info('跳過重新整理：未設定訂閱地址或自動更新');
+    return;
+  }
+
+  try {
+    // 網路抓取不佔鎖，避免長時間卡住其他設定寫入
+    const decodedContent = await fetchSubscriptionConfigFile(
+      peek.ConfigSubscription.URL
+    );
+
+    // 讀→改→寫整段在鎖內；鎖後 getFreshConfig 重讀，避免覆蓋鎖外期間的管理端變更
+    await db.withAdminConfigLock(async () => {
+      const current = await getFreshConfig();
+      if (
+        !current.ConfigSubscription?.URL ||
+        !current.ConfigSubscription.AutoUpdate
+      ) {
+        return;
+      }
+      const draft = structuredClone(current);
       draft.ConfigFile = decodedContent;
       draft.ConfigSubscription = {
         ...draft.ConfigSubscription,
         LastCheck: new Date().toISOString(),
       };
-      // refineConfig 在 ConfigFile 無法 parse 時會拋錯中止，不會把 from 全改 custom
       const next = refineConfig(draft);
       await db.saveAdminConfig(next);
       await setCachedConfig(next);
-    } catch (e) {
-      console.error('重新整理設定失敗:', e);
-    }
-  } else {
-    logger.info('跳過重新整理：未設定訂閱地址或自動更新');
+    });
+  } catch (e) {
+    console.error('重新整理設定失敗:', e);
   }
 }
 

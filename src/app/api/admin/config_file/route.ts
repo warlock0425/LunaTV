@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import {
-  getConfig,
+  getFreshConfig,
   parseConfigFile,
   refineConfig,
   setCachedConfig,
@@ -32,10 +32,7 @@ export async function POST(request: NextRequest) {
   const username = authInfo.username;
 
   try {
-    // 檢查使用者權限
-    let adminConfig = await getConfig();
-
-    // 僅站長可以修改設定檔
+    // 僅站長可以修改設定檔（不必佔鎖）
     if (username !== process.env.USERNAME) {
       return NextResponse.json(
         { error: '權限不足，只有站長可以修改設定檔' },
@@ -83,29 +80,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '檢查時間格式錯誤' }, { status: 400 });
     }
 
-    const nextConfig = structuredClone(adminConfig);
-    nextConfig.ConfigFile = configFile;
-    if (!nextConfig.ConfigSubscription) {
-      nextConfig.ConfigSubscription = {
-        URL: '',
-        AutoUpdate: false,
-        LastCheck: '',
-      };
-    }
+    // 讀→改→寫整段在鎖內；鎖後必須 getFreshConfig 重讀，避免 lost update
+    await db.withAdminConfigLock(async () => {
+      const current = await getFreshConfig();
+      const nextConfig = structuredClone(current);
+      nextConfig.ConfigFile = configFile;
+      if (!nextConfig.ConfigSubscription) {
+        nextConfig.ConfigSubscription = {
+          URL: '',
+          AutoUpdate: false,
+          LastCheck: '',
+        };
+      }
 
-    // 更新訂閱設定
-    if (subscriptionUrl !== undefined) {
-      nextConfig.ConfigSubscription.URL = subscriptionUrl;
-    }
-    if (autoUpdate !== undefined) {
-      nextConfig.ConfigSubscription.AutoUpdate = autoUpdate;
-    }
-    nextConfig.ConfigSubscription.LastCheck = lastCheckTime || '';
+      if (subscriptionUrl !== undefined) {
+        nextConfig.ConfigSubscription.URL = subscriptionUrl;
+      }
+      if (autoUpdate !== undefined) {
+        nextConfig.ConfigSubscription.AutoUpdate = autoUpdate;
+      }
+      nextConfig.ConfigSubscription.LastCheck = lastCheckTime || '';
 
-    adminConfig = refineConfig(nextConfig);
-    // 更新設定檔
-    await db.saveAdminConfig(adminConfig);
-    setCachedConfig(adminConfig);
+      const adminConfig = refineConfig(nextConfig);
+      await db.saveAdminConfig(adminConfig);
+      setCachedConfig(adminConfig);
+    });
     return NextResponse.json({
       success: true,
       message: '設定檔更新成功',

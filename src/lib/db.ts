@@ -24,6 +24,13 @@ const PLAY_RECORD_LOCK_HEARTBEAT_MS = PLAY_RECORD_LOCK_TTL_MS / 3;
 const PLAY_RECORD_LOCK_ACQUIRE_TIMEOUT_MS = 5_000;
 const PLAY_RECORD_LOCK_RETRY_MS = 50;
 
+/** 管理設定讀改寫共用鎖（與播放紀錄同一套分散式鎖原語） */
+const ADMIN_CONFIG_LOCK_KEY = 'lock:admin-config';
+const ADMIN_CONFIG_LOCK_TTL_MS = 30_000;
+const ADMIN_CONFIG_LOCK_HEARTBEAT_MS = ADMIN_CONFIG_LOCK_TTL_MS / 3;
+const ADMIN_CONFIG_LOCK_ACQUIRE_TIMEOUT_MS = 10_000;
+const ADMIN_CONFIG_LOCK_RETRY_MS = 50;
+
 export { getStorageRuntimeStatus } from './storage-runtime';
 
 function warnStorageDisabled(message: string): void {
@@ -207,6 +214,8 @@ export class DbManager {
   private storage: IStorage;
   private migrationPromise: Promise<void> | null = null;
   private playRecordMutationQueues = new Map<string, Promise<void>>();
+  /** 行程內序列化管理設定寫入（與分散式鎖疊加） */
+  private adminConfigMutationQueue: Promise<void> = Promise.resolve();
 
   constructor(storage: IStorage = getStorage()) {
     this.storage = storage;
@@ -264,6 +273,56 @@ export class DbManager {
     userName: string,
     mutation: () => Promise<T>
   ): Promise<T> {
+    return this.runWithDistributedLock(
+      `lock:play-records:${userName}`,
+      mutation,
+      {
+        ttlMs: PLAY_RECORD_LOCK_TTL_MS,
+        heartbeatMs: PLAY_RECORD_LOCK_HEARTBEAT_MS,
+        acquireTimeoutMs: PLAY_RECORD_LOCK_ACQUIRE_TIMEOUT_MS,
+        retryMs: PLAY_RECORD_LOCK_RETRY_MS,
+      }
+    );
+  }
+
+  /**
+   * 管理設定的讀→改→寫必須整段在鎖內完成。
+   * 呼叫端應在 fn 內用 getFreshConfig()（或 db.getAdminConfig）重讀，
+   * 不可沿用鎖外先讀好的快取草稿。
+   */
+  async withAdminConfigLock<T>(fn: () => Promise<T>): Promise<T> {
+    let releaseCurrent!: () => void;
+    const current = new Promise<void>((resolve) => {
+      releaseCurrent = resolve;
+    });
+    const previous = this.adminConfigMutationQueue;
+    this.adminConfigMutationQueue = previous
+      .catch(() => undefined)
+      .then(() => current);
+
+    await previous.catch(() => undefined);
+    try {
+      return await this.runWithDistributedLock(ADMIN_CONFIG_LOCK_KEY, fn, {
+        ttlMs: ADMIN_CONFIG_LOCK_TTL_MS,
+        heartbeatMs: ADMIN_CONFIG_LOCK_HEARTBEAT_MS,
+        acquireTimeoutMs: ADMIN_CONFIG_LOCK_ACQUIRE_TIMEOUT_MS,
+        retryMs: ADMIN_CONFIG_LOCK_RETRY_MS,
+      });
+    } finally {
+      releaseCurrent();
+    }
+  }
+
+  private async runWithDistributedLock<T>(
+    lockKey: string,
+    mutation: () => Promise<T>,
+    timing: {
+      ttlMs: number;
+      heartbeatMs: number;
+      acquireTimeoutMs: number;
+      retryMs: number;
+    }
+  ): Promise<T> {
     const acquireLock = this.storage.acquireLock;
     const renewLock = this.storage.renewLock;
     const releaseLock = this.storage.releaseLock;
@@ -274,9 +333,8 @@ export class DbManager {
       );
     }
 
-    const lockKey = `lock:play-records:${userName}`;
     const ownerToken = randomUUID();
-    const deadline = Date.now() + PLAY_RECORD_LOCK_ACQUIRE_TIMEOUT_MS;
+    const deadline = Date.now() + timing.acquireTimeoutMs;
     let acquired = false;
 
     while (!acquired) {
@@ -286,12 +344,7 @@ export class DbManager {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       try {
         acquired = await Promise.race([
-          acquireLock.call(
-            this.storage,
-            lockKey,
-            ownerToken,
-            PLAY_RECORD_LOCK_TTL_MS
-          ),
+          acquireLock.call(this.storage, lockKey, ownerToken, timing.ttlMs),
           new Promise<never>((_, reject) => {
             timeoutId = setTimeout(
               () => reject(new StorageLockTimeoutError(lockKey)),
@@ -305,7 +358,7 @@ export class DbManager {
 
       if (!acquired) {
         const delayMs = Math.min(
-          PLAY_RECORD_LOCK_RETRY_MS,
+          timing.retryMs,
           Math.max(0, deadline - Date.now())
         );
         if (delayMs === 0) throw new StorageLockTimeoutError(lockKey);
@@ -324,7 +377,7 @@ export class DbManager {
             this.storage,
             lockKey,
             ownerToken,
-            PLAY_RECORD_LOCK_TTL_MS
+            timing.ttlMs
           );
           if (!renewed) heartbeatError = new StorageLockLostError(lockKey);
         } catch (error) {
@@ -333,7 +386,7 @@ export class DbManager {
           renewalInFlight = null;
         }
       })();
-    }, PLAY_RECORD_LOCK_HEARTBEAT_MS);
+    }, timing.heartbeatMs);
 
     let result!: T;
     let mutationFailed = false;
