@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.8',
+    date: '2026-08-03',
+    content: `
+- 修復：搜尋結果預設也會依標題相關性排序（先前僅在開啟年份排序時生效）。
+- 改善：搜尋與詳情的片名／簡介改以繁體顯示。
+- 安全：為搜尋與詳情 API 加上限流，避免短時間過度打陸源。
+- 效能：搜尋排序改為先算分再比較，降低大量結果時主執行緒負擔。
+    `.trim(),
+  },
+  {
     version: 'v2.9.7',
     date: '2026-08-03',
     content: `
@@ -13,6 +23,7 @@ export const CHANGELOGS: ChangelogItem[] = [
 - 改善：搜尋結果改依標題相關性排序，不再在台譯搜尋時退化成字母序。
     `.trim(),
   },
+
   {
     version: 'v2.9.6',
     date: '2026-08-03',
