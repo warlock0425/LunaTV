@@ -111,6 +111,7 @@ const EXCLUDED_FILES = [
   'search-regional-bridge.test.ts',
   'playback-regional-bridge.test.ts',
   'search-sort.test.ts',
+  'localize-search-result.test.ts',
   'check-simplified.js',
   // titleParser 需同時收錄繁簡副標題鍵以比對 CMS 原文
   'titleParser.ts',

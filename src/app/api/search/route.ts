@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { cleanQueryForApi } from '@/lib/chinese';
 import {
   createLinkedAbortController,
@@ -19,6 +20,9 @@ const PRIVATE_NO_STORE_HEADERS = {
   'Cache-Control': 'private, no-store',
 };
 const SOURCE_SEARCH_CONCURRENCY = 6;
+/** 多源 × 變體 × 分頁，比 image-proxy 嚴，但比腳本刷量寬（使用者主動行為） */
+const SEARCH_RATE_LIMIT = 90;
+const SEARCH_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: NextRequest) {
   const activeUser = await requireActiveUser(request);
@@ -28,6 +32,13 @@ export async function GET(request: NextRequest) {
       { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-search',
+    limit: SEARCH_RATE_LIMIT,
+    windowSeconds: SEARCH_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
+
   const username = activeUser.username;
 
   const { searchParams } = new URL(request.url);

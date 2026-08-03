@@ -49,3 +49,32 @@ export function compareSearchTitleRelevance(
     ? aTitle.localeCompare(bTitle)
     : bTitle.localeCompare(aTitle);
 }
+
+/**
+ * 搜尋結果排序（預設路徑也會跑）。
+ * yearOrder === 'none' 時跳過年份、只依相關性；有年份排序時年份優先再相關性。
+ * page.tsx 必須呼叫此函式，不可在 yearOrder none 時提前 return。
+ */
+export function sortSearchItems<T extends { title: string; year?: string }>(
+  items: T[],
+  userQuery: string,
+  yearOrder: SearchYearOrder
+): T[] {
+  if (items.length <= 1) return items;
+  const scoreQueries = getSearchScoreQueries(userQuery);
+  const titleOrder: 'asc' | 'desc' = yearOrder === 'desc' ? 'desc' : 'asc';
+  return [...items].sort((a, b) => {
+    const yearComp = compareSearchYears(
+      a.year ?? 'unknown',
+      b.year ?? 'unknown',
+      yearOrder
+    );
+    if (yearComp !== 0) return yearComp;
+    return compareSearchTitleRelevance(
+      a.title,
+      b.title,
+      scoreQueries,
+      titleOrder
+    );
+  });
+}

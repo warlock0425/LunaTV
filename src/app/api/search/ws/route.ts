@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { cleanQueryForApi } from '@/lib/chinese';
 import {
   createLinkedAbortController,
@@ -22,6 +23,9 @@ const PRIVATE_NO_STORE_HEADERS = {
   'Cache-Control': 'private, no-store',
 };
 const SOURCE_SEARCH_CONCURRENCY = 6;
+/** SSE 長連線：限「建立連線」次數，不是每個事件 */
+const SEARCH_WS_RATE_LIMIT = 45;
+const SEARCH_WS_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: NextRequest) {
   const activeUser = await requireActiveUser(request);
@@ -31,6 +35,13 @@ export async function GET(request: NextRequest) {
       { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-search-ws',
+    limit: SEARCH_WS_RATE_LIMIT,
+    windowSeconds: SEARCH_WS_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
+
   const username = activeUser.username;
 
   const { searchParams } = new URL(request.url);

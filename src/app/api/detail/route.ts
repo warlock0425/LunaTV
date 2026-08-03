@@ -5,6 +5,7 @@ import {
   isValidApiMediaId,
   isValidApiSource,
 } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getAvailableApiSites } from '@/lib/config';
 import {
   DownstreamNotFoundError,
@@ -14,12 +15,21 @@ import {
 } from '@/lib/downstream';
 
 export const runtime = 'nodejs';
+const DETAIL_RATE_LIMIT = 180;
+const DETAIL_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: NextRequest) {
   const activeUser = await requireActiveUser(request);
   if (!activeUser) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-detail',
+    limit: DETAIL_RATE_LIMIT,
+    windowSeconds: DETAIL_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
+
   const username = activeUser.username;
 
   const { searchParams } = new URL(request.url);

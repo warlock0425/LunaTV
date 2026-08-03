@@ -5,6 +5,7 @@ import {
   isValidApiSearchQuery,
   isValidApiSource,
 } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { toSearchSimplified } from '@/lib/chinese';
 import { createLinkedAbortController } from '@/lib/concurrency';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
@@ -15,6 +16,8 @@ export const runtime = 'nodejs';
 const PRIVATE_NO_STORE_HEADERS = {
   'Cache-Control': 'private, no-store',
 };
+const SEARCH_ONE_RATE_LIMIT = 120;
+const SEARCH_ONE_RATE_WINDOW_SECONDS = 60;
 
 function normalizeSearchOneTitle(value: string): string {
   return toSearchSimplified(value)
@@ -35,6 +38,13 @@ export async function GET(request: NextRequest) {
       { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
     );
   }
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-search-one',
+    limit: SEARCH_ONE_RATE_LIMIT,
+    windowSeconds: SEARCH_ONE_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
+
   const username = activeUser.username;
 
   const { searchParams } = new URL(request.url);

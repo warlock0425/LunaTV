@@ -30,11 +30,7 @@ import SearchSuggestions from '@/components/SearchSuggestions';
 import VideoCard, { VideoCardHandle } from '@/components/VideoCard';
 import VirtualGrid from '@/components/VirtualGrid';
 
-import {
-  compareSearchTitleRelevance,
-  compareSearchYears,
-  getSearchScoreQueries,
-} from './search-sort';
+import { sortSearchItems } from './search-sort';
 
 function SearchPageClient() {
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -404,23 +400,8 @@ function SearchPageClient() {
       return true;
     });
 
-    if (yearOrder === 'none') {
-      return filtered;
-    }
-
-    const scoreQueries = getSearchScoreQueries(submittedQuery);
-    const titleOrder = yearOrder === 'asc' ? 'asc' : 'desc';
-
-    return filtered.sort((a, b) => {
-      const yearComp = compareSearchYears(a.year, b.year, yearOrder);
-      if (yearComp !== 0) return yearComp;
-      return compareSearchTitleRelevance(
-        a.title,
-        b.title,
-        scoreQueries,
-        titleOrder
-      );
-    });
+    // 預設 yearOrder === 'none' 也必須跑相關性排序（只跳過年份鍵）
+    return sortSearchItems(filtered, submittedQuery, yearOrder);
   }, [fuzzySearchResults, filterAll, submittedQuery]);
 
   const filteredAggResults = useMemo(() => {
@@ -436,28 +417,17 @@ function SearchPageClient() {
       return true;
     });
 
-    if (yearOrder === 'none') {
-      return filtered;
-    }
-
-    const scoreQueries = getSearchScoreQueries(submittedQuery);
-    const titleOrder = yearOrder === 'asc' ? 'asc' : 'desc';
-
-    return filtered.sort((a, b) => {
-      const aYear = a[1][0]?.year ?? 'unknown';
-      const bYear = b[1][0]?.year ?? 'unknown';
-      const yearComp = compareSearchYears(aYear, bYear, yearOrder);
-      if (yearComp !== 0) return yearComp;
-
-      const aTitle = a[1][0]?.title ?? '';
-      const bTitle = b[1][0]?.title ?? '';
-      return compareSearchTitleRelevance(
-        aTitle,
-        bTitle,
-        scoreQueries,
-        titleOrder
-      );
-    });
+    // 聚合列以群組代表作標題／年份排序（預設路徑同樣走相關性）
+    const representatives = filtered.map(([key, group]) => ({
+      key,
+      group,
+      title: group[0]?.title ?? '',
+      year: group[0]?.year ?? 'unknown',
+    }));
+    const sorted = sortSearchItems(representatives, submittedQuery, yearOrder);
+    return sorted.map(
+      (entry) => [entry.key, entry.group] as [string, SearchResult[]]
+    );
   }, [aggregatedResults, filterAgg, submittedQuery]);
 
   useEffect(() => {

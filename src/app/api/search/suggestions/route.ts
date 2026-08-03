@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AdminConfig } from '@/lib/admin.types';
 import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { splitTitleWords } from '@/lib/string-utils';
@@ -15,6 +16,8 @@ export const dynamic = 'force-dynamic';
 const PRIVATE_NO_STORE_HEADERS = {
   'Cache-Control': 'private, no-store',
 };
+const SEARCH_SUGGESTIONS_RATE_LIMIT = 120;
+const SEARCH_SUGGESTIONS_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,6 +28,13 @@ export async function GET(request: NextRequest) {
         { status: 401, headers: PRIVATE_NO_STORE_HEADERS }
       );
     }
+    const limited = await enforceRateLimit(request, {
+      namespace: 'api-search-suggestions',
+      limit: SEARCH_SUGGESTIONS_RATE_LIMIT,
+      windowSeconds: SEARCH_SUGGESTIONS_RATE_WINDOW_SECONDS,
+    });
+    if (limited) return limited;
+
     const username = activeUser.username;
 
     const config = await getConfig();
