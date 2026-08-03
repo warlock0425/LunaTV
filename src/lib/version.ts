@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.5',
+    date: '2026-08-03',
+    content: `
+- 修復：多人同時修改管理設定時，可能互相覆蓋而遺失變更。管理設定的讀→改→寫現在會在鎖內重讀後再寫入。
+- 長時間的網路抓取（訂閱更新、直播源重新整理）仍留在鎖外，避免卡住其他設定寫入。
+- 結構：新增管理設定寫入覆蓋測試。往後若有入口呼叫 saveAdminConfig 卻忘記加鎖、或鎖內未重讀，CI 會直接擋下。
+    `.trim(),
+  },
+  {
     version: 'v2.9.4',
     date: '2026-08-02',
     content: `
@@ -15,6 +24,7 @@ export const CHANGELOGS: ChangelogItem[] = [
 - 管理端上傳無法解析的設定檔時會回傳明確錯誤訊息，而不是靜默改壞片源標記。
     `.trim(),
   },
+
   {
     version: 'v2.9.3',
     date: '2026-08-02',
