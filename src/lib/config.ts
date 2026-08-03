@@ -844,21 +844,29 @@ export async function resetConfig() {
     throw new Error('目前未設定訂閱來源，無法安全重置');
   }
 
+  // 網路抓取在鎖外，避免長時間卡住其他設定寫入
   const decodedContent = await fetchSubscriptionConfigFile(subscriptionUrl);
-  const adminConfig = refineConfig({
-    ...originConfig,
-    ConfigFile: decodedContent,
-    ConfigSubscription: {
-      ...subscription,
-      URL: subscriptionUrl,
-      LastCheck: new Date().toISOString(),
-    },
-  });
 
-  // 先持久化成功再更新記憶體快取，避免 DB 寫入失敗時快取已是新設定
-  await db.saveAdminConfig(adminConfig);
-  cachedConfig = adminConfig;
-  cachedConfigTimestamp = Date.now();
+  await db.withAdminConfigLock(async () => {
+    // 鎖內重讀：鎖外抓取期間管理端可能改過訂閱以外的欄位
+    const fresh = await db.getAdminConfig();
+    if (!fresh?.ConfigSubscription?.URL?.trim()) {
+      throw new Error('目前未設定訂閱來源，無法安全重置');
+    }
+    const adminConfig = refineConfig({
+      ...fresh,
+      ConfigFile: decodedContent,
+      ConfigSubscription: {
+        ...fresh.ConfigSubscription,
+        LastCheck: new Date().toISOString(),
+      },
+    });
+
+    // 先持久化成功再更新記憶體快取，避免 DB 寫入失敗時快取已是新設定
+    await db.saveAdminConfig(adminConfig);
+    cachedConfig = adminConfig;
+    cachedConfigTimestamp = Date.now();
+  });
 
   return;
 }
