@@ -8,6 +8,7 @@
  * 以上均不滿足則視為不匹配，降低「點 A 搜出 B」風險。
  */
 import { generateSearchVariants } from './chinese';
+import { getRegionalMainlandTitles } from './regional-title-aliases';
 import { convertT2S } from './s2t';
 import { extractPart, extractSeason } from './titleParser';
 
@@ -203,6 +204,15 @@ function hasSpecialMismatch(
   return false;
 }
 
+/**
+ * 比對用的查詢基底：原始輸入 + regional 陸名橋接。
+ * 查詢計畫（mainland-search）已用同一張表往 CMS 丟陸名；若比對層不認，
+ * 會變成「伺服器搜到了、前端 isFuzzyMatch 濾掉」（鋼彈／蜘蛛人／棋靈王）。
+ */
+function getMatchQueryBases(query: string): string[] {
+  return Array.from(new Set([query, ...getRegionalMainlandTitles(query)]));
+}
+
 function hasExactGeneratedVariantMatch(
   vodName: string,
   query: string
@@ -210,16 +220,18 @@ function hasExactGeneratedVariantMatch(
   const cName = cleanComparableTitle(vodName);
   const normName = normalize(vodName);
 
-  return generateSearchVariants(query).some((variant) => {
-    if (!variant || variant === query) return false;
-    const cVariant = cleanComparableTitle(variant);
-    const normVariant = normalize(variant);
+  return getMatchQueryBases(query).some((base) =>
+    generateSearchVariants(base).some((variant) => {
+      if (!variant || variant === query) return false;
+      const cVariant = cleanComparableTitle(variant);
+      const normVariant = normalize(variant);
 
-    return (
-      (!!cVariant && cName === cVariant) ||
-      (!!normVariant && normName === normVariant)
-    );
-  });
+      return (
+        (!!cVariant && cName === cVariant) ||
+        (!!normVariant && normName === normVariant)
+      );
+    })
+  );
 }
 
 function stripNoiseForCompare(text: string): string {
@@ -337,6 +349,7 @@ export function isFuzzyMatch(vodName: string, query: string): boolean {
   // 乾淨比較標題（去季數標記、中繼資料、繁簡統一）
   const cQuery = cleanComparableTitle(query);
   const cName = cleanComparableTitle(vodName);
+  const normNameCleaned = stripNoiseForCompare(vodName);
 
   // 1. 查詢有季數、結果無季數
   if (querySeason !== null && nameSeason === null) {
@@ -357,6 +370,20 @@ export function isFuzzyMatch(vodName: string, query: string): boolean {
     }
   }
 
+  // regional 橋接：陸名經人工審定，CMS 常是「陸名／系列前綴＋副標」
+  // （例：鋼彈→高达 vs 机动战士高达）。一般長度護欄會擋短陸名，此處放行包含關係。
+  const regionalTitles = getRegionalMainlandTitles(query);
+  for (const rt of regionalTitles) {
+    const normRt = stripNoiseForCompare(rt);
+    if (normRt.length >= 2 && normNameCleaned.includes(normRt)) {
+      return true;
+    }
+    const cRt = cleanComparableTitle(rt);
+    if (cRt.length >= 2 && cName.includes(cRt)) {
+      return true;
+    }
+  }
+
   // 3. 兩邊都無季數
   if (querySeason === null && nameSeason === null) {
     if (hasExactGeneratedVariantMatch(vodName, query)) {
@@ -367,29 +394,41 @@ export function isFuzzyMatch(vodName: string, query: string): boolean {
       return false;
     }
     // 不互為子字串且未匹配字元過多 → 早期拒絕（以連續子字串計算）
-    if (!cName.includes(cQuery) && !cQuery.includes(cName)) {
-      const substrLen = getLongestCommonSubstring(cName, cQuery);
-      const minLen = Math.min(cName.length, cQuery.length);
-      const maxLen = Math.max(cName.length, cQuery.length);
+    // 必須連 regional 陸名一起看，否則「棋靈王→棋魂」會在變體迴圈前被誤殺
+    const comparableQueries = Array.from(
+      new Set([
+        cQuery,
+        ...regionalTitles
+          .map((title) => cleanComparableTitle(title))
+          .filter(Boolean),
+      ])
+    );
+    const anyClose = comparableQueries.some((cq) => {
+      if (cName.includes(cq) || cq.includes(cName)) return true;
+      const substrLen = getLongestCommonSubstring(cName, cq);
+      const minLen = Math.min(cName.length, cq.length);
+      const maxLen = Math.max(cName.length, cq.length);
       const unmatched =
         maxLen - minLen > 3 ? minLen - substrLen : maxLen - substrLen;
-      if (unmatched > 3) {
-        return false;
-      }
+      return unmatched <= 3;
+    });
+    if (!anyClose) {
+      return false;
     }
   }
-
-  const normNameCleaned = stripNoiseForCompare(vodName);
 
   // 清理常見干擾後綴（不含季數，季數已在上面處理）
   const cleanSuffixes =
     /(的故事|動畫版|动画版|真人版|劇場版|剧场版|Part\s*\d+|\d+期)/gi;
-  const cleanQuery = query.replace(cleanSuffixes, '').trim() || query;
 
-  // 有季數時只用原始 query 變體，避免去季數後跨季誤配
-  const variants = new Set([...generateSearchVariants(query)]);
-  if (querySeason === null) {
-    generateSearchVariants(cleanQuery).forEach((v) => variants.add(v));
+  // 原始查詢 + regional 陸名都進變體；與 mainland-search 用同一張橋接表
+  const variants = new Set<string>();
+  for (const base of getMatchQueryBases(query)) {
+    generateSearchVariants(base).forEach((v) => variants.add(v));
+    if (querySeason === null) {
+      const cleanBase = base.replace(cleanSuffixes, '').trim() || base;
+      generateSearchVariants(cleanBase).forEach((v) => variants.add(v));
+    }
   }
 
   // 查詢有季數、結果無季數 → 只允許「結果包含查詢」方向，且門檻更高
