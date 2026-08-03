@@ -6,6 +6,13 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.6',
+    date: '2026-08-03',
+    content: `
+- 修復：使用台灣譯名搜尋時（如鋼彈、蜘蛛人、棋靈王），系統雖已用大陸片名找到結果，卻在顯示前被誤判為不相關而濾掉，導致搜尋結果為空。
+    `.trim(),
+  },
+  {
     version: 'v2.9.5',
     date: '2026-08-03',
     content: `
@@ -14,6 +21,7 @@ export const CHANGELOGS: ChangelogItem[] = [
 - 結構：新增管理設定寫入覆蓋測試。往後若有入口呼叫 saveAdminConfig 卻忘記加鎖、或鎖內未重讀，CI 會直接擋下。
     `.trim(),
   },
+
   {
     version: 'v2.9.4',
     date: '2026-08-02',
