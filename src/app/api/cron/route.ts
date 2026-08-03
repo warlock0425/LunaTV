@@ -178,29 +178,40 @@ async function cronJob() {
 }
 
 async function refreshAllLiveChannels(deadline: number) {
-  const config = await getConfig();
+  const peek = await getConfig();
 
-  const enabledSources = (config.LiveConfig || []).filter(
+  const enabledSources = (peek.LiveConfig || []).filter(
     (liveInfo) => !liveInfo.disabled
   );
+  const refreshed: Array<{ key: string; nums: number }> = [];
   await mapWithConcurrency(enabledSources, 3, async (liveInfo) => {
     // 單一來源最多會用掉約 10 秒播放清單 + 12 秒 EPG；預留儲存時間，
     // 不在期限尾端再啟動一個注定超時的重新整理。
     if (Date.now() + LIVE_REFRESH_START_BUDGET_MS >= deadline) return;
     try {
       const nums = await refreshLiveChannels(liveInfo);
-      liveInfo.channelNumber = nums;
+      refreshed.push({ key: liveInfo.key, nums });
     } catch (error) {
       console.error(
         `重新整理直播源失敗 [${liveInfo.name || liveInfo.key}]:`,
         error
       );
-      liveInfo.channelNumber = 0;
+      refreshed.push({ key: liveInfo.key, nums: 0 });
     }
   });
 
-  // 儲存設定
-  await db.saveAdminConfig(config);
+  if (refreshed.length === 0) return;
+
+  // 網路抓取在鎖外；鎖內重讀後寫入 channelNumber
+  await db.withAdminConfigLock(async () => {
+    const config = await getFreshConfig();
+    for (const { key, nums } of refreshed) {
+      const live = config.LiveConfig?.find((l) => l.key === key);
+      if (live) live.channelNumber = nums;
+    }
+    await db.saveAdminConfig(config);
+    await setCachedConfig(config);
+  });
 }
 
 async function refreshConfig() {

@@ -130,8 +130,10 @@ async function restoreBackup(backup: {
     }
   >;
 }): Promise<void> {
-  await db.saveAdminConfig(backup.adminConfig);
-  await setCachedConfig(backup.adminConfig);
+  await db.withAdminConfigLock(async () => {
+    await db.saveAdminConfig(backup.adminConfig);
+    await setCachedConfig(backup.adminConfig);
+  });
 
   for (const [username, userData] of Object.entries(backup.userBackups)) {
     if (userData.password) {
@@ -385,8 +387,10 @@ export async function POST(req: NextRequest) {
     try {
       // 所有可能失敗的破壞性步驟都必須位於同一個回滾邊界內。
       await clearDataForUsers(Object.keys(backup.userBackups));
-      await db.saveAdminConfig(importedAdminConfig);
-      await setCachedConfig(importedAdminConfig);
+      await db.withAdminConfigLock(async () => {
+        await db.saveAdminConfig(importedAdminConfig);
+        await setCachedConfig(importedAdminConfig);
+      });
 
       // 導入使用者數據
       for (const username in userData) {

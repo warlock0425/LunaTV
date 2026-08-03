@@ -1,16 +1,26 @@
-import { getConfig } from './config';
+import { getConfig, getFreshConfig } from './config';
 import { db } from './db';
 import { getCachedLiveChannels, refreshLiveChannels } from './live';
 import { fetchSafeRemoteUrl, readResponseTextWithLimit } from './url-safety';
 
-jest.mock('./config', () => ({ getConfig: jest.fn() }));
-jest.mock('./db', () => ({ db: { saveAdminConfig: jest.fn() } }));
+jest.mock('./config', () => ({
+  getConfig: jest.fn(),
+  getFreshConfig: jest.fn(),
+  setCachedConfig: jest.fn(),
+}));
+jest.mock('./db', () => ({
+  db: {
+    saveAdminConfig: jest.fn(),
+    withAdminConfigLock: jest.fn(async (fn: () => Promise<unknown>) => fn()),
+  },
+}));
 jest.mock('./url-safety', () => ({
   fetchSafeRemoteUrl: jest.fn(),
   readResponseTextWithLimit: jest.fn(),
 }));
 
 const mockedGetConfig = jest.mocked(getConfig);
+const mockedGetFreshConfig = jest.mocked(getFreshConfig);
 const mockedSaveAdminConfig = jest.mocked(db.saveAdminConfig);
 const mockedFetch = jest.mocked(fetchSafeRemoteUrl);
 const mockedReadText = jest.mocked(readResponseTextWithLimit);
@@ -50,6 +60,7 @@ describe('live channel cache', () => {
       ReturnType<typeof getConfig>
     >;
     mockedGetConfig.mockResolvedValue(config);
+    mockedGetFreshConfig.mockResolvedValue(config);
     mockedFetch.mockResolvedValue({} as Response);
     mockedReadText.mockResolvedValue(
       '#EXTM3U\n#EXTINF:-1 tvg-id="one",One\nhttps://cdn.example/one.m3u8'

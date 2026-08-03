@@ -7,7 +7,7 @@ import {
   isValidApiTextParam,
   readJsonObject,
 } from '@/lib/api-input-validation';
-import { getConfig, setCachedConfig } from '@/lib/config';
+import { getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
@@ -57,185 +57,210 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '參數格式錯誤' }, { status: 400 });
     }
 
-    // 获取設定与存储
-    const adminConfig = await getConfig();
+    const outcome = await db.withAdminConfigLock(
+      async (): Promise<NextResponse | 'ok'> => {
+        // 鎖內重讀設定
+        const adminConfig = await getFreshConfig();
 
-    // 權限與身份校驗
-    if (username !== process.env.USERNAME) {
-      const userEntry = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!userEntry || userEntry.role !== 'admin' || userEntry.banned) {
-        return NextResponse.json({ error: '權限不足' }, { status: 401 });
-      }
-    }
-
-    switch (action) {
-      case 'add': {
-        const { name, type, query } = body as {
-          name?: string;
-          type?: 'movie' | 'tv';
-          query?: string;
-        };
-        if (!name || !type || !query) {
-          return NextResponse.json({ error: '缺少必要參數' }, { status: 400 });
-        }
-        if (!isCategoryType(type)) {
-          return NextResponse.json(
-            { error: 'type 格式不合法' },
-            { status: 400 }
+        // 權限與身份校驗
+        if (username !== process.env.USERNAME) {
+          const userEntry = adminConfig.UserConfig.Users.find(
+            (u) => u.username === username
           );
-        }
-        if (
-          !isValidApiTextParam(name, 50) ||
-          !isValidApiTextParam(query, 200)
-        ) {
-          return NextResponse.json(
-            { error: '參數格式不合法' },
-            { status: 400 }
-          );
-        }
-        // 檢查是否已存在相同的查詢和類型組合
-        if (
-          adminConfig.CustomCategories.some(
-            (c) => c.query === query && c.type === type
-          )
-        ) {
-          return NextResponse.json({ error: '該分類已存在' }, { status: 400 });
-        }
-        adminConfig.CustomCategories.push({
-          name,
-          type,
-          query,
-          from: 'custom',
-          disabled: false,
-        });
-        break;
-      }
-      case 'disable': {
-        const { query, type } = body as {
-          query?: string;
-          type?: 'movie' | 'tv';
-        };
-        if (!query || !type)
-          return NextResponse.json(
-            { error: '缺少 query 或 type 參數' },
-            { status: 400 }
-          );
-        if (!isCategoryType(type))
-          return NextResponse.json(
-            { error: 'type 格式不合法' },
-            { status: 400 }
-          );
-        if (!isValidApiTextParam(query, 200))
-          return NextResponse.json(
-            { error: 'query 格式不合法' },
-            { status: 400 }
-          );
-        const entry = adminConfig.CustomCategories.find(
-          (c) => c.query === query && c.type === type
-        );
-        if (!entry)
-          return NextResponse.json({ error: '分類不存在' }, { status: 404 });
-        entry.disabled = true;
-        break;
-      }
-      case 'enable': {
-        const { query, type } = body as {
-          query?: string;
-          type?: 'movie' | 'tv';
-        };
-        if (!query || !type)
-          return NextResponse.json(
-            { error: '缺少 query 或 type 參數' },
-            { status: 400 }
-          );
-        if (!isCategoryType(type))
-          return NextResponse.json(
-            { error: 'type 格式不合法' },
-            { status: 400 }
-          );
-        if (!isValidApiTextParam(query, 200))
-          return NextResponse.json(
-            { error: 'query 格式不合法' },
-            { status: 400 }
-          );
-        const entry = adminConfig.CustomCategories.find(
-          (c) => c.query === query && c.type === type
-        );
-        if (!entry)
-          return NextResponse.json({ error: '分類不存在' }, { status: 404 });
-        entry.disabled = false;
-        break;
-      }
-      case 'delete': {
-        const { query, type } = body as {
-          query?: string;
-          type?: 'movie' | 'tv';
-        };
-        if (!query || !type)
-          return NextResponse.json(
-            { error: '缺少 query 或 type 參數' },
-            { status: 400 }
-          );
-        if (!isCategoryType(type))
-          return NextResponse.json(
-            { error: 'type 格式不合法' },
-            { status: 400 }
-          );
-        if (!isValidApiTextParam(query, 200))
-          return NextResponse.json(
-            { error: 'query 格式不合法' },
-            { status: 400 }
-          );
-        const idx = adminConfig.CustomCategories.findIndex(
-          (c) => c.query === query && c.type === type
-        );
-        if (idx === -1)
-          return NextResponse.json({ error: '分類不存在' }, { status: 404 });
-        const entry = adminConfig.CustomCategories[idx];
-        if (entry.from === 'config') {
-          return NextResponse.json(
-            { error: '該分類不可刪除' },
-            { status: 400 }
-          );
-        }
-        adminConfig.CustomCategories.splice(idx, 1);
-        break;
-      }
-      case 'sort': {
-        const { order } = body as { order?: string[] };
-        if (!Array.isArray(order)) {
-          return NextResponse.json(
-            { error: '排序列表格式錯誤' },
-            { status: 400 }
-          );
-        }
-        const map = new Map(
-          adminConfig.CustomCategories.map((c) => [`${c.query}:${c.type}`, c])
-        );
-        const newList: typeof adminConfig.CustomCategories = [];
-        order.forEach((key) => {
-          const item = map.get(key);
-          if (item) {
-            newList.push(item);
-            map.delete(key);
+          if (!userEntry || userEntry.role !== 'admin' || userEntry.banned) {
+            return NextResponse.json({ error: '權限不足' }, { status: 401 });
           }
-        });
-        // 未在 order 中的保持原順序
-        adminConfig.CustomCategories.forEach((item) => {
-          if (map.has(`${item.query}:${item.type}`)) newList.push(item);
-        });
-        adminConfig.CustomCategories = newList;
-        break;
-      }
-      default:
-        return NextResponse.json({ error: '未知操作' }, { status: 400 });
-    }
+        }
 
-    // 持久化到存储
-    await db.saveAdminConfig(adminConfig);
-    setCachedConfig(adminConfig);
+        switch (action) {
+          case 'add': {
+            const { name, type, query } = body as {
+              name?: string;
+              type?: 'movie' | 'tv';
+              query?: string;
+            };
+            if (!name || !type || !query) {
+              return NextResponse.json(
+                { error: '缺少必要參數' },
+                { status: 400 }
+              );
+            }
+            if (!isCategoryType(type)) {
+              return NextResponse.json(
+                { error: 'type 格式不合法' },
+                { status: 400 }
+              );
+            }
+            if (
+              !isValidApiTextParam(name, 50) ||
+              !isValidApiTextParam(query, 200)
+            ) {
+              return NextResponse.json(
+                { error: '參數格式不合法' },
+                { status: 400 }
+              );
+            }
+            // 檢查是否已存在相同的查詢和類型組合
+            if (
+              adminConfig.CustomCategories.some(
+                (c) => c.query === query && c.type === type
+              )
+            ) {
+              return NextResponse.json(
+                { error: '該分類已存在' },
+                { status: 400 }
+              );
+            }
+            adminConfig.CustomCategories.push({
+              name,
+              type,
+              query,
+              from: 'custom',
+              disabled: false,
+            });
+            break;
+          }
+          case 'disable': {
+            const { query, type } = body as {
+              query?: string;
+              type?: 'movie' | 'tv';
+            };
+            if (!query || !type)
+              return NextResponse.json(
+                { error: '缺少 query 或 type 參數' },
+                { status: 400 }
+              );
+            if (!isCategoryType(type))
+              return NextResponse.json(
+                { error: 'type 格式不合法' },
+                { status: 400 }
+              );
+            if (!isValidApiTextParam(query, 200))
+              return NextResponse.json(
+                { error: 'query 格式不合法' },
+                { status: 400 }
+              );
+            const entry = adminConfig.CustomCategories.find(
+              (c) => c.query === query && c.type === type
+            );
+            if (!entry)
+              return NextResponse.json(
+                { error: '分類不存在' },
+                { status: 404 }
+              );
+            entry.disabled = true;
+            break;
+          }
+          case 'enable': {
+            const { query, type } = body as {
+              query?: string;
+              type?: 'movie' | 'tv';
+            };
+            if (!query || !type)
+              return NextResponse.json(
+                { error: '缺少 query 或 type 參數' },
+                { status: 400 }
+              );
+            if (!isCategoryType(type))
+              return NextResponse.json(
+                { error: 'type 格式不合法' },
+                { status: 400 }
+              );
+            if (!isValidApiTextParam(query, 200))
+              return NextResponse.json(
+                { error: 'query 格式不合法' },
+                { status: 400 }
+              );
+            const entry = adminConfig.CustomCategories.find(
+              (c) => c.query === query && c.type === type
+            );
+            if (!entry)
+              return NextResponse.json(
+                { error: '分類不存在' },
+                { status: 404 }
+              );
+            entry.disabled = false;
+            break;
+          }
+          case 'delete': {
+            const { query, type } = body as {
+              query?: string;
+              type?: 'movie' | 'tv';
+            };
+            if (!query || !type)
+              return NextResponse.json(
+                { error: '缺少 query 或 type 參數' },
+                { status: 400 }
+              );
+            if (!isCategoryType(type))
+              return NextResponse.json(
+                { error: 'type 格式不合法' },
+                { status: 400 }
+              );
+            if (!isValidApiTextParam(query, 200))
+              return NextResponse.json(
+                { error: 'query 格式不合法' },
+                { status: 400 }
+              );
+            const idx = adminConfig.CustomCategories.findIndex(
+              (c) => c.query === query && c.type === type
+            );
+            if (idx === -1)
+              return NextResponse.json(
+                { error: '分類不存在' },
+                { status: 404 }
+              );
+            const entry = adminConfig.CustomCategories[idx];
+            if (entry.from === 'config') {
+              return NextResponse.json(
+                { error: '該分類不可刪除' },
+                { status: 400 }
+              );
+            }
+            adminConfig.CustomCategories.splice(idx, 1);
+            break;
+          }
+          case 'sort': {
+            const { order } = body as { order?: string[] };
+            if (!Array.isArray(order)) {
+              return NextResponse.json(
+                { error: '排序列表格式錯誤' },
+                { status: 400 }
+              );
+            }
+            const map = new Map(
+              adminConfig.CustomCategories.map((c) => [
+                `${c.query}:${c.type}`,
+                c,
+              ])
+            );
+            const newList: typeof adminConfig.CustomCategories = [];
+            order.forEach((key) => {
+              const item = map.get(key);
+              if (item) {
+                newList.push(item);
+                map.delete(key);
+              }
+            });
+            // 未在 order 中的保持原順序
+            adminConfig.CustomCategories.forEach((item) => {
+              if (map.has(`${item.query}:${item.type}`)) newList.push(item);
+            });
+            adminConfig.CustomCategories = newList;
+            break;
+          }
+          default:
+            return NextResponse.json({ error: '未知操作' }, { status: 400 });
+        }
+
+        // 持久化到存储
+        await db.saveAdminConfig(adminConfig);
+        setCachedConfig(adminConfig);
+        return 'ok';
+      }
+    );
+
+    if (outcome !== 'ok') return outcome;
 
     return NextResponse.json(
       { ok: true },

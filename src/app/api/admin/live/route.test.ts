@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import { getConfig } from '@/lib/config';
+import { getFreshConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { deleteCachedLiveChannels, refreshLiveChannels } from '@/lib/live';
 
@@ -11,17 +11,22 @@ import { POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({
-  getConfig: jest.fn(),
+  getFreshConfig: jest.fn(),
   setCachedConfig: jest.fn(),
 }));
-jest.mock('@/lib/db', () => ({ db: { saveAdminConfig: jest.fn() } }));
+jest.mock('@/lib/db', () => ({
+  db: {
+    saveAdminConfig: jest.fn(),
+    withAdminConfigLock: jest.fn(async (fn: () => Promise<unknown>) => fn()),
+  },
+}));
 jest.mock('@/lib/live', () => ({
   deleteCachedLiveChannels: jest.fn(),
   refreshLiveChannels: jest.fn(),
 }));
 
 const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
-const mockedGetConfig = jest.mocked(getConfig);
+const mockedGetConfig = jest.mocked(getFreshConfig);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);
 const mockedDeleteCache = jest.mocked(deleteCachedLiveChannels);
 const mockedRefresh = jest.mocked(refreshLiveChannels);
@@ -53,7 +58,7 @@ describe('/api/admin/live', () => {
           from: 'custom',
         },
       ],
-    } as unknown as Awaited<ReturnType<typeof getConfig>>);
+    } as unknown as Awaited<ReturnType<typeof getFreshConfig>>);
   });
 
   it('rejects an add action with missing or malformed fields', async () => {

@@ -3,14 +3,14 @@
 import { NextRequest } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import { getConfig } from '@/lib/config';
+import { getFreshConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 
 import { POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({
-  getConfig: jest.fn(),
+  getFreshConfig: jest.fn(),
   setCachedConfig: jest.fn(),
 }));
 jest.mock('@/lib/db', () => ({
@@ -20,6 +20,7 @@ jest.mock('@/lib/db', () => ({
     changePassword: jest.fn(),
     deleteUser: jest.fn(),
     checkUserExist: jest.fn().mockResolvedValue(false),
+    withAdminConfigLock: jest.fn(async (fn: () => Promise<unknown>) => fn()),
   },
 }));
 jest.mock('@/lib/security-store', () => ({
@@ -27,7 +28,7 @@ jest.mock('@/lib/security-store', () => ({
 }));
 
 const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
-const mockedGetConfig = jest.mocked(getConfig);
+const mockedGetConfig = jest.mocked(getFreshConfig);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);
 
 function request(body: Record<string, unknown>) {
@@ -53,7 +54,7 @@ describe('/api/admin/user array validation', () => {
         Users: [{ username: 'alice', role: 'user' }],
         Tags: [],
       },
-    } as unknown as Awaited<ReturnType<typeof getConfig>>);
+    } as unknown as Awaited<ReturnType<typeof getFreshConfig>>);
   });
 
   afterAll(() => delete process.env.STORAGE_TYPE);
@@ -99,7 +100,7 @@ describe('/api/admin/user 新增帳號的輸入驗證', () => {
     });
     mockedGetConfig.mockResolvedValue({
       UserConfig: { Users: [{ username: 'alice', role: 'user' }], Tags: [] },
-    } as unknown as Awaited<ReturnType<typeof getConfig>>);
+    } as unknown as Awaited<ReturnType<typeof getFreshConfig>>);
     jest.mocked(db.checkUserExist).mockResolvedValue(false);
   });
 

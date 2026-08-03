@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import { getConfig, setCachedConfig } from '@/lib/config';
+import { getConfig, getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { refreshLiveChannels } from '@/lib/live';
 
@@ -9,36 +9,39 @@ export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    // 權限檢查
+    // 權限檢查（可讀快取，不必佔寫鎖）
     const authInfo = await getVerifiedAuthInfo(request);
     const username = authInfo?.username;
-    const config = await getConfig();
+    const peek = await getConfig();
     if (username !== process.env.USERNAME) {
-      // 管理員
-      const user = config.UserConfig.Users.find((u) => u.username === username);
+      const user = peek.UserConfig.Users.find((u) => u.username === username);
       if (!user || user.role !== 'admin' || user.banned) {
         return NextResponse.json({ error: '權限不足' }, { status: 401 });
       }
     }
 
-    // 並發重新整理所有啟用的直播源
-    const refreshPromises = (config.LiveConfig || [])
-      .filter((liveInfo) => !liveInfo.disabled)
-      .map(async (liveInfo) => {
+    // 網路抓取在鎖外；結果以 key→channelNumber 帶回
+    const enabled = (peek.LiveConfig || []).filter((live) => !live.disabled);
+    const refreshed = await Promise.all(
+      enabled.map(async (liveInfo) => {
         try {
           const nums = await refreshLiveChannels(liveInfo);
-          liveInfo.channelNumber = nums;
-        } catch (error) {
-          liveInfo.channelNumber = 0;
+          return { key: liveInfo.key, nums };
+        } catch {
+          return { key: liveInfo.key, nums: 0 };
         }
-      });
+      })
+    );
 
-    // 等待所有重新整理任務完成
-    await Promise.all(refreshPromises);
-
-    // 儲存設定
-    await db.saveAdminConfig(config);
-    setCachedConfig(config);
+    await db.withAdminConfigLock(async () => {
+      const config = await getFreshConfig();
+      for (const { key, nums } of refreshed) {
+        const live = config.LiveConfig?.find((l) => l.key === key);
+        if (live) live.channelNumber = nums;
+      }
+      await db.saveAdminConfig(config);
+      setCachedConfig(config);
+    });
 
     return NextResponse.json({
       success: true,

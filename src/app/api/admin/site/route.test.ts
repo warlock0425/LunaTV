@@ -10,10 +10,15 @@ import { POST } from './route';
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
 jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({
-  getConfig: jest.fn(),
+  getFreshConfig: jest.fn(),
   setCachedConfig: jest.fn(),
 }));
-jest.mock('@/lib/db', () => ({ db: { saveAdminConfig: jest.fn() } }));
+jest.mock('@/lib/db', () => ({
+  db: {
+    saveAdminConfig: jest.fn(),
+    withAdminConfigLock: jest.fn(async (fn: () => Promise<unknown>) => fn()),
+  },
+}));
 
 const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);

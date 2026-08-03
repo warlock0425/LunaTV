@@ -1,4 +1,4 @@
-import { getConfig } from '@/lib/config';
+import { getConfig, getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import {
   fetchSafeRemoteUrl,
@@ -62,11 +62,21 @@ export async function getCachedLiveChannels(
     if (existingLoad) return existingLoad;
 
     const load = (async () => {
+      // 網路抓取在鎖外
       const channelNum = await refreshLiveChannels(liveInfo);
       if (channelNum === 0) return null;
 
-      liveInfo.channelNumber = channelNum;
-      await db.saveAdminConfig(config);
+      // 鎖內重讀後寫入 channelNumber，避免蓋掉其他管理端變更
+      await db.withAdminConfigLock(async () => {
+        const fresh = await getFreshConfig();
+        const entry = fresh.LiveConfig?.find(
+          (live) => live.key === key && !live.disabled
+        );
+        if (!entry) return;
+        entry.channelNumber = channelNum;
+        await db.saveAdminConfig(fresh);
+        setCachedConfig(fresh);
+      });
       return cachedLiveChannels[key] || null;
     })().finally(() => {
       liveChannelLoads.delete(key);

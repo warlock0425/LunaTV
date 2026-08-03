@@ -3,20 +3,25 @@
 import { NextRequest } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import { getConfig } from '@/lib/config';
+import { getFreshConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 
 import { POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
 jest.mock('@/lib/config', () => ({
-  getConfig: jest.fn(),
+  getFreshConfig: jest.fn(),
   setCachedConfig: jest.fn(),
 }));
-jest.mock('@/lib/db', () => ({ db: { saveAdminConfig: jest.fn() } }));
+jest.mock('@/lib/db', () => ({
+  db: {
+    saveAdminConfig: jest.fn(),
+    withAdminConfigLock: jest.fn(async (fn: () => Promise<unknown>) => fn()),
+  },
+}));
 
 const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
-const mockedGetConfig = jest.mocked(getConfig);
+const mockedGetConfig = jest.mocked(getFreshConfig);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);
 
 describe('/api/admin/category', () => {
@@ -32,7 +37,7 @@ describe('/api/admin/category', () => {
     mockedGetConfig.mockResolvedValue({
       UserConfig: { Users: [] },
       CustomCategories: [],
-    } as unknown as Awaited<ReturnType<typeof getConfig>>);
+    } as unknown as Awaited<ReturnType<typeof getFreshConfig>>);
   });
 
   afterAll(() => delete process.env.STORAGE_TYPE);

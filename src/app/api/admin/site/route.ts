@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
-import { getConfig, setCachedConfig } from '@/lib/config';
+import { getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
@@ -84,38 +84,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '參數格式錯誤' }, { status: 400 });
     }
 
-    const adminConfig = await getConfig();
+    const response = await db.withAdminConfigLock(async () => {
+      const adminConfig = await getFreshConfig();
 
-    // 權限校驗
-    if (username !== process.env.USERNAME) {
-      // 管理员
-      const user = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!user || user.role !== 'admin' || user.banned) {
-        return NextResponse.json({ error: '權限不足' }, { status: 401 });
+      // 權限校驗（鎖內重讀後再判定）
+      if (username !== process.env.USERNAME) {
+        const user = adminConfig.UserConfig.Users.find(
+          (u) => u.username === username
+        );
+        if (!user || user.role !== 'admin' || user.banned) {
+          return NextResponse.json({ error: '權限不足' }, { status: 401 });
+        }
       }
-    }
 
-    // 更新快取中的站點設定
-    adminConfig.SiteConfig = {
-      SiteName,
-      Announcement,
-      SearchDownstreamMaxPage,
-      SiteInterfaceCacheTime,
-      DoubanProxyType,
-      DoubanProxy,
-      DoubanImageProxyType,
-      DoubanImageProxy,
-      DisableYellowFilter,
-      FluidSearch,
-      EnableWebLive: EnableWebLive ?? false,
-      PreferValidatedSourceOrder: PreferValidatedSourceOrder ?? false,
-    };
+      adminConfig.SiteConfig = {
+        SiteName,
+        Announcement,
+        SearchDownstreamMaxPage,
+        SiteInterfaceCacheTime,
+        DoubanProxyType,
+        DoubanProxy,
+        DoubanImageProxyType,
+        DoubanImageProxy,
+        DisableYellowFilter,
+        FluidSearch,
+        EnableWebLive: EnableWebLive ?? false,
+        PreferValidatedSourceOrder: PreferValidatedSourceOrder ?? false,
+      };
 
-    // 寫入資料庫
-    await db.saveAdminConfig(adminConfig);
-    setCachedConfig(adminConfig);
+      await db.saveAdminConfig(adminConfig);
+      setCachedConfig(adminConfig);
+      return null;
+    });
+    if (response) return response;
 
     revalidatePath('/', 'layout');
 

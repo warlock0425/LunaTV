@@ -44,6 +44,7 @@ jest.mock('@/lib/db', () => ({
     deleteUser: jest.fn(),
     clearAllData: jest.fn(),
     saveAdminConfig: jest.fn(),
+    withAdminConfigLock: jest.fn(async (fn: () => Promise<unknown>) => fn()),
   },
 }));
 jest.mock('@/lib/password', () => ({
