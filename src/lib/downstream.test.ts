@@ -151,7 +151,7 @@ describe('downstream query normalization', () => {
     expect(getCalledKeywords()).toEqual(['精确查询', '后备查询']);
   });
 
-  it('localizes title for display while leaving type_name and play URLs alone', async () => {
+  it('keeps the original mainland source title (no display conversion)', async () => {
     mockSearchResponse([
       {
         vod_id: '1',
@@ -168,8 +168,8 @@ describe('downstream query normalization', () => {
       ['\u9032\u64ca\u7684\u5de8\u4eba']
     );
 
-    // 顯示層轉繁；比對在 localize 前已用原始字串完成
-    expect(results[0]?.title).toBe('\u9032\u64ca\u7684\u5de8\u4eba');
+    // 片名／簡介維持 CMS 原文，不做顯示層繁體化
+    expect(results[0]?.title).toBe('\u8fdb\u51fb\u7684\u5de8\u4eba');
     expect(results[0]?.type_name).toBe('\u52a8\u6f2b');
     expect(results[0]?.episodes[0]).toBe('https://example.test/1.m3u8');
   });

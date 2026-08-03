@@ -10,7 +10,7 @@ import {
 } from '@/lib/url-safety';
 import { cleanHtmlTags } from '@/lib/utils';
 
-import { toDisplayLanguage, toSearchSimplified } from './chinese';
+import { toSearchSimplified } from './chinese';
 import { getMainlandSearchQueries } from './mainland-search';
 import { deduplicateRequest } from './request-dedupe';
 import { isFuzzyMatch } from './searchEngine';
@@ -75,21 +75,12 @@ function cancelResponseBody(response: Response): void {
 }
 
 /**
- * 顯示層繁體化：只轉 title / desc。
- * 必須在 isFuzzyMatch 採納判斷「之後」呼叫——比對吃 CMS 原始字串，
- * 先繁化會改變 2.9.6/2.9.7 剛穩定的 bridge 行為。
- * 絕不碰 episodes（m3u8 URL 裡的中文路徑不可被 toDisplayLanguage 改寫）。
- * 匯出供測試鎖定契約。
+ * 搜尋／詳情結果必須保留 CMS 原文（含簡體片名與簡介）。
+ * 繁簡與台譯只負責「找得到」，不得改寫使用者看到的上游標題。
+ * 呼叫點留在 isFuzzyMatch 之後，方便日後若要加非標題欄位處理時不碰比對順序。
  */
 export function localizeSearchResult(result: SearchResult): SearchResult {
-  return {
-    ...result,
-    title: toDisplayLanguage(result.title || ''),
-    desc:
-      typeof result.desc === 'string' && result.desc
-        ? toDisplayLanguage(result.desc)
-        : result.desc,
-  };
+  return result;
 }
 
 /** 上游標題的空白正規化：去首尾、把連續空白塌縮為單一半形空格 */

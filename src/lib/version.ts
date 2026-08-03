@@ -6,15 +6,22 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.9',
+    date: '2026-08-03',
+    content: `
+- 還原：搜尋與詳情的片名／簡介改回保留上游原文，不再做顯示層繁體化。繁簡與台譯只負責搜尋比對，不改寫 CMS 標題。
+    `.trim(),
+  },
+  {
     version: 'v2.9.8',
     date: '2026-08-03',
     content: `
 - 修復：搜尋結果預設也會依標題相關性排序（先前僅在開啟年份排序時生效）。
-- 改善：搜尋與詳情的片名／簡介改以繁體顯示。
 - 安全：為搜尋與詳情 API 加上限流，避免短時間過度打陸源。
 - 效能：搜尋排序改為先算分再比較，降低大量結果時主執行緒負擔。
     `.trim(),
   },
+
   {
     version: 'v2.9.7',
     date: '2026-08-03',

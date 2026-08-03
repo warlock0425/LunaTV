@@ -1,59 +1,44 @@
 /** @jest-environment node */
 
 import { localizeSearchResult } from './downstream';
-import { isFuzzyMatch } from './searchEngine';
 import { SearchResult } from './types';
 
-function cmsResult(overrides: Partial<SearchResult>): SearchResult {
+/**
+ * 契約：搜尋／詳情結果不得改寫 CMS 片名與簡介。
+ * 繁簡／台譯只負責查詢與比對，顯示層保持上游原文。
+ */
+function cmsResult(overrides: Partial<SearchResult> = {}): SearchResult {
   return {
     id: '1',
     title: '机动战士高达',
     poster: '',
-    episodes: [
-      'https://cdn.example/路径/第01集.m3u8',
-      'https://cdn.example/path/ep02.m3u8',
-    ],
-    episodes_titles: ['第01集', '第02集'],
+    episodes: ['https://cdn.example/路径/第01集.m3u8'],
+    episodes_titles: ['第01集'],
     source: 'src',
     source_name: '測試源',
     year: '1979',
-    desc: '这是简体简介缓存设置',
+    desc: '这是简体简介',
+    type_name: '动漫',
     ...overrides,
   };
 }
 
-describe('localizeSearchResult 顯示層繁體化', () => {
-  it('只轉 title / desc，不碰 episodes URL', () => {
-    const raw = cmsResult({});
-    const localized = localizeSearchResult(raw);
+describe('localizeSearchResult 保留 CMS 原文', () => {
+  it('不改 title / desc / type_name / episodes', () => {
+    const raw = cmsResult();
+    const out = localizeSearchResult(raw);
 
-    expect(localized.title).not.toBe(raw.title);
-    // 簡體「这是」應被繁化
-    expect(localized.desc).toContain('這是');
-    expect(localized.desc).not.toContain('这是');
-
-    expect(localized.episodes).toEqual(raw.episodes);
-    expect(localized.episodes[0]).toContain('路径');
-    expect(localized.episodes[0]).toContain('.m3u8');
+    expect(out.title).toBe(raw.title);
+    expect(out.desc).toBe(raw.desc);
+    expect(out.type_name).toBe(raw.type_name);
+    expect(out.episodes).toEqual(raw.episodes);
+    expect(out.episodes[0]).toContain('路径');
   });
 
-  it('繁化後標題仍能被台譯 isFuzzyMatch 接受（比對層契約）', () => {
-    const raw = cmsResult({ title: '机动战士高达' });
-    // 模擬 production：先用原始字串比對（downstream 內順序），再繁化
-    expect(isFuzzyMatch(raw.title, '鋼彈')).toBe(true);
-
-    const localized = localizeSearchResult(raw);
-    // 客戶端搜尋頁再用繁化後標題過濾——必須仍過
-    expect(isFuzzyMatch(localized.title, '鋼彈')).toBe(true);
-  });
-
-  it('episodes_titles 可保留（非 URL）；episodes 絕對不變', () => {
-    const url = 'https://x.test/简体路径/play.m3u8?sign=1';
-    const raw = cmsResult({
-      episodes: [url],
-      episodes_titles: ['第1集 特别篇'],
-    });
-    const localized = localizeSearchResult(raw);
-    expect(localized.episodes[0]).toBe(url);
+  it('回傳同一語意物件（不轉繁）', () => {
+    const raw = cmsResult({ title: '进击的巨人', desc: '缓存设置' });
+    const out = localizeSearchResult(raw);
+    expect(out.title).toBe('进击的巨人');
+    expect(out.desc).toBe('缓存设置');
   });
 });
