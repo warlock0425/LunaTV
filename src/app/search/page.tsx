@@ -14,7 +14,8 @@ import React, {
 
 import { cleanQueryForApi } from '@/lib/chinese';
 import { addSearchHistory } from '@/lib/db.client';
-import { isFuzzyMatch } from '@/lib/searchEngine';
+import { getRegionalMainlandTitles } from '@/lib/regional-title-aliases';
+import { getBestTitleMatchScore, isFuzzyMatch } from '@/lib/searchEngine';
 import { readStreamingSearchPreference } from '@/lib/streaming-search-preference';
 import { SearchResult } from '@/lib/types';
 import { useClientValue } from '@/hooks/useClientMount';
@@ -418,14 +419,18 @@ function SearchPageClient() {
       return filtered;
     }
 
+    const query = submittedQuery.trim();
+    const scoreQueries = [query, ...getRegionalMainlandTitles(query)];
+
     return filtered.sort((a, b) => {
       const yearComp = compareYear(a.year, b.year, yearOrder);
       if (yearComp !== 0) return yearComp;
 
-      const aExactMatch = a.title === submittedQuery.trim();
-      const bExactMatch = b.title === submittedQuery.trim();
-      if (aExactMatch && !bExactMatch) return -1;
-      if (!aExactMatch && bExactMatch) return 1;
+      // 台譯 vs 陸名永遠不會字面相等；用既有評分（換源／play-search 同源）
+      const scoreDiff =
+        getBestTitleMatchScore(b.title, scoreQueries) -
+        getBestTitleMatchScore(a.title, scoreQueries);
+      if (scoreDiff !== 0) return scoreDiff;
 
       return yearOrder === 'asc'
         ? a.title.localeCompare(b.title)
@@ -450,19 +455,22 @@ function SearchPageClient() {
       return filtered;
     }
 
+    const query = submittedQuery.trim();
+    const scoreQueries = [query, ...getRegionalMainlandTitles(query)];
+
     return filtered.sort((a, b) => {
       const aYear = a[1][0]?.year ?? 'unknown';
       const bYear = b[1][0]?.year ?? 'unknown';
       const yearComp = compareYear(aYear, bYear, yearOrder);
       if (yearComp !== 0) return yearComp;
 
-      const aExactMatch = a[1][0]?.title === submittedQuery.trim();
-      const bExactMatch = b[1][0]?.title === submittedQuery.trim();
-      if (aExactMatch && !bExactMatch) return -1;
-      if (!aExactMatch && bExactMatch) return 1;
-
       const aTitle = a[1][0]?.title ?? '';
       const bTitle = b[1][0]?.title ?? '';
+      const scoreDiff =
+        getBestTitleMatchScore(bTitle, scoreQueries) -
+        getBestTitleMatchScore(aTitle, scoreQueries);
+      if (scoreDiff !== 0) return scoreDiff;
+
       return yearOrder === 'asc'
         ? aTitle.localeCompare(bTitle)
         : bTitle.localeCompare(aTitle);

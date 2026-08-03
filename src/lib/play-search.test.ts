@@ -283,13 +283,18 @@ describe('play-search helpers', () => {
       includeFastStage: false,
     });
 
+    // includeFastStage:false 仍保留 mainland（與站內搜尋共用陸名計畫），再跑 Bangumi 階段
     expect(withAliases.map((stage) => stage.reason)).toEqual([
+      'mainland',
       'bangumi-alias',
       'search-title',
       'full',
       'translation-core',
     ]);
-    expect(withAliases[0].queries).toContain('\u65b0\u77f3\u7eaa');
+    const aliasStage = withAliases.find(
+      (stage) => stage.reason === 'bangumi-alias'
+    );
+    expect(aliasStage?.queries).toContain('\u65b0\u77f3\u7eaa');
     expect(withAliases.every((stage) => stage.directSearch)).toBe(true);
   });
 
@@ -371,11 +376,15 @@ describe('play-search helpers', () => {
     });
 
     expect(plan.map((stage) => stage.reason)).toEqual([
+      'mainland',
       'full',
       'translation-core',
     ]);
-    expect(plan[1].limit).toBe(4);
-    expect(plan[1].translationFallback).toBe(true);
+    const translation = plan.find(
+      (stage) => stage.reason === 'translation-core'
+    );
+    expect(translation?.limit).toBe(4);
+    expect(translation?.translationFallback).toBe(true);
   });
 
   it('keeps popular anime aliases data-driven through Bangumi aliases', () => {
@@ -390,8 +399,9 @@ describe('play-search helpers', () => {
       includeFastStage: false,
     });
 
-    expect(plan[0].reason).toBe('bangumi-alias');
-    expect(plan[0].queries).toContain('\u5742\u672c\u65e5\u5e38');
+    const aliasStage = plan.find((stage) => stage.reason === 'bangumi-alias');
+    expect(aliasStage).toBeDefined();
+    expect(aliasStage!.queries).toContain('\u5742\u672c\u65e5\u5e38');
   });
 
   it('uses only Chinese aliases for China-source fallback queries', () => {

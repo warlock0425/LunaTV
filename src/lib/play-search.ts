@@ -1,6 +1,7 @@
 import { normalizeAliasList } from '@/lib/bangumi-aliases';
 import { cleanQueryForApi, toSearchSimplified } from '@/lib/chinese';
 import { logger } from '@/lib/logger';
+import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { convertT2S } from '@/lib/s2t';
 import { getBestTitleMatchScore, isFuzzyMatch } from '@/lib/searchEngine';
 import { SearchResult } from '@/lib/types';
@@ -208,6 +209,18 @@ function isUsefulQuery(query: string): boolean {
   return normalized.length >= 4;
 }
 
+/**
+ * 站內搜尋計畫（getMainlandSearchQueries）允許 2 字陸名（高达、棋魂）。
+ * 換源若沿用 isUsefulQuery（≥3），會把整段 regional 結果濾光，
+ * 鋼彈／棋靈王變成 0 查詢。僅用於合併共用計畫時的放行門檻。
+ */
+function isUsefulSharedMainlandQuery(query: string): boolean {
+  const normalized = normalizeSearchTitleForSource(query);
+  if (!normalized) return false;
+  if (CJK_PATTERN.test(normalized)) return normalized.length >= 2;
+  return normalized.length >= 4;
+}
+
 function buildSearchQueryList(
   title: string,
   searchTitle?: string,
@@ -310,15 +323,26 @@ export function getMainlandFallbackSourceSearchQueries(
   title: string,
   searchTitle?: string
 ): string[] {
-  const queries = [
+  // 與 /api/search 同一張表、同一套計畫（OpenCC + regional），禁止另長第三套別名
+  const sharedPlan: string[] = [];
+  for (const base of [title, searchTitle]) {
+    if (!base) continue;
+    sharedPlan.push(...getMainlandSearchQueries(base));
+  }
+  const sharedQueries = sharedPlan
+    .map((query) => query.trim())
+    .filter(isUsefulSharedMainlandQuery);
+
+  const legacyQueries = [
     ...getMainlandCoreTitleQueries(title),
     ...getMainlandCoreTitleQueries(searchTitle),
     ...getSourceSearchQueries(title, searchTitle),
-  ];
+  ]
+    .map((query) => query.trim())
+    .filter(isUsefulQuery);
 
-  return Array.from(
-    new Set(queries.map((query) => query.trim()).filter(isUsefulQuery))
-  );
+  // 共用計畫優先（陸名先試），再接既有 core／full 變體
+  return Array.from(new Set([...sharedQueries, ...legacyQueries]));
 }
 
 export function getChineseAliasSourceSearchQueries(
@@ -540,6 +564,8 @@ export function buildPlaybackSearchPlan({
 }: PlaybackSearchPlanOptions): PlaybackSearchPlanStage[] {
   const stages: PlaybackSearchPlanStage[] = [];
 
+  // fast：原字串優先；mainland：與站內搜尋共用陸名計畫（含 regional）
+  // mainland 不綁 includeFastStage——播放頁已有源時會關掉 fast，仍必須能換源
   if (includeFastStage) {
     stages.push({
       reason: 'fast',
@@ -548,14 +574,14 @@ export function buildPlaybackSearchPlan({
       directSearch: true,
       speedTest: false,
     });
-    stages.push({
-      reason: 'mainland',
-      queries: getMainlandFallbackSourceSearchQueries(title, searchTitle),
-      limit: 3,
-      directSearch: true,
-      speedTest: false,
-    });
   }
+  stages.push({
+    reason: 'mainland',
+    queries: getMainlandFallbackSourceSearchQueries(title, searchTitle),
+    limit: 3,
+    directSearch: true,
+    speedTest: false,
+  });
 
   if (isBangumiCardSearch) {
     if (includeFastStage && aliases.length === 0) {
