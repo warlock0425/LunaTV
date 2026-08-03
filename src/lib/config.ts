@@ -200,31 +200,41 @@ export async function fetchSubscriptionConfigFile(
   }
 }
 
-// 從設定檔補充管理員設定
+/**
+ * 從設定檔合併片源／分類／直播源到管理設定。
+ *
+ * 安全契約（訂閱 cron 與管理端共用）：
+ * - ConfigFile 無法 parse 時**拋錯中止**，不得用空物件繼續跑——否則所有
+ *   `from: 'config'` 會被誤標成 `custom`，管理端「訂閱源不可刪」保護消失。
+ * - 回傳新物件，不就地改動傳入的 adminConfig（避免改到 getConfig 快取本體）。
+ */
 export function refineConfig(adminConfig: AdminConfig): AdminConfig {
   let fileConfig: ConfigFileStruct;
   try {
     fileConfig = parseConfigFile(adminConfig.ConfigFile);
   } catch (e) {
-    fileConfig = {} as ConfigFileStruct;
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(`設定檔無法解析，已中止合併以免改寫片源標記：${detail}`);
   }
+
+  // 不就地改呼叫端傳入的物件（尤其是 getConfig() 回傳的快取本體）
+  const result: AdminConfig = structuredClone(adminConfig);
 
   // 合併檔案中的源資訊
   const apiSitesFromFile = Object.entries(fileConfig.api_site || []);
   const currentApiSites = new Map(
-    (adminConfig.SourceConfig || []).map((s) => [s.key, s])
+    (result.SourceConfig || []).map((s) => [s.key, s])
   );
 
   apiSitesFromFile.forEach(([key, site]) => {
     const existingSource = currentApiSites.get(key);
     if (existingSource) {
-      // 如果已存在，只覆蓋 name、api、detail 和 from
+      // 如果已存在，只覆蓋 name、api、detail 和 from（保留 disabled 等）
       existingSource.name = toDisplayLanguage(site.name);
       existingSource.api = site.api;
       existingSource.detail = site.detail;
       existingSource.from = 'config';
     } else {
-      // 如果不存在，創建新條目
       currentApiSites.set(key, {
         key,
         name: toDisplayLanguage(site.name),
@@ -244,13 +254,12 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
     }
   });
 
-  // 將 Map 轉換回數組
-  adminConfig.SourceConfig = Array.from(currentApiSites.values());
+  result.SourceConfig = Array.from(currentApiSites.values());
 
   // 覆蓋 CustomCategories
   const customCategoriesFromFile = fileConfig.custom_category || [];
   const currentCustomCategories = new Map(
-    (adminConfig.CustomCategories || []).map((c) => [c.query + c.type, c])
+    (result.CustomCategories || []).map((c) => [c.query + c.type, c])
   );
 
   customCategoriesFromFile.forEach((category) => {
@@ -272,7 +281,6 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
     }
   });
 
-  // 檢查現有 CustomCategories 是否在 fileConfig.custom_category 中，如果不在則標記為 custom
   const customCategoriesFromFileKeys = new Set(
     customCategoriesFromFile.map((c) => c.query + c.type)
   );
@@ -282,12 +290,11 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
     }
   });
 
-  // 將 Map 轉換回數組
-  adminConfig.CustomCategories = Array.from(currentCustomCategories.values());
+  result.CustomCategories = Array.from(currentCustomCategories.values());
 
-  const livesFromFile = Object.entries(fileConfig.lives || []);
+  const livesFromFile = Object.entries(fileConfig.lives || {});
   const currentLives = new Map(
-    (adminConfig.LiveConfig || []).map((l) => [l.key, l])
+    (result.LiveConfig || []).map((l) => [l.key, l])
   );
   livesFromFile.forEach(([key, site]) => {
     const existingLive = currentLives.get(key);
@@ -296,8 +303,8 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
       existingLive.url = site.url;
       existingLive.ua = site.ua;
       existingLive.epg = site.epg;
+      existingLive.from = 'config';
     } else {
-      // 如果不存在，創建新條目
       currentLives.set(key, {
         key,
         name: toDisplayLanguage(site.name),
@@ -311,7 +318,6 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
     }
   });
 
-  // 檢查現有 LiveConfig 是否在 fileConfig.lives 中，如果不在則標記為 custom
   const livesFromFileKeys = new Set(livesFromFile.map(([key]) => key));
   currentLives.forEach((live) => {
     if (!livesFromFileKeys.has(live.key)) {
@@ -319,10 +325,9 @@ export function refineConfig(adminConfig: AdminConfig): AdminConfig {
     }
   });
 
-  // 將 Map 轉換回數組
-  adminConfig.LiveConfig = Array.from(currentLives.values());
+  result.LiveConfig = Array.from(currentLives.values());
 
-  return adminConfig;
+  return result;
 }
 
 async function getInitConfig(
@@ -850,9 +855,10 @@ export async function resetConfig() {
     },
   });
 
+  // 先持久化成功再更新記憶體快取，避免 DB 寫入失敗時快取已是新設定
+  await db.saveAdminConfig(adminConfig);
   cachedConfig = adminConfig;
   cachedConfigTimestamp = Date.now();
-  await db.saveAdminConfig(adminConfig);
 
   return;
 }

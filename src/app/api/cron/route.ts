@@ -203,7 +203,7 @@ async function refreshAllLiveChannels(deadline: number) {
 }
 
 async function refreshConfig() {
-  let config = await getConfig();
+  const config = await getConfig();
   if (
     config &&
     config.ConfigSubscription &&
@@ -214,11 +214,18 @@ async function refreshConfig() {
       const decodedContent = await fetchSubscriptionConfigFile(
         config.ConfigSubscription.URL
       );
-      config.ConfigFile = decodedContent;
-      config.ConfigSubscription.LastCheck = new Date().toISOString();
-      config = refineConfig(config);
-      await db.saveAdminConfig(config);
-      await setCachedConfig(config);
+      // 草稿：不就地改 getConfig() 回傳的快取本體。存檔成功後才更新快取。
+      // 否則 save 失敗時，進程會一直提供從未持久化的設定，直到重啟。
+      const draft = structuredClone(config);
+      draft.ConfigFile = decodedContent;
+      draft.ConfigSubscription = {
+        ...draft.ConfigSubscription,
+        LastCheck: new Date().toISOString(),
+      };
+      // refineConfig 在 ConfigFile 無法 parse 時會拋錯中止，不會把 from 全改 custom
+      const next = refineConfig(draft);
+      await db.saveAdminConfig(next);
+      await setCachedConfig(next);
     } catch (e) {
       console.error('重新整理設定失敗:', e);
     }
