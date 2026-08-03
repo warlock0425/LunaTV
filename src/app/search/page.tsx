@@ -14,8 +14,7 @@ import React, {
 
 import { cleanQueryForApi } from '@/lib/chinese';
 import { addSearchHistory } from '@/lib/db.client';
-import { getRegionalMainlandTitles } from '@/lib/regional-title-aliases';
-import { getBestTitleMatchScore, isFuzzyMatch } from '@/lib/searchEngine';
+import { isFuzzyMatch } from '@/lib/searchEngine';
 import { readStreamingSearchPreference } from '@/lib/streaming-search-preference';
 import { SearchResult } from '@/lib/types';
 import { useClientValue } from '@/hooks/useClientMount';
@@ -30,6 +29,12 @@ import SearchResultFilter, {
 import SearchSuggestions from '@/components/SearchSuggestions';
 import VideoCard, { VideoCardHandle } from '@/components/VideoCard';
 import VirtualGrid from '@/components/VirtualGrid';
+
+import {
+  compareSearchTitleRelevance,
+  compareSearchYears,
+  getSearchScoreQueries,
+} from './search-sort';
 
 function SearchPageClient() {
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -285,22 +290,6 @@ function SearchPageClient() {
     });
   };
 
-  const compareYear = (
-    aYear: string,
-    bYear: string,
-    order: 'none' | 'asc' | 'desc'
-  ) => {
-    if (order === 'none') return 0;
-    const aIsEmpty = !aYear || aYear === 'unknown';
-    const bIsEmpty = !bYear || bYear === 'unknown';
-    if (aIsEmpty && bIsEmpty) return 0;
-    if (aIsEmpty) return 1;
-    if (bIsEmpty) return -1;
-    const aNum = parseInt(aYear, 10);
-    const bNum = parseInt(bYear, 10);
-    return order === 'asc' ? aNum - bNum : bNum - aNum;
-  };
-
   // 核心更新：對 API 返回的結果進行模糊匹配過濾，根治譯名差異導致的空畫面
   const fuzzySearchResults = useMemo(() => {
     const query = submittedQuery.trim();
@@ -419,22 +408,18 @@ function SearchPageClient() {
       return filtered;
     }
 
-    const query = submittedQuery.trim();
-    const scoreQueries = [query, ...getRegionalMainlandTitles(query)];
+    const scoreQueries = getSearchScoreQueries(submittedQuery);
+    const titleOrder = yearOrder === 'asc' ? 'asc' : 'desc';
 
     return filtered.sort((a, b) => {
-      const yearComp = compareYear(a.year, b.year, yearOrder);
+      const yearComp = compareSearchYears(a.year, b.year, yearOrder);
       if (yearComp !== 0) return yearComp;
-
-      // 台譯 vs 陸名永遠不會字面相等；用既有評分（換源／play-search 同源）
-      const scoreDiff =
-        getBestTitleMatchScore(b.title, scoreQueries) -
-        getBestTitleMatchScore(a.title, scoreQueries);
-      if (scoreDiff !== 0) return scoreDiff;
-
-      return yearOrder === 'asc'
-        ? a.title.localeCompare(b.title)
-        : b.title.localeCompare(a.title);
+      return compareSearchTitleRelevance(
+        a.title,
+        b.title,
+        scoreQueries,
+        titleOrder
+      );
     });
   }, [fuzzySearchResults, filterAll, submittedQuery]);
 
@@ -455,25 +440,23 @@ function SearchPageClient() {
       return filtered;
     }
 
-    const query = submittedQuery.trim();
-    const scoreQueries = [query, ...getRegionalMainlandTitles(query)];
+    const scoreQueries = getSearchScoreQueries(submittedQuery);
+    const titleOrder = yearOrder === 'asc' ? 'asc' : 'desc';
 
     return filtered.sort((a, b) => {
       const aYear = a[1][0]?.year ?? 'unknown';
       const bYear = b[1][0]?.year ?? 'unknown';
-      const yearComp = compareYear(aYear, bYear, yearOrder);
+      const yearComp = compareSearchYears(aYear, bYear, yearOrder);
       if (yearComp !== 0) return yearComp;
 
       const aTitle = a[1][0]?.title ?? '';
       const bTitle = b[1][0]?.title ?? '';
-      const scoreDiff =
-        getBestTitleMatchScore(bTitle, scoreQueries) -
-        getBestTitleMatchScore(aTitle, scoreQueries);
-      if (scoreDiff !== 0) return scoreDiff;
-
-      return yearOrder === 'asc'
-        ? aTitle.localeCompare(bTitle)
-        : bTitle.localeCompare(aTitle);
+      return compareSearchTitleRelevance(
+        aTitle,
+        bTitle,
+        scoreQueries,
+        titleOrder
+      );
     });
   }, [aggregatedResults, filterAgg, submittedQuery]);
 

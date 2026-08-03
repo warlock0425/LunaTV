@@ -110,6 +110,7 @@ const EXCLUDED_FILES = [
   // 全鏈橋接測試：必須斷言 CMS 簡體／陸譯標題
   'search-regional-bridge.test.ts',
   'playback-regional-bridge.test.ts',
+  'search-sort.test.ts',
   'check-simplified.js',
   // titleParser 需同時收錄繁簡副標題鍵以比對 CMS 原文
   'titleParser.ts',
