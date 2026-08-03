@@ -6,12 +6,21 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v2.9.7',
+    date: '2026-08-03',
+    content: `
+- 修復：用台灣譯名進入播放後換源時，未用大陸片名搜尋，導致換源清單是空的（如蜘蛛人、棋靈王、間諜家家酒、鋼彈）。
+- 改善：搜尋結果改依標題相關性排序，不再在台譯搜尋時退化成字母序。
+    `.trim(),
+  },
+  {
     version: 'v2.9.6',
     date: '2026-08-03',
     content: `
 - 修復：使用台灣譯名搜尋時（如鋼彈、蜘蛛人、棋靈王），系統雖已用大陸片名找到結果，卻在顯示前被誤判為不相關而濾掉，導致搜尋結果為空。
     `.trim(),
   },
+
   {
     version: 'v2.9.5',
     date: '2026-08-03',
