@@ -30,6 +30,15 @@ describe('search-sort（搜尋頁 production 比較器）', () => {
     expect(compareSearchYears('2024', '2020', 'desc')).toBeLessThan(0);
   });
 
+  it('compareSearchYears：非法年份不得回傳 NaN', () => {
+    const cmp = compareSearchYears('not-a-year', '2024', 'desc');
+    expect(Number.isNaN(cmp)).toBe(false);
+    // 非法年份視為較後（與 empty/unknown 同向）
+    expect(cmp).toBeGreaterThan(0);
+    expect(compareSearchYears('2024', '@@@', 'asc')).toBeLessThan(0);
+    expect(compareSearchYears('foo', 'bar', 'asc')).toBe(0);
+  });
+
   it('純字母序會把無關片排前——對照組', () => {
     const byLocale = [RELEVANT_GUNDAM, UNRELATED_BUT_SORTS_FIRST].sort((a, b) =>
       a.localeCompare(b)
