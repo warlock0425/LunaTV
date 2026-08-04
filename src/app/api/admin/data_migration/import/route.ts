@@ -231,7 +231,12 @@ export async function POST(req: NextRequest) {
       decryptedData = SimpleCrypto.decrypt(encryptedData, password);
     } catch (error) {
       return NextResponse.json(
-        { error: '解密失敗，請檢查密碼是否正確' },
+        {
+          error:
+            error instanceof Error && error.message.startsWith('解密失敗')
+              ? error.message
+              : '解密失敗：密碼不正確，或備份格式無法辨識',
+        },
         { status: 400 }
       );
     }
