@@ -111,6 +111,24 @@ export class SimpleCrypto {
     }
   }
 
+  /**
+   * 舊格式明文應為 base64(gzip(JSON))（見 data_migration export）。
+   * 密碼錯誤時 AES 輸出是偽隨機位元組，Utf8 解碼偶爾會得到「非空亂碼」
+   * 而不拋錯——必須用內容合理性檢查擋掉，不能只看 !decrypted。
+   */
+  private static isPlausibleLegacyPlaintext(plaintext: string): boolean {
+    if (!plaintext || plaintext.length < 8) return false;
+    // 真實備份是 base64（可含換行）；排除明顯亂碼
+    if (!/^[A-Za-z0-9+/=\s]+$/.test(plaintext)) return false;
+    try {
+      const raw = Buffer.from(plaintext.replace(/\s/g, ''), 'base64');
+      // gzip 魔術位元 1f 8b
+      return raw.length >= 10 && raw[0] === 0x1f && raw[1] === 0x8b;
+    } catch {
+      return false;
+    }
+  }
+
   private static decryptLegacy(
     encryptedData: string,
     password: string
@@ -119,7 +137,7 @@ export class SimpleCrypto {
       const bytes = CryptoJS.AES.decrypt(encryptedData, password);
       const decrypted = bytes.toString(CryptoJS.enc.Utf8);
 
-      if (!decrypted) {
+      if (!this.isPlausibleLegacyPlaintext(decrypted)) {
         throw new Error('解密失敗，請檢查密碼是否正確');
       }
 
