@@ -88,21 +88,25 @@ describe('SimpleCrypto', () => {
     it('舊格式密碼錯誤時必定拋出（固定密文，不碰運氣）', () => {
       expect(() =>
         SimpleCrypto.decrypt(FIXED_LEGACY_CIPHERTEXT, 'nope')
-      ).toThrow('解密失敗，請檢查密碼是否正確');
+      ).toThrow(/解密失敗/);
       expect(SimpleCrypto.canDecrypt(FIXED_LEGACY_CIPHERTEXT, 'nope')).toBe(
         false
       );
     });
 
-    it('解密出非 gzip 的內容會被擋（模擬 Utf8 碰巧非空）', () => {
-      // 合法 base64 字元但不是 gzip → 不得當成成功
+    it('解密出非 gzip、非 JSON 的內容會被擋（模擬 Utf8 碰巧非空）', () => {
+      // 合法 base64 字元但不是 gzip、也不是 JSON → 不得當成成功
       const junk = CryptoJS.AES.encrypt(
         'not-a-gzip-payload!!!!!!!!',
         'x'
       ).toString();
-      expect(() => SimpleCrypto.decrypt(junk, 'x')).toThrow(
-        '解密失敗，請檢查密碼是否正確'
-      );
+      expect(() => SimpleCrypto.decrypt(junk, 'x')).toThrow(/解密失敗/);
+    });
+
+    it('仍接受假想中的裸 JSON 舊格式明文', () => {
+      const bareJson = JSON.stringify({ adminConfig: {}, userData: {} });
+      const legacy = CryptoJS.AES.encrypt(bareJson, 'legacy-pw').toString();
+      expect(SimpleCrypto.decrypt(legacy, 'legacy-pw')).toBe(bareJson);
     });
   });
 });

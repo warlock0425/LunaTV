@@ -112,21 +112,41 @@ export class SimpleCrypto {
   }
 
   /**
-   * 舊格式明文應為 base64(gzip(JSON))（見 data_migration export）。
-   * 密碼錯誤時 AES 輸出是偽隨機位元組，Utf8 解碼偶爾會得到「非空亂碼」
-   * 而不拋錯——必須用內容合理性檢查擋掉，不能只看 !decrypted。
+   * 舊格式明文合理性（密碼錯誤時 AES 輸出偽隨機位元組，Utf8 偶爾非空亂碼）。
+   * 接受兩種歷史形態：
+   *   A) base64(gzip(JSON)) — 本 repo 自 v2.5.4 起的 export 契約
+   *   B) 裸 JSON — 假想中更舊／上游時期備份；隨機亂碼幾乎不可能 JSON.parse 成功
    */
   private static isPlausibleLegacyPlaintext(plaintext: string): boolean {
-    if (!plaintext || plaintext.length < 8) return false;
-    // 真實備份是 base64（可含換行）；排除明顯亂碼
-    if (!/^[A-Za-z0-9+/=\s]+$/.test(plaintext)) return false;
-    try {
-      const raw = Buffer.from(plaintext.replace(/\s/g, ''), 'base64');
-      // gzip 魔術位元 1f 8b
-      return raw.length >= 10 && raw[0] === 0x1f && raw[1] === 0x8b;
-    } catch {
-      return false;
+    if (!plaintext) return false;
+
+    // A) base64(gzip(...))
+    if (plaintext.length >= 8 && /^[A-Za-z0-9+/=\s]+$/.test(plaintext)) {
+      try {
+        const raw = Buffer.from(plaintext.replace(/\s/g, ''), 'base64');
+        if (raw.length >= 10 && raw[0] === 0x1f && raw[1] === 0x8b) {
+          return true;
+        }
+      } catch {
+        // fall through to JSON path
+      }
     }
+
+    // B) 裸 JSON
+    const trimmed = plaintext.trim();
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
+      try {
+        JSON.parse(trimmed);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    return false;
   }
 
   private static decryptLegacy(
@@ -138,12 +158,16 @@ export class SimpleCrypto {
       const decrypted = bytes.toString(CryptoJS.enc.Utf8);
 
       if (!this.isPlausibleLegacyPlaintext(decrypted)) {
-        throw new Error('解密失敗，請檢查密碼是否正確');
+        // 密碼錯與「密碼對但格式不認得」無法可靠區分；訊息涵蓋兩者
+        throw new Error('解密失敗：密碼不正確，或備份格式無法辨識');
       }
 
       return decrypted;
     } catch (error) {
-      throw new Error('解密失敗，請檢查密碼是否正確');
+      if (error instanceof Error && error.message.startsWith('解密失敗')) {
+        throw error;
+      }
+      throw new Error('解密失敗：密碼不正確，或備份格式無法辨識');
     }
   }
 
