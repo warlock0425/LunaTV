@@ -490,12 +490,35 @@ async function reloadConfig(): Promise<AdminConfig> {
   adminConfig = configSelfCheck(adminConfig);
   const after = safeSerializeConfig(adminConfig);
 
+  // 先更新記憶體快取（讀路徑可立刻用）；若需持久化則在鎖內重讀再寫，避免 lost-update
   cachedConfig = adminConfig;
   cachedConfigTimestamp = Date.now();
 
   if (before === null || before !== after) {
     try {
-      await db.saveAdminConfig(cachedConfig);
+      await db.withAdminConfigLock(async () => {
+        // 鎖內重讀：鎖外期間管理端可能已改過設定
+        const fresh = await db.getAdminConfig();
+        if (!fresh) {
+          // 首次初始化：落地本次建好的設定
+          await db.saveAdminConfig(adminConfig!);
+          cachedConfig = adminConfig;
+          cachedConfigTimestamp = Date.now();
+          return;
+        }
+        const beforeLock = safeSerializeConfig(fresh);
+        const repaired = configSelfCheck(fresh);
+        const afterLock = safeSerializeConfig(repaired);
+        if (beforeLock === afterLock) {
+          // 他方已修好或無需修復——用最新 DB 狀態更新快取
+          cachedConfig = repaired;
+          cachedConfigTimestamp = Date.now();
+          return;
+        }
+        await db.saveAdminConfig(repaired);
+        cachedConfig = repaired;
+        cachedConfigTimestamp = Date.now();
+      });
     } catch (error) {
       console.error('儲存自我修復後的管理員設定失敗:', error);
     }

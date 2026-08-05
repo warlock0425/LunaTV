@@ -3,12 +3,30 @@ import { NextRequest } from 'next/server';
 /**
  * Session HMAC 密鑰：優先 SESSION_SECRET，否則回退 PASSWORD（相容舊部署）。
  * 登入密碼校驗仍只用 PASSWORD。
+ *
+ * 未設 SESSION_SECRET 時只警告一次：多使用者部署應設獨立密鑰，
+ * 否則改 PASSWORD 會使所有 session 簽章失效。
  */
+let warnedMissingSessionSecret = false;
+
 export function getAuthSessionSecret(): string | null {
   const sessionSecret = process.env.SESSION_SECRET?.trim();
   if (sessionSecret) return sessionSecret;
   const password = process.env.PASSWORD?.trim();
+  if (password && !warnedMissingSessionSecret) {
+    warnedMissingSessionSecret = true;
+    console.warn(
+      '[auth] SESSION_SECRET 未設定，session 簽章回退 PASSWORD。' +
+        '多使用者／正式部署請設定 SESSION_SECRET；' +
+        '變更 PASSWORD 會使所有既有 session 失效。'
+    );
+  }
   return password || null;
+}
+
+/** 僅供測試重置「已警告」旗標 */
+export function __resetSessionSecretWarningForTests(): void {
+  warnedMissingSessionSecret = false;
 }
 
 export const AUTH_SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;

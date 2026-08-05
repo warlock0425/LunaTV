@@ -40,16 +40,8 @@ interface FullOverwriteExemption {
   reason: string;
 }
 
-const SAVE_WITHOUT_LOCK_EXEMPTIONS: UnlockExemption[] = [
-  {
-    file: 'lib/config.ts',
-    near: '儲存自我修復後的管理員設定失敗',
-    reason:
-      'reloadConfig 的自我修復寫回：冷啟動 / 快取過期時被動修復，' +
-      '僅在 self-check 真的改動內容時寫入。若每次冷讀都搶 admin-config 鎖，' +
-      '會把讀路徑串行化。與管理端顯式讀改寫不同，故不強制鎖。',
-  },
-];
+/** 無鎖豁免：目前生產碼不應再有「鎖外 saveAdminConfig」。維持空清單並靠測試看守。 */
+const SAVE_WITHOUT_LOCK_EXEMPTIONS: UnlockExemption[] = [];
 
 const FULL_OVERWRITE_EXEMPTIONS: FullOverwriteExemption[] = [
   {

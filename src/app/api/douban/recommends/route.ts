@@ -190,9 +190,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: '取得豆瓣數據失敗', details: (error as Error).message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '取得豆瓣數據失敗' }, { status: 500 });
   }
 }

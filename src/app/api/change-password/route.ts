@@ -3,10 +3,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireActiveUser } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import { db } from '@/lib/db';
-import { revokeUserSessions } from '@/lib/security-store';
+import {
+  clearLoginAttempts,
+  consumeLoginAttempt,
+  revokeUserSessions,
+} from '@/lib/security-store';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
+
+/** 與登入相同：5 次失敗、鎖定 15 分鐘 */
+const CHANGE_PASSWORD_MAX_ATTEMPTS = 5;
+const CHANGE_PASSWORD_WINDOW_SECONDS = 15 * 60;
+
+function changePasswordIdentity(username: string): string {
+  return `changepw:user:${username}`;
+}
 
 export async function POST(request: NextRequest) {
   const storageType = getServerStorageType();
@@ -58,11 +70,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const identity = changePasswordIdentity(username);
+    const attempt = await consumeLoginAttempt(
+      identity,
+      CHANGE_PASSWORD_MAX_ATTEMPTS,
+      CHANGE_PASSWORD_WINDOW_SECONDS
+    );
+    if (attempt.blocked) {
+      return NextResponse.json(
+        { error: '嘗試次數過多，請稍後再試' },
+        {
+          status: 429,
+          headers: { 'Retry-After': String(attempt.retryAfter) },
+        }
+      );
+    }
+
     const passwordMatches = await db.verifyUser(username, currentPassword);
     if (!passwordMatches) {
       return NextResponse.json({ error: '目前密碼錯誤' }, { status: 401 });
     }
 
+    await clearLoginAttempts(identity);
     await db.changePassword(username, newPassword);
     await revokeUserSessions(username);
 

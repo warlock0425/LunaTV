@@ -2,8 +2,10 @@ import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 
 import {
+  __resetSessionSecretWarningForTests,
   AUTH_SESSION_MAX_AGE_MS,
   getAuthInfoFromCookie,
+  getAuthSessionSecret,
   getAuthSignaturePayload,
   verifyAuthSession,
   verifySignature,
@@ -61,6 +63,41 @@ describe('getAuthSignaturePayload', () => {
 
   it('handles empty subject', () => {
     expect(getAuthSignaturePayload('', 0)).toBe(':0:1');
+  });
+});
+
+describe('getAuthSessionSecret', () => {
+  const originalSession = process.env.SESSION_SECRET;
+  const originalPassword = process.env.PASSWORD;
+
+  beforeEach(() => {
+    __resetSessionSecretWarningForTests();
+    delete process.env.SESSION_SECRET;
+    process.env.PASSWORD = 'fallback-password';
+  });
+
+  afterAll(() => {
+    if (originalSession === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = originalSession;
+    if (originalPassword === undefined) delete process.env.PASSWORD;
+    else process.env.PASSWORD = originalPassword;
+  });
+
+  it('warns only once when falling back to PASSWORD', () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(getAuthSessionSecret()).toBe('fallback-password');
+    expect(getAuthSessionSecret()).toBe('fallback-password');
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain('SESSION_SECRET');
+    warn.mockRestore();
+  });
+
+  it('does not warn when SESSION_SECRET is set', () => {
+    process.env.SESSION_SECRET = 'dedicated-secret';
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(getAuthSessionSecret()).toBe('dedicated-secret');
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
 

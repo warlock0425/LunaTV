@@ -134,10 +134,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: '取得豆瓣數據失敗', details: (error as Error).message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: '取得豆瓣數據失敗' }, { status: 500 });
   }
 }
 const TOP250_CACHE = new Map<string, { expiresAt: number; data: unknown }>();
@@ -242,7 +239,6 @@ async function handleTop250(pageStart: number, pageSize: number) {
     return NextResponse.json(
       {
         error: '取得豆瓣 Top250 數據失敗',
-        details: (error as Error).message,
       },
       { status: 500 }
     );
