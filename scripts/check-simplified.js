@@ -112,6 +112,8 @@ const EXCLUDED_FILES = [
   'playback-regional-bridge.test.ts',
   'search-sort.test.ts',
   'localize-search-result.test.ts',
+  // 建議陸名計畫測試：斷言 CMS 簡體／陸譯字串
+  'suggestion-queries.test.ts',
   'check-simplified.js',
   // titleParser 需同時收錄繁簡副標題鍵以比對 CMS 原文
   'titleParser.ts',

@@ -6,12 +6,16 @@ import { AdminConfig } from '@/lib/admin.types';
 import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
-import { toSearchSimplified } from '@/lib/chinese';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
-import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { splitTitleWords } from '@/lib/string-utils';
 import { yellowWords } from '@/lib/yellow';
+
+import {
+  getSuggestionMatchNeedles,
+  getSuggestionPrimaryQuery,
+  suggestionWordMatchesNeedles,
+} from './suggestion-queries';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -87,19 +91,10 @@ async function generateSuggestions(
   }>
 > {
   const queryLower = query.toLowerCase();
-  // 與主搜尋同一套陸名計畫；建議是即時路徑，只取第 1 個查詢
-  const planned = getMainlandSearchQueries(query);
-  const primaryQuery = planned[0] || query;
-  const matchNeedles = Array.from(
-    new Set(
-      [
-        queryLower,
-        toSearchSimplified(query).toLowerCase(),
-        primaryQuery.toLowerCase(),
-        ...planned.map((p) => p.toLowerCase()),
-      ].filter(Boolean)
-    )
-  );
+  // production 查詢計畫：見 suggestion-queries.ts（測試 import 同一份）
+  const primaryQuery = getSuggestionPrimaryQuery(query);
+  const matchNeedles = getSuggestionMatchNeedles(query);
+  const useMainlandPrimary = primaryQuery !== query;
 
   const apiSites = await getAvailableApiSites(username);
   let realKeywords: string[] = [];
@@ -113,7 +108,7 @@ async function generateSuggestions(
       results = await searchFromApi(
         firstSite,
         primaryQuery,
-        planned.length > 0 ? [primaryQuery] : undefined,
+        useMainlandPrimary ? [primaryQuery] : undefined,
         controller.signal
       );
     } finally {
@@ -133,15 +128,7 @@ async function generateSuggestions(
           .map((r: any) => r.title)
           .filter(Boolean)
           .flatMap((title: string) => splitTitleWords(title))
-          .filter((w: string) => {
-            if (w.length <= 1) return false;
-            const wordLower = w.toLowerCase();
-            // 台譯輸入時標題多為陸名，需用計畫／簡化字串比對，不能只 includes 原文
-            return matchNeedles.some(
-              (needle) =>
-                wordLower.includes(needle) || needle.includes(wordLower)
-            );
-          })
+          .filter((w: string) => suggestionWordMatchesNeedles(w, matchNeedles))
       )
     ).slice(0, 8);
   }
