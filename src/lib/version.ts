@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.0.2',
+    date: '2026-08-08',
+    content: `
+- 效能：搜尋不再把連續失敗的片源排到最前面。先前死源會因為「被跳過」而被誤記為極快，反而優先被查詢。
+- 改善：搜尋沒有結果時，會顯示系統實際採用的中國片名，並提供一鍵用該名稱重搜。
+    `.trim(),
+  },
+  {
     version: 'v3.0.1',
     date: '2026-08-03',
     content: `
@@ -14,6 +22,7 @@ export const CHANGELOGS: ChangelogItem[] = [
 - 結構：新增「對外抓取的 API 必須有限流」守門測試。往後新增會對外請求的端點卻忘記限流，CI 會直接擋下；要例外必須寫下理由。
     `.trim(),
   },
+
   {
     version: 'v3.0.0',
     date: '2026-08-03',
