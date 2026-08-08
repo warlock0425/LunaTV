@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getConfig } from '@/lib/config';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
+/** 每次進頁 1 次 */
+const LIVE_SOURCES_RATE_LIMIT = 30;
+const LIVE_SOURCES_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: NextRequest) {
   // 第二道驗證：本端點會回傳完整 LiveConfig（含各直播源的 url 與 epg），
@@ -13,6 +17,12 @@ export async function GET(request: NextRequest) {
   if (!authInfo) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-live-sources',
+    limit: LIVE_SOURCES_RATE_LIMIT,
+    windowSeconds: LIVE_SOURCES_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
 
   logger.debug('live sources called:', request.url);
   try {

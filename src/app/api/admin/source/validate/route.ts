@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import {
   createLinkedAbortController,
   mapWithConcurrency,
@@ -13,6 +14,9 @@ export const runtime = 'nodejs';
 const SOURCE_VALIDATION_CONCURRENCY = 4;
 // 三級檢測含 detail + m3u8 抽樣，較單純搜尋需要更長預算
 const SOURCE_VALIDATION_TIMEOUT_MS = 15_000;
+/** SSE：1 次點擊 = 1 條連線；留餘裕給管理員重跑，勿壓到個位數 */
+const SOURCE_VALIDATE_RATE_LIMIT = 20;
+const SOURCE_VALIDATE_RATE_WINDOW_SECONDS = 60;
 
 function sseData(payload: unknown): string {
   return 'data: ' + JSON.stringify(payload) + '\n\n';
@@ -24,6 +28,13 @@ export async function GET(request: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: '權限不足' }, { status: 401 });
   }
+  // 限「建立 SSE 連線」次數，不是每個事件
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-admin-source-validate',
+    limit: SOURCE_VALIDATE_RATE_LIMIT,
+    windowSeconds: SOURCE_VALIDATE_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
 
   const { searchParams } = new URL(request.url);
   const searchKeyword = searchParams.get('q');

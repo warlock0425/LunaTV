@@ -7,6 +7,7 @@ import {
   isValidApiRemoteUrl,
   isValidApiSource,
 } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getConfig } from '@/lib/config';
 import {
   fetchSafeRemoteUrl,
@@ -17,6 +18,9 @@ import {
 export const runtime = 'nodejs';
 const PRECHECK_TIMEOUT_MS = 10000;
 const MAX_PRECHECK_MANIFEST_BYTES = 512 * 1024;
+/** 換台／重試；與 api-search 同級 */
+const LIVE_PRECHECK_RATE_LIMIT = 90;
+const LIVE_PRECHECK_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: NextRequest) {
   // 第二道驗證：本端點會依請求參數對外發出請求，與 /api/proxy/* 同級，
@@ -25,6 +29,12 @@ export async function GET(request: NextRequest) {
   if (!authInfo) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-live-precheck',
+    limit: LIVE_PRECHECK_RATE_LIMIT,
+    windowSeconds: LIVE_PRECHECK_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
 
   const { searchParams } = new URL(request.url);
   const url = searchParams.get('url');
