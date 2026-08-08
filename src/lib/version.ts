@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.0.1',
+    date: '2026-08-03',
+    content: `
+- 安全：直播相關 API（轉台預檢、節目單、頻道清單、直播源清單）與片源檢測加上限流，避免被反覆呼叫驅動伺服器對外抓取。正常收看與管理操作不受影響。
+- 安全：站長設定訂閱抓取一併補上限流。
+- 結構：新增「對外抓取的 API 必須有限流」守門測試。往後新增會對外請求的端點卻忘記限流，CI 會直接擋下；要例外必須寫下理由。
+    `.trim(),
+  },
+  {
     version: 'v3.0.0',
     date: '2026-08-03',
     content: `
@@ -16,6 +25,7 @@ export const CHANGELOGS: ChangelogItem[] = [
 - 正確性：設定的自我修復寫回改為在鎖內進行，避免與管理端同時修改時互相覆蓋。
     `.trim(),
   },
+
   {
     version: 'v2.9.9',
     date: '2026-08-03',
