@@ -46,8 +46,27 @@ function getState(sourceKey: string): BreakerState {
 }
 
 /**
+ * 純讀：來源是否仍在 breaker 冷卻期內（不改 probing）。
+ * 供排序等唯讀情境使用。放行半開探測請一律走 isSourceTripped。
+ */
+export function isSourceInCooldown(
+  sourceKey: string,
+  now = Date.now()
+): boolean {
+  const state = breakerStates.get(sourceKey);
+  if (!state || state.openUntil === 0) return false;
+  return now < state.openUntil;
+}
+
+/** 純讀：冷卻截止時間（0 表示未熔斷）。供排序挑「最快恢復」候選用。 */
+export function getSourceBreakerOpenUntil(sourceKey: string): number {
+  return breakerStates.get(sourceKey)?.openUntil ?? 0;
+}
+
+/**
  * 該來源目前是否應被跳過。
  * 冷卻期滿後的第一次呼叫會回傳 false（放行探測請求）並標記 probing。
+ * ⚠️ 有副作用（會消耗半開探測名額）——排序／唯讀路徑禁止呼叫此函式。
  */
 export function isSourceTripped(sourceKey: string): boolean {
   const state = breakerStates.get(sourceKey);

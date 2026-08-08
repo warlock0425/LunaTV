@@ -1,5 +1,6 @@
 import {
   getTrippedSources,
+  isSourceInCooldown,
   isSourceTripped,
   recordSourceFailure,
   recordSourceSuccess,
@@ -88,5 +89,18 @@ describe('source circuit breaker', () => {
     expect(tripped).toHaveLength(1);
     expect(tripped[0].sourceKey).toBe('src-a');
     expect(tripped[0].consecutiveFailures).toBe(3);
+  });
+
+  it('isSourceInCooldown 純讀：冷卻中為 true，期滿後為 false 且不消耗探測名額', () => {
+    for (let i = 0; i < 3; i++) recordSourceFailure('src-a');
+    expect(isSourceInCooldown('src-a')).toBe(true);
+
+    jest.advanceTimersByTime(COOLDOWN_MS + 1000);
+    expect(isSourceInCooldown('src-a')).toBe(false);
+    expect(isSourceInCooldown('src-a')).toBe(false); // 再讀仍不改 probing
+
+    // 探測名額仍給 isSourceTripped
+    expect(isSourceTripped('src-a')).toBe(false);
+    expect(isSourceTripped('src-a')).toBe(true);
   });
 });
