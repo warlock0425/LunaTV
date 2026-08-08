@@ -1,6 +1,6 @@
 {
   "name": "berserkertv",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "private": true,
   "scripts": {
     "dev": "pnpm gen:manifest && next dev --webpack -H 0.0.0.0",
