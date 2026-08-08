@@ -1,8 +1,7 @@
 import { Languages } from 'lucide-react';
 import { useMemo } from 'react';
 
-import { cleanQueryForApi, toSearchSimplified } from '@/lib/chinese';
-import { getRegionalMainlandTitles } from '@/lib/regional-title-aliases';
+import { getTriedMainlandLabel } from '@/lib/search-tried-mainland';
 
 export default function SearchQueryNotice({
   query,
@@ -11,14 +10,12 @@ export default function SearchQueryNotice({
   query: string;
   resolvedQuery?: string;
 }) {
-  const target = useMemo(() => {
-    const regional = getRegionalMainlandTitles(query)[0];
-    return (
-      resolvedQuery || regional || toSearchSimplified(cleanQueryForApi(query))
-    );
-  }, [query, resolvedQuery]);
+  const target = useMemo(
+    () => getTriedMainlandLabel(query, resolvedQuery),
+    [query, resolvedQuery]
+  );
 
-  if (!query.trim() || !target || target === query.trim()) return null;
+  if (!target) return null;
 
   return (
     <div className='mx-auto mt-3 flex max-w-2xl items-start gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300'>

@@ -14,6 +14,7 @@ import React, {
 
 import { cleanQueryForApi } from '@/lib/chinese';
 import { addSearchHistory } from '@/lib/db.client';
+import { getTriedMainlandLabel } from '@/lib/search-tried-mainland';
 import { isFuzzyMatch } from '@/lib/searchEngine';
 import { readStreamingSearchPreference } from '@/lib/streaming-search-preference';
 import { SearchResult } from '@/lib/types';
@@ -109,8 +110,8 @@ function SearchPageClient() {
       const data = await searchResponse.json();
       if (currentQueryRef.current !== originalQuery) return;
 
-      // 即使重搜仍無結果，也告知使用者實際採用的大陸片名，
-      // 否則通知會退回顯示字元轉換版（例如「星际大战」而非「星球大战」）
+      // 即使重搜仍無結果，也寫入 resolved：空狀態／SearchQueryNotice 會秀陸名與「再搜」鈕；
+      // 否則會退回字元轉換版（例如「星际大战」而非豆瓣「星球大战」）
       setResolvedSearchQuery(primary);
 
       if (Array.isArray(data.results) && data.results.length > 0) {
@@ -292,6 +293,12 @@ function SearchPageClient() {
     if (!query) return searchResults;
     return searchResults.filter((item) => isFuzzyMatch(item.title, query));
   }, [searchResults, submittedQuery]);
+
+  // 空結果要秀的「實際試過的中國片名」；與 SearchQueryNotice 同一套優先序
+  const triedMainlandLabel = useMemo(
+    () => getTriedMainlandLabel(submittedQuery, resolvedSearchQuery),
+    [submittedQuery, resolvedSearchQuery]
+  );
 
   const aggregatedResults = useMemo(() => {
     const map = new Map<string, SearchResult[]>();
@@ -736,6 +743,17 @@ function SearchPageClient() {
     router.push(`/search?q=${encodeURIComponent(suggestion)}`);
   };
 
+  /** 空結果「用陸名再搜」：把實際採用的中國片名寫進 URL，走同一套搜尋協調器 */
+  const handleRetryWithMainland = (mainlandTitle: string) => {
+    const trimmed = mainlandTitle.trim().replace(/\s+/g, ' ');
+    if (!trimmed) return;
+    setSearchQuery(trimmed);
+    setIsLoading(true);
+    setShowResults(true);
+    setShowSuggestions(false);
+    router.push(`/search?q=${encodeURIComponent(trimmed)}`);
+  };
+
   const scrollToTop = () => {
     try {
       document.body.scrollTo({
@@ -915,20 +933,45 @@ function SearchPageClient() {
                       <Search className='h-6 w-6 text-zinc-400' />
                     </div>
                     <p className='text-base font-medium text-zinc-100'>
-                      找不到「{resolvedSearchQuery || searchQuery}」的結果
+                      找不到「{submittedQuery || searchQuery}」的結果
                     </p>
                     <p className='max-w-sm text-sm leading-relaxed text-zinc-500'>
-                      可以試試更簡短的關鍵字、改用原文片名，或關閉上方的「聚合」以顯示各來源的個別結果。
+                      {triedMainlandLabel ? (
+                        <>
+                          系統已用中國片名
+                          <span className='mx-1 font-medium text-zinc-300'>
+                            「{triedMainlandLabel}」
+                          </span>
+                          搜過。可以點下方用該名稱再搜、試更簡短關鍵字，或關閉「聚合」。
+                        </>
+                      ) : (
+                        <>
+                          可以試試更簡短的關鍵字、改用原文片名，或關閉上方的「聚合」以顯示各來源的個別結果。
+                        </>
+                      )}
                     </p>
-                    {viewMode === 'agg' && (
-                      <button
-                        type='button'
-                        onClick={() => setViewMode('all')}
-                        className='mt-2 rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition hover:bg-accent/15'
-                      >
-                        關閉聚合再試一次
-                      </button>
-                    )}
+                    <div className='mt-2 flex flex-wrap items-center justify-center gap-2'>
+                      {triedMainlandLabel && (
+                        <button
+                          type='button'
+                          onClick={() =>
+                            handleRetryWithMainland(triedMainlandLabel)
+                          }
+                          className='rounded-full border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-medium text-accent transition hover:bg-accent/15'
+                        >
+                          用「{triedMainlandLabel}」再搜一次
+                        </button>
+                      )}
+                      {viewMode === 'agg' && (
+                        <button
+                          type='button'
+                          onClick={() => setViewMode('all')}
+                          className='rounded-full border border-white/15 bg-zinc-900/40 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800/80'
+                        >
+                          關閉聚合再試一次
+                        </button>
+                      )}
+                    </div>
                   </div>
                 )
               ) : (
