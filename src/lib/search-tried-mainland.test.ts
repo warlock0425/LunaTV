@@ -28,4 +28,12 @@ describe('getTriedMainlandLabel', () => {
     expect(same).toBeTruthy();
     expect(getTriedMainlandLabel(same!, same)).toBeNull();
   });
+
+  it('collapses whitespace before comparing (avoids same-URL spin)', () => {
+    // label 與 query 只差連續空白時不應再出「再搜」鈕
+    expect(getTriedMainlandLabel('Avatar  World', 'Avatar World')).toBeNull();
+    const same = getRegionalMainlandTitles('駭客任務')[0];
+    expect(same).toBeTruthy();
+    expect(getTriedMainlandLabel(`  ${same}  `, same)).toBeNull();
+  });
 });
