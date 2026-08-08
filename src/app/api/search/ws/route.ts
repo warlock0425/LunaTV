@@ -12,7 +12,10 @@ import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { logger } from '@/lib/logger';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
-import { recordSearchZeroResult } from '@/lib/search-zero-results';
+import {
+  recordSearchZeroResult,
+  shouldRecordSearchZeroResult,
+} from '@/lib/search-zero-results';
 import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
 import { orderSourcesByValidation } from '@/lib/source-validation';
 import { SearchResult } from '@/lib/types';
@@ -110,8 +113,8 @@ export async function GET(request: NextRequest) {
         }
 
         completeSent = true;
-        if (allResults.length === 0) {
-          // 站級零結果收集（不綁使用者）；失敗不影響串流
+        // 與搜尋頁一致：無關 CMS 垃圾結果經 isFuzzyMatch 後也是「空」，要記
+        if (shouldRecordSearchZeroResult(allResults, query)) {
           void recordSearchZeroResult(query);
         }
         const completeEvent = `data: ${JSON.stringify({

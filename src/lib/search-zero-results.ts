@@ -1,5 +1,6 @@
 import { db } from './db';
 import { logger } from './logger';
+import { isFuzzyMatch } from './searchEngine';
 import { getServerStorageType } from './storage-runtime';
 
 /**
@@ -42,29 +43,47 @@ function memoryStore(): MemoryStore {
 }
 
 /** node-redis / Upstash 方言不同，呼叫端依 kind 分支；client 形狀不統一故用 unknown */
-type BorrowedStorageClient = {
+type BorrowedClientBundle = {
   client: unknown;
   kind: 'redis' | 'upstash';
+  /** BaseRedisStorage.withRetry：寫入走它才會重連，避免裸 client 靜默失敗 */
+  withRetry?: <T>(
+    operation: () => Promise<T>,
+    maxRetries?: number
+  ) => Promise<T>;
 };
 
 /**
  * 借用 db 層 storage.client（與 storage.ts 相同做法）。
  * 不 createClient／不 new UpstashRedis——保活與重連留在既有單例上。
  */
-function getBorrowedClient(): BorrowedStorageClient | null {
+function getBorrowedClient(): BorrowedClientBundle | null {
   const storageType = getServerStorageType();
   if (storageType === 'localstorage') return null;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- 與 storage.ts 相同：DbManager.storage 未公開型別
   const storageImpl = (db as any).storage as
-    { client?: unknown } | null | undefined;
+    | {
+        client?: unknown;
+        withRetry?: <T>(
+          operation: () => Promise<T>,
+          maxRetries?: number
+        ) => Promise<T>;
+      }
+    | null
+    | undefined;
   if (!storageImpl?.client) return null;
 
+  const withRetry =
+    typeof storageImpl.withRetry === 'function'
+      ? storageImpl.withRetry.bind(storageImpl)
+      : undefined;
+
   if (storageType === 'upstash') {
-    return { client: storageImpl.client, kind: 'upstash' };
+    return { client: storageImpl.client, kind: 'upstash', withRetry };
   }
   if (storageType === 'redis' || storageType === 'kvrocks') {
-    return { client: storageImpl.client, kind: 'redis' };
+    return { client: storageImpl.client, kind: 'redis', withRetry };
   }
   return null;
 }
@@ -72,6 +91,21 @@ function getBorrowedClient(): BorrowedStorageClient | null {
 /** hash 指令依方言呼叫；簽名不統一，以 unknown 承接後在本函式內斷言 */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type HashClient = any;
+
+/**
+ * 與搜尋頁一致：CMS 常對任意關鍵字回無關片，前端 isFuzzyMatch 濾成空，
+ * 但伺服器 allResults.length > 0。零結果必須跟「使用者實際看得到」對齊。
+ */
+export function shouldRecordSearchZeroResult(
+  results: Array<{ title?: string }>,
+  query: string
+): boolean {
+  if (!normalizeZeroResultQuery(query)) return false;
+  if (!results || results.length === 0) return true;
+  return !results.some(
+    (item) => typeof item.title === 'string' && isFuzzyMatch(item.title, query)
+  );
+}
 
 /** trim + 收合空白；不合格回 null */
 export function normalizeZeroResultQuery(raw: string): string | null {
@@ -149,8 +183,10 @@ function entriesFromCountLastMaps(
     if (!query) continue;
     const count = Math.floor(Number(rawCount));
     if (!Number.isFinite(count) || count < 1) continue;
-    const lastAt = Math.floor(Number(lasts[rawQuery] ?? lasts[query] ?? 0));
-    if (!Number.isFinite(lastAt) || lastAt <= 0) continue;
+    // lastAt 缺失時仍列出（避免 HINCRBY 成功、HSET 失敗時整筆消失）
+    const rawLast = Number(lasts[rawQuery] ?? lasts[query] ?? 0);
+    const lastAt =
+      Number.isFinite(rawLast) && rawLast > 0 ? Math.floor(rawLast) : 0;
     out.push({ query, count, lastAt });
   }
   return sortZeroResultEntries(out);
@@ -309,17 +345,17 @@ export async function recordSearchZeroResult(
     }
 
     const client = borrowed.client as HashClient;
-    const { kind } = borrowed;
+    const { kind, withRetry } = borrowed;
+    const run = <T>(op: () => Promise<T>): Promise<T> =>
+      withRetry ? withRetry(op) : op();
+
     if (kind === 'upstash') {
-      await Promise.all([
-        client.hincrby(COUNT_HASH_KEY, query, 1),
-        client.hset(LAST_HASH_KEY, { [query]: now }),
-      ]);
+      await run(() => client.hincrby(COUNT_HASH_KEY, query, 1));
+      await run(() => client.hset(LAST_HASH_KEY, { [query]: now }));
     } else {
-      await Promise.all([
-        client.hIncrBy(COUNT_HASH_KEY, query, 1),
-        client.hSet(LAST_HASH_KEY, query, String(now)),
-      ]);
+      // 序列化：避免一邊失敗時 Promise.all 讓兩邊語意不清；並走 withRetry 重連
+      await run(() => client.hIncrBy(COUNT_HASH_KEY, query, 1));
+      await run(() => client.hSet(LAST_HASH_KEY, query, String(now)));
     }
     // HLEN 未超標則不 HGETALL；裁切失敗不影響已寫入的增量
     try {

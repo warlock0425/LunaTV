@@ -1,6 +1,8 @@
+import { getRegionalMainlandTitles } from './regional-title-aliases';
 import {
   normalizeZeroResultQuery,
   resetSearchZeroResultsMemoryForTests,
+  shouldRecordSearchZeroResult,
   sortZeroResultEntries,
   upsertZeroResultEntries,
 } from './search-zero-results';
@@ -70,5 +72,37 @@ describe('sortZeroResultEntries', () => {
       { query: '低頻舊', count: 1, lastAt: 100 },
     ]);
     expect(sorted.map((e) => e.query)).toEqual(['高頻', '低頻新', '低頻舊']);
+  });
+});
+
+describe('shouldRecordSearchZeroResult', () => {
+  it('records when API returned nothing', () => {
+    expect(shouldRecordSearchZeroResult([], '完全不存在的片名甲乙丙')).toBe(
+      true
+    );
+  });
+
+  it('records when API junk fails isFuzzyMatch (same as empty UI)', () => {
+    // CMS 對亂碼查詢仍可能回熱門片；前端 quant 濾掉後是空畫面
+    // 陸名從別名表取，避免測試檔寫簡體字面量
+    const junkTitle = getRegionalMainlandTitles('冰與火之歌')[0] || 'OTHER';
+    expect(
+      shouldRecordSearchZeroResult(
+        [{ title: junkTitle }, { title: 'UNRELATED_XYZ' }],
+        '完全不存在的片名甲乙丙'
+      )
+    ).toBe(true);
+  });
+
+  it('does not record when a relevant title is present', () => {
+    const cmsTitle = getRegionalMainlandTitles('間諜家家酒')[0];
+    expect(cmsTitle).toBeTruthy();
+    expect(
+      shouldRecordSearchZeroResult([{ title: cmsTitle! }], '間諜家家酒')
+    ).toBe(false);
+  });
+
+  it('does not record non-CJK queries', () => {
+    expect(shouldRecordSearchZeroResult([], 'Avatar')).toBe(false);
   });
 });
