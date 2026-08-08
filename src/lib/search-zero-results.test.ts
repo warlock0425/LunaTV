@@ -22,6 +22,11 @@ describe('normalizeZeroResultQuery', () => {
     expect(normalizeZeroResultQuery('駭客任務')).toBe('駭客任務');
     expect(normalizeZeroResultQuery('鬼滅之刃 第二季')).toBe('鬼滅之刃 第二季');
   });
+
+  it('rejects kana-only after stripping all kana (g flag)', () => {
+    // 若缺 g，replace 只去掉第一個假名，殘留假名仍可能誤判
+    expect(normalizeZeroResultQuery('あいうえお')).toBeNull();
+  });
 });
 
 describe('upsertZeroResultEntries', () => {

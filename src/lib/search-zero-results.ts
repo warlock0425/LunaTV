@@ -1,12 +1,16 @@
-import { Redis as UpstashRedis } from '@upstash/redis';
-import { createClient, RedisClientType } from 'redis';
-
+import { db } from './db';
 import { logger } from './logger';
 import { getServerStorageType } from './storage-runtime';
 
 /**
  * 站級「搜尋零結果」收集：只存查詢詞 + 次數 + 最後時間，不綁使用者。
  * 用途：站長補 regional-title-aliases 時的真實依據，不是個人隱私紀錄。
+ *
+ * 儲存：借用 DbManager 既有 Redis／Upstash／Kvrocks client（保活、重連、Symbol 單例），
+ * 不以本模組再開第二套連線。資料用 hash：
+ *   countHash[query] = 次數（HINCRBY 原子遞增）
+ *   lastHash[query]  = 最後時間（HSET）
+ * localstorage／無 client 時退回進程內 Map。
  */
 
 export type SearchZeroResultEntry = {
@@ -18,57 +22,47 @@ export type SearchZeroResultEntry = {
 export const SEARCH_ZERO_RESULTS_MAX_ENTRIES = 100;
 export const SEARCH_ZERO_RESULTS_MAX_QUERY_LEN = 80;
 
-const STORAGE_KEY = 'search:zero-results:v1';
+/** v2：hash 欄位結構；勿再寫回 v1 整包 JSON */
+const COUNT_HASH_KEY = 'search:zero-results:count:v2';
+const LAST_HASH_KEY = 'search:zero-results:last:v2';
+
 const CJK_PATTERN = /[\u3400-\u9fff]/;
-const KANA_PATTERN = /[\u3040-\u30ff]/;
+const KANA_PATTERN = /[\u3040-\u30ff]/g;
 
-const storageType = getServerStorageType();
-
-let redisClientPromise: Promise<RedisClientType> | null = null;
-let upstashClient: UpstashRedis | null = null;
+type MemoryStore = Map<string, { count: number; lastAt: number }>;
 
 const globalZeroResults = globalThis as typeof globalThis & {
-  __berserkerSearchZeroResults?: SearchZeroResultEntry[];
+  __berserkerSearchZeroResultsMap?: MemoryStore;
 };
 
-function memoryStore(): SearchZeroResultEntry[] {
-  globalZeroResults.__berserkerSearchZeroResults ??= [];
-  return globalZeroResults.__berserkerSearchZeroResults;
+function memoryStore(): MemoryStore {
+  globalZeroResults.__berserkerSearchZeroResultsMap ??= new Map();
+  return globalZeroResults.__berserkerSearchZeroResultsMap;
 }
 
-function getRedisUrl(): string | null {
-  return storageType === 'kvrocks'
-    ? process.env.KVROCKS_URL || null
-    : process.env.REDIS_URL || null;
-}
+/**
+ * 借用 db 層 storage.client（與 storage.ts 相同做法）。
+ * 不 createClient／不 new UpstashRedis——保活與重連留在既有單例上。
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getBorrowedClient(): {
+  client: any;
+  kind: 'redis' | 'upstash';
+} | null {
+  const storageType = getServerStorageType();
+  if (storageType === 'localstorage') return null;
 
-async function getRedisClient(): Promise<RedisClientType | null> {
-  const url = getRedisUrl();
-  if (!url || !['redis', 'kvrocks'].includes(storageType)) return null;
-  if (!redisClientPromise) {
-    const client = createClient({ url }) as RedisClientType;
-    client.on('error', (error) => {
-      logger.error('Search zero-results Redis client error:', error);
-    });
-    redisClientPromise = client
-      .connect()
-      .then(() => client)
-      .catch((error) => {
-        redisClientPromise = null;
-        throw error;
-      });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const storageImpl = (db as any).storage;
+  if (!storageImpl?.client) return null;
+
+  if (storageType === 'upstash') {
+    return { client: storageImpl.client, kind: 'upstash' };
   }
-  return redisClientPromise;
-}
-
-function getUpstashClient(): UpstashRedis | null {
-  if (storageType !== 'upstash') return null;
-  if (!process.env.UPSTASH_URL || !process.env.UPSTASH_TOKEN) return null;
-  upstashClient ||= new UpstashRedis({
-    url: process.env.UPSTASH_URL,
-    token: process.env.UPSTASH_TOKEN,
-  });
-  return upstashClient;
+  if (storageType === 'redis' || storageType === 'kvrocks') {
+    return { client: storageImpl.client, kind: 'redis' };
+  }
+  return null;
 }
 
 /** trim + 收合空白；不合格回 null */
@@ -77,8 +71,8 @@ export function normalizeZeroResultQuery(raw: string): string | null {
   if (!q || q.length > SEARCH_ZERO_RESULTS_MAX_QUERY_LEN) return null;
   // 只收中日韓漢字查詢：台譯表要補的是這類；英文片名靠原文搜即可
   if (!CJK_PATTERN.test(q)) return null;
-  // 假名為主的查詢不進譯名表候選
-  if (KANA_PATTERN.test(q) && !CJK_PATTERN.test(q.replace(KANA_PATTERN, ''))) {
+  // 去掉全部假名後若已無漢字，視為假名為主，不進譯名表候選
+  if (!CJK_PATTERN.test(q.replace(KANA_PATTERN, ''))) {
     return null;
   }
   return q;
@@ -97,7 +91,7 @@ export function sortZeroResultEntries(
 
 /**
  * 純函式：寫入一筆零結果查詢並裁到 maxEntries。
- * 驗收用；實際 I/O 走 recordSearchZeroResult。
+ * 記憶體路徑與單測用；Redis 路徑走 HINCRBY。
  */
 export function upsertZeroResultEntries(
   entries: SearchZeroResultEntry[],
@@ -137,69 +131,143 @@ export function upsertZeroResultEntries(
   );
 }
 
-function parseStoredEntries(raw: unknown): SearchZeroResultEntry[] {
-  if (!raw) return [];
-  let parsed: unknown = raw;
-  if (typeof raw === 'string') {
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
-  if (!Array.isArray(parsed)) return [];
-
+function entriesFromCountLastMaps(
+  counts: Record<string, string | number>,
+  lasts: Record<string, string | number>
+): SearchZeroResultEntry[] {
   const out: SearchZeroResultEntry[] = [];
-  for (const item of parsed) {
-    if (!item || typeof item !== 'object') continue;
-    const row = item as Record<string, unknown>;
-    const query = normalizeZeroResultQuery(String(row.query ?? ''));
-    const count = Number(row.count);
-    const lastAt = Number(row.lastAt);
-    if (!query || !Number.isFinite(count) || count < 1) continue;
+  for (const [rawQuery, rawCount] of Object.entries(counts)) {
+    const query = normalizeZeroResultQuery(rawQuery);
+    if (!query) continue;
+    const count = Math.floor(Number(rawCount));
+    if (!Number.isFinite(count) || count < 1) continue;
+    const lastAt = Math.floor(Number(lasts[rawQuery] ?? lasts[query] ?? 0));
     if (!Number.isFinite(lastAt) || lastAt <= 0) continue;
-    out.push({ query, count: Math.floor(count), lastAt: Math.floor(lastAt) });
+    out.push({ query, count, lastAt });
   }
-  return sortZeroResultEntries(out).slice(0, SEARCH_ZERO_RESULTS_MAX_ENTRIES);
+  return sortZeroResultEntries(out);
 }
 
-async function loadEntries(): Promise<SearchZeroResultEntry[]> {
-  try {
-    const upstash = getUpstashClient();
-    if (upstash) {
-      const raw = await upstash.get<string | SearchZeroResultEntry[]>(
-        STORAGE_KEY
-      );
-      return parseStoredEntries(raw);
-    }
-    const redis = await getRedisClient();
-    if (redis) {
-      const raw = await redis.get(STORAGE_KEY);
-      return parseStoredEntries(raw);
-    }
-  } catch (error) {
-    logger.warn('讀取零結果查詢失敗，改用記憶體：', error);
+function stringifyHash(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw: any
+): Record<string, string | number> {
+  if (!raw || typeof raw !== 'object') return {};
+  const out: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v === null || v === undefined) continue;
+    if (typeof v === 'object') continue;
+    out[k] = v as string | number;
   }
-  return sortZeroResultEntries([...memoryStore()]);
+  return out;
 }
 
-async function saveEntries(entries: SearchZeroResultEntry[]): Promise<void> {
-  const payload = JSON.stringify(entries);
-  try {
-    const upstash = getUpstashClient();
-    if (upstash) {
-      await upstash.set(STORAGE_KEY, payload);
-      return;
-    }
-    const redis = await getRedisClient();
-    if (redis) {
-      await redis.set(STORAGE_KEY, payload);
-      return;
-    }
-  } catch (error) {
-    logger.warn('寫入零結果查詢失敗，改用記憶體：', error);
+async function hgetallBoth(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  kind: 'redis' | 'upstash'
+): Promise<{
+  counts: Record<string, string | number>;
+  lasts: Record<string, string | number>;
+}> {
+  if (kind === 'upstash') {
+    const [counts, lasts] = await Promise.all([
+      client.hgetall(COUNT_HASH_KEY),
+      client.hgetall(LAST_HASH_KEY),
+    ]);
+    return {
+      counts: stringifyHash(counts),
+      lasts: stringifyHash(lasts),
+    };
   }
-  globalZeroResults.__berserkerSearchZeroResults = entries;
+  const [counts, lasts] = await Promise.all([
+    client.hGetAll(COUNT_HASH_KEY),
+    client.hGetAll(LAST_HASH_KEY),
+  ]);
+  return {
+    counts: stringifyHash(counts),
+    lasts: stringifyHash(lasts),
+  };
+}
+
+async function hdelFields(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  kind: 'redis' | 'upstash',
+  fields: string[]
+): Promise<void> {
+  if (fields.length === 0) return;
+  if (kind === 'upstash') {
+    await Promise.all([
+      client.hdel(COUNT_HASH_KEY, ...fields),
+      client.hdel(LAST_HASH_KEY, ...fields),
+    ]);
+    return;
+  }
+  await Promise.all([
+    client.hDel(COUNT_HASH_KEY, fields),
+    client.hDel(LAST_HASH_KEY, fields),
+  ]);
+}
+
+/** 超過上限時刪掉次數最低的欄位（讀取排序後裁切） */
+async function pruneIfNeeded(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  kind: 'redis' | 'upstash'
+): Promise<void> {
+  const { counts, lasts } = await hgetallBoth(client, kind);
+  const entries = entriesFromCountLastMaps(counts, lasts);
+  if (entries.length <= SEARCH_ZERO_RESULTS_MAX_ENTRIES) return;
+
+  const keep = new Set(
+    entries.slice(0, SEARCH_ZERO_RESULTS_MAX_ENTRIES).map((e) => e.query)
+  );
+  // hash 欄位可能是正規化前的 key；對照 counts 的實際 field 名刪
+  const dropFields = Object.keys(counts).filter((field) => {
+    const q = normalizeZeroResultQuery(field);
+    return !q || !keep.has(q);
+  });
+  await hdelFields(client, kind, dropFields);
+}
+
+function listFromMemory(): SearchZeroResultEntry[] {
+  const entries: SearchZeroResultEntry[] = [];
+  for (const [query, value] of memoryStore()) {
+    entries.push({
+      query,
+      count: value.count,
+      lastAt: value.lastAt,
+    });
+  }
+  return sortZeroResultEntries(entries).slice(
+    0,
+    SEARCH_ZERO_RESULTS_MAX_ENTRIES
+  );
+}
+
+function recordInMemory(query: string, now: number): void {
+  const store = memoryStore();
+  const prev = store.get(query);
+  store.set(query, {
+    count: (prev?.count || 0) + 1,
+    lastAt: now,
+  });
+  if (store.size <= SEARCH_ZERO_RESULTS_MAX_ENTRIES) return;
+
+  const ranked = sortZeroResultEntries(
+    Array.from(store.entries()).map(([q, v]) => ({
+      query: q,
+      count: v.count,
+      lastAt: v.lastAt,
+    }))
+  );
+  const keep = new Set(
+    ranked.slice(0, SEARCH_ZERO_RESULTS_MAX_ENTRIES).map((e) => e.query)
+  );
+  for (const key of Array.from(store.keys())) {
+    if (!keep.has(key)) store.delete(key);
+  }
 }
 
 /** 搜尋 API 零結果時呼叫；失敗不影響搜尋回應 */
@@ -207,18 +275,41 @@ export async function recordSearchZeroResult(
   rawQuery: string,
   now = Date.now()
 ): Promise<void> {
-  if (!normalizeZeroResultQuery(rawQuery)) return;
+  const query = normalizeZeroResultQuery(rawQuery);
+  if (!query) return;
+
   try {
-    const current = await loadEntries();
-    const next = upsertZeroResultEntries(
-      current,
-      rawQuery,
-      now,
-      SEARCH_ZERO_RESULTS_MAX_ENTRIES
-    );
-    await saveEntries(next);
+    const borrowed = getBorrowedClient();
+    if (!borrowed) {
+      recordInMemory(query, now);
+      return;
+    }
+
+    const { client, kind } = borrowed;
+    if (kind === 'upstash') {
+      await Promise.all([
+        client.hincrby(COUNT_HASH_KEY, query, 1),
+        client.hset(LAST_HASH_KEY, { [query]: now }),
+      ]);
+    } else {
+      await Promise.all([
+        client.hIncrBy(COUNT_HASH_KEY, query, 1),
+        client.hSet(LAST_HASH_KEY, query, String(now)),
+      ]);
+    }
+    // 偶發裁切；失敗不影響已寫入的增量
+    try {
+      await pruneIfNeeded(client, kind);
+    } catch (error) {
+      logger.warn('裁切零結果 hash 失敗：', error);
+    }
   } catch (error) {
-    logger.warn('記錄零結果查詢失敗：', error);
+    logger.warn('記錄零結果查詢失敗，改用記憶體：', error);
+    try {
+      recordInMemory(query, now);
+    } catch {
+      /* 記憶體後備也失敗就放棄 */
+    }
   }
 }
 
@@ -226,14 +317,22 @@ export async function listSearchZeroResults(): Promise<
   SearchZeroResultEntry[]
 > {
   try {
-    return await loadEntries();
+    const borrowed = getBorrowedClient();
+    if (!borrowed) {
+      return listFromMemory();
+    }
+    const { counts, lasts } = await hgetallBoth(borrowed.client, borrowed.kind);
+    return entriesFromCountLastMaps(counts, lasts).slice(
+      0,
+      SEARCH_ZERO_RESULTS_MAX_ENTRIES
+    );
   } catch (error) {
-    logger.warn('列出零結果查詢失敗：', error);
-    return sortZeroResultEntries([...memoryStore()]);
+    logger.warn('列出零結果查詢失敗，改用記憶體：', error);
+    return listFromMemory();
   }
 }
 
 /** 測試用：清空進程內記憶體後備 */
 export function resetSearchZeroResultsMemoryForTests(): void {
-  globalZeroResults.__berserkerSearchZeroResults = [];
+  globalZeroResults.__berserkerSearchZeroResultsMap = new Map();
 }
