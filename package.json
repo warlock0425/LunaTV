@@ -80,8 +80,8 @@
   "lint-staged": {
     "src/**/*.{js,jsx,ts,tsx}": [
       "node scripts/check-simplified.js",
-      "eslint --max-warnings=0",
-      "prettier -w"
+      "prettier -w",
+      "eslint --max-warnings=0"
     ],
     "**/*.{json,css,scss,md,webmanifest}": [
       "prettier -w"

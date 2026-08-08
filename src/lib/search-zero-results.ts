@@ -27,6 +27,7 @@ const COUNT_HASH_KEY = 'search:zero-results:count:v2';
 const LAST_HASH_KEY = 'search:zero-results:last:v2';
 
 const CJK_PATTERN = /[\u3400-\u9fff]/;
+// 僅用於 .replace()。帶 /g 的 RegExp 若用 .test() 會受 lastIndex 影響，勿對此常數呼叫 .test()
 const KANA_PATTERN = /[\u3040-\u30ff]/g;
 
 type MemoryStore = Map<string, { count: number; lastAt: number }>;
@@ -40,20 +41,23 @@ function memoryStore(): MemoryStore {
   return globalZeroResults.__berserkerSearchZeroResultsMap;
 }
 
+/** node-redis / Upstash 方言不同，呼叫端依 kind 分支；client 形狀不統一故用 unknown */
+type BorrowedStorageClient = {
+  client: unknown;
+  kind: 'redis' | 'upstash';
+};
+
 /**
  * 借用 db 層 storage.client（與 storage.ts 相同做法）。
  * 不 createClient／不 new UpstashRedis——保活與重連留在既有單例上。
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function getBorrowedClient(): {
-  client: any;
-  kind: 'redis' | 'upstash';
-} | null {
+function getBorrowedClient(): BorrowedStorageClient | null {
   const storageType = getServerStorageType();
   if (storageType === 'localstorage') return null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const storageImpl = (db as any).storage;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- 與 storage.ts 相同：DbManager.storage 未公開型別
+  const storageImpl = (db as any).storage as
+    { client?: unknown } | null | undefined;
   if (!storageImpl?.client) return null;
 
   if (storageType === 'upstash') {
@@ -64,6 +68,10 @@ function getBorrowedClient(): {
   }
   return null;
 }
+
+/** hash 指令依方言呼叫；簽名不統一，以 unknown 承接後在本函式內斷言 */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type HashClient = any;
 
 /** trim + 收合空白；不合格回 null */
 export function normalizeZeroResultQuery(raw: string): string | null {
@@ -163,8 +171,7 @@ function stringifyHash(
 }
 
 async function hgetallBoth(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  client: any,
+  client: HashClient,
   kind: 'redis' | 'upstash'
 ): Promise<{
   counts: Record<string, string | number>;
@@ -191,8 +198,7 @@ async function hgetallBoth(
 }
 
 async function hdelFields(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  client: any,
+  client: HashClient,
   kind: 'redis' | 'upstash',
   fields: string[]
 ): Promise<void> {
@@ -210,12 +216,29 @@ async function hdelFields(
   ]);
 }
 
-/** 超過上限時刪掉次數最低的欄位（讀取排序後裁切） */
+async function hashFieldCount(
+  client: HashClient,
+  kind: 'redis' | 'upstash'
+): Promise<number> {
+  const raw =
+    kind === 'upstash'
+      ? await client.hlen(COUNT_HASH_KEY)
+      : await client.hLen(COUNT_HASH_KEY);
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * 超過上限時刪掉次數最低的欄位。
+ * 先用 HLEN（O(1)）擋；未超標不 HGETALL。
+ */
 async function pruneIfNeeded(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  client: any,
+  client: HashClient,
   kind: 'redis' | 'upstash'
 ): Promise<void> {
+  const len = await hashFieldCount(client, kind);
+  if (len <= SEARCH_ZERO_RESULTS_MAX_ENTRIES) return;
+
   const { counts, lasts } = await hgetallBoth(client, kind);
   const entries = entriesFromCountLastMaps(counts, lasts);
   if (entries.length <= SEARCH_ZERO_RESULTS_MAX_ENTRIES) return;
@@ -285,7 +308,8 @@ export async function recordSearchZeroResult(
       return;
     }
 
-    const { client, kind } = borrowed;
+    const client = borrowed.client as HashClient;
+    const { kind } = borrowed;
     if (kind === 'upstash') {
       await Promise.all([
         client.hincrby(COUNT_HASH_KEY, query, 1),
@@ -297,7 +321,7 @@ export async function recordSearchZeroResult(
         client.hSet(LAST_HASH_KEY, query, String(now)),
       ]);
     }
-    // 偶發裁切；失敗不影響已寫入的增量
+    // HLEN 未超標則不 HGETALL；裁切失敗不影響已寫入的增量
     try {
       await pruneIfNeeded(client, kind);
     } catch (error) {
