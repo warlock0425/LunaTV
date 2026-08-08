@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import {
   fetchSafeRemoteUrl,
   parseSafeRemoteUrl,
@@ -11,6 +12,9 @@ import {
 export const runtime = 'nodejs';
 const CONFIG_FETCH_TIMEOUT_MS = 10_000;
 const CONFIG_FETCH_MAX_BYTES = 5 * 1024 * 1024;
+/** 站長手動抓訂閱；留餘裕重試 */
+const CONFIG_SUBSCRIPTION_FETCH_RATE_LIMIT = 30;
+const CONFIG_SUBSCRIPTION_FETCH_RATE_WINDOW_SECONDS = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +30,13 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    const limited = await enforceRateLimit(request, {
+      namespace: 'api-admin-config-subscription-fetch',
+      limit: CONFIG_SUBSCRIPTION_FETCH_RATE_LIMIT,
+      windowSeconds: CONFIG_SUBSCRIPTION_FETCH_RATE_WINDOW_SECONDS,
+    });
+    if (limited) return limited;
 
     const body = await readJsonObject(request);
     if (!body) {
