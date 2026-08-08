@@ -6,6 +6,13 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.0',
+    date: '2026-08-08',
+    content: `
+- 新增：管理端「搜尋零結果」清單，記錄站上搜不到結果的查詢詞與次數，方便站長依真實情況補台灣譯名對照。僅記錄查詢詞、次數與時間，不記錄使用者。
+    `.trim(),
+  },
+  {
     version: 'v3.0.2',
     date: '2026-08-08',
     content: `
@@ -13,6 +20,7 @@ export const CHANGELOGS: ChangelogItem[] = [
 - 改善：搜尋沒有結果時，會顯示系統實際採用的中國片名，並提供一鍵用該名稱重搜。
     `.trim(),
   },
+
   {
     version: 'v3.0.1',
     date: '2026-08-03',
