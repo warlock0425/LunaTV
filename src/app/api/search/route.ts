@@ -11,6 +11,7 @@ import {
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { searchFromApi } from '@/lib/downstream';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
+import { recordSearchZeroResult } from '@/lib/search-zero-results';
 import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
 import { orderSourcesByValidation } from '@/lib/source-validation';
 import { yellowWords } from '@/lib/yellow';
@@ -109,7 +110,8 @@ export async function GET(request: NextRequest) {
       });
     }
     if (flattenedResults.length === 0) {
-      // no cache if empty
+      // 站級零結果收集（不綁使用者）；失敗不影響搜尋回應
+      void recordSearchZeroResult(query);
       return NextResponse.json(
         { results: [], primaryQuery: cleanedOriginal },
         { status: 200, headers: PRIVATE_NO_STORE_HEADERS }
