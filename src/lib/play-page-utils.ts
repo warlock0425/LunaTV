@@ -126,6 +126,76 @@ export function parseLoadSpeedKBps(loadSpeed: string): number {
   return unit === 'MB/s' ? value * 1024 : value;
 }
 
+/** 標題分組容差：與 preferBestSource 既有行為一致（max - 80） */
+export const TITLE_MATCH_SAFE_MARGIN = 80;
+
+/**
+ * 標題安全組：分數距最高分不超過 margin 的候選。
+ * 畫質／速度閘門必須在此之後，避免 1080p 但播錯片。
+ */
+export function filterTitleSafeCandidates<T extends { titleScore: number }>(
+  candidates: T[],
+  margin = TITLE_MATCH_SAFE_MARGIN
+): T[] {
+  if (candidates.length === 0) return [];
+  const maxTitleScore = Math.max(...candidates.map((c) => c.titleScore));
+  return candidates.filter((c) => c.titleScore >= maxTitleScore - margin);
+}
+
+export type SpeedTestedCandidate<T = unknown> = {
+  source: T;
+  testResult: VideoTestResult;
+  titleScore: number;
+};
+
+/**
+ * 全部測速完成後的首播選擇（無「命中即起播」時）。
+ * 順序：標題安全組 → 組內若有 1080p+ 只從其中選 → 否則整組退回評分（fellBackWithoutHd）。
+ * 「未知」畫質不算 1080p+（與 isPreferredDisplayQuality 一致），可參與退回評分。
+ */
+export function selectSourceAfterSpeedTests<T>(
+  successful: Array<SpeedTestedCandidate<T>>
+): { source: T; fellBackWithoutHd: boolean } | null {
+  if (successful.length === 0) return null;
+
+  const titleSafe = filterTitleSafeCandidates(successful);
+  const pool = titleSafe.length > 0 ? titleSafe : successful;
+
+  const hdPool = pool.filter((c) =>
+    isPreferredDisplayQuality(c.testResult.quality)
+  );
+  const usePool = hdPool.length > 0 ? hdPool : pool;
+  const fellBackWithoutHd = hdPool.length === 0;
+
+  const validSpeeds = usePool
+    .map((result) => parseLoadSpeedKBps(result.testResult.loadSpeed))
+    .filter((speed) => speed > 0);
+  const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1024;
+
+  const validPings = usePool
+    .map((result) => result.testResult.pingTime)
+    .filter((ping) => ping > 0);
+  const minPing = validPings.length > 0 ? Math.min(...validPings) : 50;
+  const maxPing = validPings.length > 0 ? Math.max(...validPings) : 1000;
+
+  const ranked = usePool
+    .map((result) => ({
+      ...result,
+      sourceScore: calculateSourceScore(
+        result.testResult,
+        maxSpeed,
+        minPing,
+        maxPing
+      ),
+    }))
+    .sort((a, b) => b.sourceScore - a.sourceScore);
+
+  return {
+    source: ranked[0].source,
+    fellBackWithoutHd,
+  };
+}
+
 export function calculateSourceScore(
   testResult: VideoTestResult,
   _maxSpeed: number,

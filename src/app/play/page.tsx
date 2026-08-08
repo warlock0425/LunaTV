@@ -774,7 +774,11 @@ function PlayPageClient() {
               if (optimizationEnabled) {
                 setLoadingStage('preferring');
                 setLoadingMessage('⚡ 正在優選最佳播放源...');
-                detailData = await preferBestSource(sourcesInfo);
+                const preferred = await preferBestSource(sourcesInfo);
+                detailData = preferred.source;
+                if (preferred.noHighQualityNotice) {
+                  toast('此片無 1080p 以上來源', 'info');
+                }
               } else {
                 detailData = sourcesInfo[0];
               }
@@ -788,9 +792,13 @@ function PlayPageClient() {
             (!isBangumiCardSearch || needPreferRef.current)
           ) {
             setLoadingStage('preferring');
-            setLoadingMessage('⚡ 正在優選最佳播放源...');
+            setLoadingMessage('⚡ 正在優選最佳播放源（優先 1080p+）...');
 
-            detailData = await preferBestSource(sourcesInfo);
+            const preferred = await preferBestSource(sourcesInfo);
+            detailData = preferred.source;
+            if (preferred.noHighQualityNotice) {
+              toast('此片無 1080p 以上來源', 'info');
+            }
             if (!active) return;
           }
         }

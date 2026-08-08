@@ -1,11 +1,13 @@
 import {
   calculateSourceScore,
   filterSourcesPreferHighQuality,
+  filterTitleSafeCandidates,
   formatPlayerTime,
   getStableTitle,
   isBelowPreferredDisplayQuality,
   isPreferredDisplayQuality,
   parseLoadSpeedKBps,
+  selectSourceAfterSpeedTests,
 } from './play-page-utils';
 
 describe('畫質優先過濾（換源列表）', () => {
@@ -121,5 +123,127 @@ describe('play page pure helpers', () => {
 
     expect(fast1080).toBeGreaterThan(slow480);
     expect(fast1080).toBe(135);
+  });
+});
+
+describe('首播畫質底線（selectSourceAfterSpeedTests）', () => {
+  const src = (id: string) =>
+    ({
+      source: id,
+      id,
+      title: '正確片名',
+      episodes: ['http://x'],
+    }) as const;
+
+  it('有 1080p 時絕不先選快的 720p', () => {
+    const picked = selectSourceAfterSpeedTests([
+      {
+        source: src('slow-hd'),
+        titleScore: 1000,
+        testResult: {
+          quality: '1080p',
+          loadSpeed: '300 KB/s',
+          pingTime: 200,
+        },
+      },
+      {
+        source: src('fast-720'),
+        titleScore: 1000,
+        testResult: {
+          quality: '720p',
+          loadSpeed: '5 MB/s',
+          pingTime: 30,
+        },
+      },
+    ]);
+    expect(picked).not.toBeNull();
+    expect(picked!.fellBackWithoutHd).toBe(false);
+    expect(picked!.source.source).toBe('slow-hd');
+  });
+
+  it('標題安全組優先於畫質：錯片名 1080p 不得贏過對片名 720p', () => {
+    const picked = selectSourceAfterSpeedTests([
+      {
+        source: { ...src('wrong-hd'), title: '完全不同的片' },
+        titleScore: 100,
+        testResult: {
+          quality: '1080p',
+          loadSpeed: '5 MB/s',
+          pingTime: 30,
+        },
+      },
+      {
+        source: src('right-720'),
+        titleScore: 1000,
+        testResult: {
+          quality: '720p',
+          loadSpeed: '200 KB/s',
+          pingTime: 200,
+        },
+      },
+    ]);
+    expect(picked).not.toBeNull();
+    // 標題組只有 right-720；無 1080p+ → 退回
+    expect(picked!.source.source).toBe('right-720');
+    expect(picked!.fellBackWithoutHd).toBe(true);
+  });
+
+  it('完全無 1080p+ 時退回評分並標記 fellBackWithoutHd', () => {
+    const picked = selectSourceAfterSpeedTests([
+      {
+        source: src('a'),
+        titleScore: 900,
+        testResult: {
+          quality: '720p',
+          loadSpeed: '1 MB/s',
+          pingTime: 80,
+        },
+      },
+      {
+        source: src('b'),
+        titleScore: 900,
+        testResult: {
+          quality: '480p',
+          loadSpeed: '2 MB/s',
+          pingTime: 50,
+        },
+      },
+    ]);
+    expect(picked).not.toBeNull();
+    expect(picked!.fellBackWithoutHd).toBe(true);
+  });
+
+  it('未知畫質不算 1080p+，不單獨觸發高畫質組', () => {
+    const picked = selectSourceAfterSpeedTests([
+      {
+        source: src('unknown'),
+        titleScore: 1000,
+        testResult: {
+          quality: '未知',
+          loadSpeed: '2 MB/s',
+          pingTime: 40,
+        },
+      },
+      {
+        source: src('720'),
+        titleScore: 1000,
+        testResult: {
+          quality: '720p',
+          loadSpeed: '500 KB/s',
+          pingTime: 100,
+        },
+      },
+    ]);
+    expect(picked).not.toBeNull();
+    expect(picked!.fellBackWithoutHd).toBe(true);
+  });
+
+  it('filterTitleSafeCandidates 距最高分超過 margin 會剔除', () => {
+    const safe = filterTitleSafeCandidates([
+      { titleScore: 1000, id: 'a' },
+      { titleScore: 950, id: 'b' },
+      { titleScore: 100, id: 'c' },
+    ]);
+    expect(safe.map((x) => x.id)).toEqual(['a', 'b']);
   });
 });

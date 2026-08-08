@@ -1,7 +1,12 @@
 import { MutableRefObject, useCallback, useRef, useState } from 'react';
 
 import { logger } from '@/lib/logger';
-import { calculateSourceScore, VideoTestResult } from '@/lib/play-page-utils';
+import {
+  filterTitleSafeCandidates,
+  isPreferredDisplayQuality,
+  selectSourceAfterSpeedTests,
+  VideoTestResult,
+} from '@/lib/play-page-utils';
 import {
   deduplicateResults,
   getMatchQueries,
@@ -15,6 +20,12 @@ import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8 } from '@/lib/utils';
 
 const SPEED_TEST_CACHE_TTL_MS = 30 * 60 * 1000;
+
+export type PreferBestSourceResult = {
+  source: SearchResult;
+  /** 全部測完後標題安全組內仍無 1080p+，已退回現行評分 */
+  noHighQualityNotice?: boolean;
+};
 
 /** 類型文字是否為動漫／番劇（避免單字「漫」誤判浪漫等） */
 function isAnimeTypeText(typeText: string): boolean {
@@ -109,132 +120,155 @@ export function usePlaybackSourceSearch({
     return result;
   };
 
-  // 播放源優選函數
+  /**
+   * 播放源優選：
+   * 1) 先算標題分、取標題安全組（不可顛倒）
+   * 2) 組內測速，命中第一個 1080p+ 即回傳起播，其餘背景繼續測
+   * 3) 全部測完仍無 1080p+ → 退回評分選最好的，並標記提示
+   * 4) 全部測速失敗 → sources[0]
+   */
   const preferBestSource = async (
     sources: SearchResult[]
-  ): Promise<SearchResult> => {
-    if (sources.length === 1) return sources[0];
-
-    const signal = abortActiveSpeedTests();
-
-    // 限制併發數為 3 進行分批測速
-    const allResults = await runWithConcurrency(sources, 3, async (source) => {
-      try {
-        if (!source.episodes || source.episodes.length === 0) {
-          logger.warn(`播放源 ${source.source_name} 沒有可用的播放地址`);
-          return null;
-        }
-
-        const episodeUrl = source.episodes[0];
-        const testResult = await getCachedVideoTestResult(episodeUrl, signal);
-
-        return {
-          source,
-          testResult,
-        };
-      } catch (error) {
-        return null;
-      }
-    });
-
-    // 等待所有測速完成，包含成功和失敗的結果
-    // 儲存所有測速結果到 precomputedVideoInfo，供 EpisodeSelector 使用（包含錯誤結果）
-    const newVideoInfoMap = new Map<
-      string,
-      {
-        quality: string;
-        loadSpeed: string;
-        pingTime: number;
-        hasError?: boolean;
-      }
-    >();
-    allResults.forEach((result, index) => {
-      const source = sources[index];
-      const sourceKey = `${source.source}-${source.id}`;
-
-      if (result) {
-        // 成功的結果
-        newVideoInfoMap.set(sourceKey, result.testResult);
-      }
-    });
-
-    // 過濾出成功的結果用於優選計算
-    const successfulResults = allResults.filter(Boolean) as Array<{
-      source: SearchResult;
-      testResult: { quality: string; loadSpeed: string; pingTime: number };
-    }>;
-
-    setPrecomputedVideoInfo(newVideoInfoMap);
-
-    if (successfulResults.length === 0) {
-      logger.warn('所有播放源測速都失敗，使用第一個播放源');
-      return sources[0];
+  ): Promise<PreferBestSourceResult> => {
+    if (sources.length === 0) {
+      throw new Error('preferBestSource requires at least one source');
     }
-
-    // 找出所有有效速度的最大值，用於線性映射
-    const validSpeeds = successfulResults
-      .map((result) => {
-        const speedStr = result.testResult.loadSpeed;
-        if (speedStr === '未知' || speedStr === '測量中...') return 0;
-
-        const match = speedStr.match(/^([\d.]+)\s*(KB\/s|MB\/s)$/);
-        if (!match) return 0;
-
-        const value = parseFloat(match[1]);
-        const unit = match[2];
-        return unit === 'MB/s' ? value * 1024 : value; // 統一轉換為 KB/s
-      })
-      .filter((speed) => speed > 0);
-
-    const maxSpeed = validSpeeds.length > 0 ? Math.max(...validSpeeds) : 1024; // 預設1MB/s作為基準
-
-    // 找出所有有效延遲的最小值和最大值，用於線性映射
-    const validPings = successfulResults
-      .map((result) => result.testResult.pingTime)
-      .filter((ping) => ping > 0);
-
-    const minPing = validPings.length > 0 ? Math.min(...validPings) : 50;
-    const maxPing = validPings.length > 0 ? Math.max(...validPings) : 1000;
+    if (sources.length === 1) {
+      return { source: sources[0] };
+    }
 
     const matchQueries = getMatchQueries(
       initialVideoTitleRef.current,
       searchTitle
     );
 
-    // 計算每個結果的評分，標題精準度優先於測速，避免錯誤片源因速度快被選中。
-    const resultsWithScore = successfulResults.map((result) => ({
-      ...result,
-      titleScore: getBestTitleMatchScore(result.source.title, matchQueries),
-      sourceScore: calculateSourceScore(
-        result.testResult,
-        maxSpeed,
-        minPing,
-        maxPing
-      ),
+    // 標題分不需網路；先分組再測速，避免錯片 1080p 搶先
+    const titled = sources.map((source) => ({
+      source,
+      titleScore: getBestTitleMatchScore(source.title, matchQueries),
     }));
+    const titleSafe = filterTitleSafeCandidates(titled);
+    const toTest = titleSafe.length > 0 ? titleSafe : titled;
 
-    const maxTitleScore = Math.max(
-      ...resultsWithScore.map((result) => result.titleScore)
+    const signal = abortActiveSpeedTests();
+    const successful: Array<{
+      source: SearchResult;
+      testResult: VideoTestResult;
+      titleScore: number;
+    }> = [];
+    const testedKeys = new Set<string>();
+
+    const mergeInfo = (sourceKey: string, testResult: VideoTestResult) => {
+      setPrecomputedVideoInfo((prev) => {
+        const next = new Map(prev);
+        next.set(sourceKey, testResult);
+        return next;
+      });
+    };
+
+    const testOne = async (item: {
+      source: SearchResult;
+      titleScore: number;
+    }): Promise<{
+      source: SearchResult;
+      testResult: VideoTestResult;
+      titleScore: number;
+    } | null> => {
+      const sourceKey = `${item.source.source}-${item.source.id}`;
+      try {
+        if (!item.source.episodes || item.source.episodes.length === 0) {
+          logger.warn(`播放源 ${item.source.source_name} 沒有可用的播放地址`);
+          return null;
+        }
+        if (signal.aborted) return null;
+
+        const episodeUrl = item.source.episodes[0];
+        const testResult = await getCachedVideoTestResult(episodeUrl, signal);
+        testedKeys.add(sourceKey);
+        mergeInfo(sourceKey, testResult);
+        return {
+          source: item.source,
+          testResult,
+          titleScore: item.titleScore,
+        };
+      } catch {
+        return null;
+      }
+    };
+
+    // 併發 3：任一標題安全組內的 1080p+ 完成即起播
+    // 用物件承載，避免 async worker 賦值後 TS 仍把 outer let 收窄成 never
+    const earlyHd = { source: null as SearchResult | null };
+    let nextIndex = 0;
+    const workers = Array.from(
+      { length: Math.min(3, toTest.length) },
+      async () => {
+        while (
+          nextIndex < toTest.length &&
+          !earlyHd.source &&
+          !signal.aborted
+        ) {
+          const current = toTest[nextIndex++];
+          const result = await testOne(current);
+          if (!result) continue;
+          successful.push(result);
+          if (isPreferredDisplayQuality(result.testResult.quality)) {
+            earlyHd.source = result.source;
+            return;
+          }
+        }
+      }
     );
-    const titleSafeResults = resultsWithScore.filter(
-      (result) => result.titleScore >= maxTitleScore - 80
-    );
+    await Promise.all(workers);
 
-    // 按標題精準度分組後，再按綜合測速評分排序，選擇最佳播放源
-    titleSafeResults.sort((a, b) => b.sourceScore - a.sourceScore);
-
-    logger.debug('播放源評分排序結果:');
-    titleSafeResults.forEach((result, index) => {
-      logger.debug(
-        `${index + 1}. ${result.source.source_name} - 標題: ${
-          result.titleScore
-        }, 測速: ${result.sourceScore.toFixed(2)} (${
-          result.testResult.quality
-        }, ${result.testResult.loadSpeed}, ${result.testResult.pingTime}ms)`
+    if (earlyHd.source) {
+      // 其餘源背景測完只更新換源列表，不打斷播放、不 abort
+      const remaining = sources.filter(
+        (s) => !testedKeys.has(`${s.source}-${s.id}`)
       );
-    });
+      if (remaining.length > 0) {
+        void runWithConcurrency(remaining, 3, async (source) => {
+          await runSpeedTestForSource(source, signal);
+        });
+      }
+      logger.debug(
+        `首播命中 1080p+：${earlyHd.source.source_name}（其餘 ${remaining.length} 個背景測速）`
+      );
+      return { source: earlyHd.source };
+    }
 
-    return titleSafeResults[0]?.source || resultsWithScore[0].source;
+    if (successful.length === 0) {
+      logger.warn('所有播放源測速都失敗，使用第一個播放源');
+      // 背景仍試著補測，方便換源列表
+      void runWithConcurrency(sources, 3, async (source) => {
+        await runSpeedTestForSource(source, signal);
+      });
+      return { source: sources[0] };
+    }
+
+    const picked = selectSourceAfterSpeedTests(successful);
+    if (!picked) {
+      return { source: sources[0] };
+    }
+
+    // 未測完的也背景補測
+    const remaining = sources.filter(
+      (s) => !testedKeys.has(`${s.source}-${s.id}`)
+    );
+    if (remaining.length > 0) {
+      void runWithConcurrency(remaining, 3, async (source) => {
+        await runSpeedTestForSource(source, signal);
+      });
+    }
+
+    if (picked.fellBackWithoutHd) {
+      logger.debug('標題安全組內無 1080p+，退回評分選源');
+    }
+
+    return {
+      source: picked.source,
+      noHighQualityNotice: picked.fellBackWithoutHd,
+    };
   };
 
   // 計算播放源綜合評分
