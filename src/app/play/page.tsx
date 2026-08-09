@@ -641,7 +641,6 @@ function PlayPageClient() {
           const searchQueries = async (
             queries: string[],
             searchOptions: {
-              speedTest?: boolean;
               directSearch?: boolean;
               translationFallback?: boolean;
             } = {}
@@ -660,7 +659,6 @@ function PlayPageClient() {
                 },
                 {
                   strictCardMatch: isBangumiCardSearch,
-                  speedTest: searchOptions.speedTest,
                   directSearch: searchOptions.directSearch,
                   translationFallback: searchOptions.translationFallback,
                 }
@@ -681,7 +679,6 @@ function PlayPageClient() {
             for (const stage of stages) {
               if (sourcesInfo.length > 0) break;
               await searchQueries(stage.queries.slice(0, stage.limit), {
-                speedTest: stage.speedTest,
                 directSearch: stage.directSearch,
                 translationFallback: stage.translationFallback,
               });
@@ -950,7 +947,6 @@ function PlayPageClient() {
                   },
                   {
                     strictCardMatch: isBangumiCardSearch,
-                    speedTest: backgroundStage?.speedTest,
                     directSearch: backgroundStage?.directSearch,
                   }
                 );

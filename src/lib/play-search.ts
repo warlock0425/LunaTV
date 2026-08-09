@@ -57,7 +57,6 @@ export interface PlaybackSearchPlanStage {
   queries: string[];
   limit: number;
   directSearch: boolean;
-  speedTest: boolean;
   translationFallback?: boolean;
 }
 
@@ -572,7 +571,6 @@ export function buildPlaybackSearchPlan({
       queries: getFastSourceSearchQueries(title, searchTitle),
       limit: 3,
       directSearch: true,
-      speedTest: false,
     });
   }
   stages.push({
@@ -580,7 +578,6 @@ export function buildPlaybackSearchPlan({
     queries: getMainlandFallbackSourceSearchQueries(title, searchTitle),
     limit: 3,
     directSearch: true,
-    speedTest: false,
   });
 
   if (isBangumiCardSearch) {
@@ -596,7 +593,6 @@ export function buildPlaybackSearchPlan({
         queries: getChineseAliasSourceSearchQueries(aliases),
         limit: 3,
         directSearch: true,
-        speedTest: false,
       });
     }
     stages.push({
@@ -604,21 +600,18 @@ export function buildPlaybackSearchPlan({
       queries: searchTitle ? getFastSourceSearchQueries('', searchTitle) : [],
       limit: 2,
       directSearch: true,
-      speedTest: false,
     });
     stages.push({
       reason: 'full',
       queries: getSourceSearchQueries(title, searchTitle, aliases),
       limit: 4,
       directSearch: true,
-      speedTest: false,
     });
     stages.push({
       reason: 'translation-core',
       queries: getBangumiTranslationFallbackQueries(title, aliases),
       limit: TRANSLATION_FALLBACK_MAX_QUERIES,
       directSearch: true,
-      speedTest: false,
       translationFallback: true,
     });
   } else {
@@ -627,7 +620,6 @@ export function buildPlaybackSearchPlan({
       queries: getSourceSearchQueries(title, searchTitle),
       limit: 4,
       directSearch: true,
-      speedTest: false,
     });
   }
 

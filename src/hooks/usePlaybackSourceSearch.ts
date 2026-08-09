@@ -297,8 +297,8 @@ export function usePlaybackSourceSearch({
     } catch (e) {
       // 測速失敗或被中止時務必把佔位移除，否則這個源會被永久標記成
       // 「已測過」卻沒有任何結果——之後每一輪都會 early return，
-      // 選集面板上它的畫質／速度會一直空著。fetchSourcesData 每次呼叫都會
-      // abort 前一批測速，所以這條路徑非常容易走到。
+      // 選集面板上它的畫質／速度會一直空著。preferBestSource 開新一輪、
+      // 或卸載時 abort 都會走到這條路徑。
       speedTestedKeys.current.delete(key);
       logger.warn(`Speed test failed for ${res.source_name}:`, e);
     }
@@ -309,7 +309,6 @@ export function usePlaybackSourceSearch({
     onProgress?: (results: SearchResult[]) => void,
     options: {
       strictCardMatch?: boolean;
-      speedTest?: boolean;
       directSearch?: boolean;
       translationFallback?: boolean;
     } = {}
@@ -436,14 +435,8 @@ export function usePlaybackSourceSearch({
         onProgress(deduplicated);
       }
 
-      if (options.speedTest !== false) {
-        // 背景限制併發數為 3 分批測速
-        const signal = abortActiveSpeedTests();
-        runWithConcurrency(deduplicated, 3, async (res: SearchResult) => {
-          await runSpeedTestForSource(res, signal);
-        });
-      }
-
+      // 測速只由 preferBestSource 驅動（含命中即起播後的背景補測）。
+      // 此處不得 abort／開第二條測速路徑，否則會掐掉首播 1080p 閘門。
       const sorted = sortByTitleMatch(deduplicated, matchQueries);
       return sorted;
     } catch (err) {
