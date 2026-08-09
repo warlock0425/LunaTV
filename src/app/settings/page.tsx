@@ -17,6 +17,8 @@ import {
 } from '@/lib/streaming-search-preference';
 import { useMounted } from '@/hooks/useClientMount';
 
+import ChangePasswordCard from '@/components/ChangePasswordCard';
+
 const DATA_PROXY_OPTIONS = [
   { value: 'direct', label: '直連（伺服器直接請求豆瓣）' },
   { value: 'cmliussss-cdn-tencent', label: '騰訊 CDN' },
@@ -262,6 +264,9 @@ export default function SettingsPage() {
             onChange={setIptvDirect}
           />
         </div>
+
+        {/* 帳號：自助改密（站長與 localstorage 模式不顯示，見元件內註解） */}
+        <ChangePasswordCard />
 
         {/* 進階：代理（預設收合，降低認知負荷） */}
         <div className='bg-white dark:bg-zinc-900/60 backdrop-blur-sm rounded-2xl border border-zinc-200 dark:border-white/5 overflow-hidden'>
