@@ -8,6 +8,10 @@ import {
 } from '@/lib/url-safety';
 
 import { setBoundedMapValue } from './bounded-map';
+import {
+  describeSourceValidation,
+  type SourceDisableSuggestion,
+} from './source-validation-status';
 
 /** 搜尋可達 / 詳情可解集數 / 抽樣 m3u8 可播 */
 export type SourceCheckLevel = 'search' | 'detail' | 'playable';
@@ -358,24 +362,14 @@ export function orderSourcesByValidation<T extends { key: string }>(
     .map((entry) => entry.site);
 }
 
-/** 給後台展示：是否建議人工檢查／停用（不自動執行） */
-export function getSourceDisableSuggestion(sourceKey: string): {
-  suggest: boolean;
-  reason: string;
-} | null {
-  const result = getLastValidation(sourceKey);
-  if (!result) return null;
-  if (result.status === 'invalid') {
-    return { suggest: true, reason: '連線失敗，建議檢查 API 或暫時停用' };
-  }
-  if (result.status === 'partial' && result.levels.detail === 'fail') {
-    return { suggest: true, reason: '可搜但無法解析集數，建議檢查詳情接口' };
-  }
-  if (result.status === 'partial' && result.levels.playable === 'fail') {
-    return {
-      suggest: true,
-      reason: '可搜可解但播放抽樣失敗，建議換關鍵詞重測或作備援',
-    };
-  }
-  return null;
+/**
+ * 給後台展示：是否建議人工檢查／停用（不自動執行）。
+ *
+ * 判讀規則放在 source-validation-status，管理端 client component 直接用
+ * describeSourceValidation 讀 SSE 拿到的結果，兩邊同一份規則。
+ */
+export function getSourceDisableSuggestion(
+  sourceKey: string
+): SourceDisableSuggestion | null {
+  return describeSourceValidation(getLastValidation(sourceKey));
 }

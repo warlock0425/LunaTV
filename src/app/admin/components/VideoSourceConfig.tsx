@@ -30,6 +30,7 @@ import { createPortal } from 'react-dom';
 
 import { AdminConfig } from '@/lib/admin.types';
 import { logger } from '@/lib/logger';
+import { describeSourceValidation } from '@/lib/source-validation-status';
 
 import { AlertModal, showError, useAlertModal } from './AlertModal';
 import { buttonStyles } from './buttonStyles';
@@ -470,7 +471,11 @@ export const VideoSourceConfig = ({
               : '·'
         }`
       : '';
+    // 「部分通過」有兩種完全相反的處置：解集數失敗多半是源壞了，試播失敗常常
+    // 只是這次的關鍵詞沒片。共用 describeSourceValidation，與伺服器端同一份規則。
+    const suggestion = describeSourceValidation(result);
     const detailMsg = [
+      suggestion?.reason,
       result.message,
       levelLabel,
       result.episodeCount ? `${result.episodeCount}集` : '',
@@ -498,7 +503,7 @@ export const VideoSourceConfig = ({
         };
       case 'partial':
         return {
-          text: '建議關注',
+          text: suggestion?.label || '建議關注',
           className:
             'bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-300',
           icon: '◐',
@@ -517,7 +522,7 @@ export const VideoSourceConfig = ({
         };
       case 'invalid':
         return {
-          text: '建議停用',
+          text: suggestion?.label || '建議停用',
           className:
             'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300',
           icon: '✗',
