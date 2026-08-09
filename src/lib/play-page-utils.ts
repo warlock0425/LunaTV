@@ -5,6 +5,26 @@ export type VideoTestResult = {
   hasError?: boolean;
 };
 
+/**
+ * 畫質／速度測速要打哪一集的 URL。
+ *
+ * CMS `vod_play_url` 原樣收進 episodes，index 0 常是預告／花絮／重複條目
+ * （見 downstream.parseVodPlayUrl，不過濾）。有第二筆就用 [1]，單集才退回 [0]。
+ *
+ * 首播優選測速與背景列表測速必須共用此函式，否則 1080p 閘門與換源標籤
+ * 可能量到不同 URL、合法地互相矛盾。
+ *
+ * 不適用：source-validation 等「能不能播」探針（仍可用 [0]）。
+ */
+export function pickSpeedTestEpisodeUrl(
+  episodes: string[] | undefined | null
+): string | null {
+  if (!episodes || episodes.length === 0) return null;
+  const preferred = episodes.length > 1 ? episodes[1] : episodes[0];
+  const url = typeof preferred === 'string' ? preferred.trim() : '';
+  return url || null;
+}
+
 /** 1080p 及以上：換源列表優先顯示的畫質 */
 export function isPreferredDisplayQuality(
   quality: string | undefined | null

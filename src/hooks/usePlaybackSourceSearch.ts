@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import {
   filterTitleSafeCandidates,
   isPreferredDisplayQuality,
+  pickSpeedTestEpisodeUrl,
   selectSourceAfterSpeedTests,
   VideoTestResult,
 } from '@/lib/play-page-utils';
@@ -176,13 +177,13 @@ export function usePlaybackSourceSearch({
     } | null> => {
       const sourceKey = `${item.source.source}-${item.source.id}`;
       try {
-        if (!item.source.episodes || item.source.episodes.length === 0) {
+        if (signal.aborted) return null;
+
+        const episodeUrl = pickSpeedTestEpisodeUrl(item.source.episodes);
+        if (!episodeUrl) {
           logger.warn(`播放源 ${item.source.source_name} 沒有可用的播放地址`);
           return null;
         }
-        if (signal.aborted) return null;
-
-        const episodeUrl = item.source.episodes[0];
         const testResult = await getCachedVideoTestResult(episodeUrl, signal);
         testedKeys.add(sourceKey);
         mergeInfo(sourceKey, testResult);
@@ -283,10 +284,8 @@ export function usePlaybackSourceSearch({
     speedTestedKeys.current.add(key);
 
     try {
-      const episodeUrl =
-        res.episodes.length > 1
-          ? res.episodes[res.episodes.length - 1]
-          : res.episodes[0];
+      // 與首播測速同一規則：episodes[1] ?? [0]，見 pickSpeedTestEpisodeUrl
+      const episodeUrl = pickSpeedTestEpisodeUrl(res.episodes);
       if (!episodeUrl) return;
 
       const testResult = await getCachedVideoTestResult(episodeUrl, signal);

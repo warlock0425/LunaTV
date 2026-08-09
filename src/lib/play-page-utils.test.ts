@@ -7,8 +7,39 @@ import {
   isBelowPreferredDisplayQuality,
   isPreferredDisplayQuality,
   parseLoadSpeedKBps,
+  pickSpeedTestEpisodeUrl,
   selectSourceAfterSpeedTests,
 } from './play-page-utils';
+
+describe('pickSpeedTestEpisodeUrl（測速取集）', () => {
+  it('多集時用第二集，避開 CMS 常塞在 [0] 的預告／花絮', () => {
+    expect(
+      pickSpeedTestEpisodeUrl([
+        'http://cdn/trailer.m3u8',
+        'http://cdn/ep2.m3u8',
+        'http://cdn/ep3.m3u8',
+      ])
+    ).toBe('http://cdn/ep2.m3u8');
+  });
+
+  it('單集退回 [0]', () => {
+    expect(pickSpeedTestEpisodeUrl(['http://cdn/movie.m3u8'])).toBe(
+      'http://cdn/movie.m3u8'
+    );
+  });
+
+  it('空列表或無效輸入回 null', () => {
+    expect(pickSpeedTestEpisodeUrl([])).toBeNull();
+    expect(pickSpeedTestEpisodeUrl(null)).toBeNull();
+    expect(pickSpeedTestEpisodeUrl(undefined)).toBeNull();
+    expect(pickSpeedTestEpisodeUrl(['', '  '])).toBeNull();
+  });
+
+  it('第二集空白時不退回 [0]（避免誤量預告）', () => {
+    // 有 length>1 但 [1] 空字串：視為無可用測速 URL
+    expect(pickSpeedTestEpisodeUrl(['http://a.m3u8', '  '])).toBeNull();
+  });
+});
 
 describe('畫質優先過濾（換源列表）', () => {
   it('識別 1080p+ 與低畫質', () => {
