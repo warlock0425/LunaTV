@@ -36,7 +36,15 @@ describe('/api/proxy/m3u8', () => {
       timestamp: Date.now(),
     });
     mockedGetConfig.mockResolvedValue({
-      LiveConfig: [{ key: 'live', ua: 'Custom UA' }],
+      LiveConfig: [
+        {
+          key: 'live',
+          ua: 'Custom UA',
+          url: 'https://cdn.example/playlist.m3u',
+          name: 'live',
+          from: 'custom',
+        },
+      ],
     } as Awaited<ReturnType<typeof getConfig>>);
   });
 

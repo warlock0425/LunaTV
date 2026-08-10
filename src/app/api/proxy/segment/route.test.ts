@@ -2,6 +2,7 @@
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
+import { clearLiveProxyRememberedHosts } from '@/lib/live-proxy-allowlist';
 import { fetchSafeRemoteUrl } from '@/lib/url-safety';
 
 import { GET } from './route';
@@ -23,6 +24,7 @@ const mockedFetch = jest.mocked(fetchSafeRemoteUrl);
 describe('/api/proxy/segment', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearLiveProxyRememberedHosts();
     process.env.STORAGE_TYPE = 'localstorage';
     process.env.PASSWORD = 'secret';
     mockedGetVerifiedAuth.mockResolvedValue({
@@ -31,7 +33,15 @@ describe('/api/proxy/segment', () => {
       timestamp: Date.now(),
     });
     mockedGetConfig.mockResolvedValue({
-      LiveConfig: [{ key: 'live', ua: 'Custom UA' }],
+      LiveConfig: [
+        {
+          key: 'live',
+          ua: 'Custom UA',
+          url: 'https://cdn.example/playlist.m3u',
+          name: 'live',
+          from: 'custom',
+        },
+      ],
     } as Awaited<ReturnType<typeof getConfig>>);
   });
 
@@ -92,7 +102,13 @@ describe('/api/proxy/segment', () => {
 
   it('rejects a disabled live source before fetching upstream', async () => {
     mockedGetConfig.mockResolvedValue({
-      LiveConfig: [{ key: 'live', disabled: true }],
+      LiveConfig: [
+        {
+          key: 'live',
+          disabled: true,
+          url: 'https://cdn.example/playlist.m3u',
+        },
+      ],
     } as Awaited<ReturnType<typeof getConfig>>);
 
     const response = await GET(
@@ -103,5 +119,36 @@ describe('/api/proxy/segment', () => {
 
     expect(response.status).toBe(404);
     expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('url 主機不屬於該直播源 → 403，且不向上游抓取', async () => {
+    const response = await GET(
+      new Request(
+        'http://localhost/api/proxy/segment?url=https%3A%2F%2Fevil.example%2Fhuge.iso&moontv-source=live'
+      )
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized Content-Length before streaming', async () => {
+    mockedFetch.mockResolvedValue(
+      new Response('x', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': String(60 * 1024 * 1024),
+        },
+      })
+    );
+
+    const response = await GET(
+      new Request(
+        'http://localhost/api/proxy/segment?url=https%3A%2F%2Fcdn.example%2Fvideo.mp4&moontv-source=live'
+      )
+    );
+
+    expect(response.status).toBe(413);
   });
 });

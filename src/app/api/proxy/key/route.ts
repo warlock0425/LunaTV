@@ -8,6 +8,8 @@ import {
   isValidApiSource,
 } from '@/lib/api-input-validation';
 import { getConfig } from '@/lib/config';
+import { peekCachedLiveChannels } from '@/lib/live';
+import { isUrlAllowedForLiveProxy } from '@/lib/live-proxy-allowlist';
 import { logger } from '@/lib/logger';
 import {
   fetchSafeRemoteUrl,
@@ -56,6 +58,23 @@ export async function GET(request: Request) {
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }
+
+  if (!source) {
+    return NextResponse.json(
+      { error: 'Missing moontv-source parameter' },
+      { status: 400 }
+    );
+  }
+
+  const cachedChannels = peekCachedLiveChannels(source);
+  const channelUrls = cachedChannels?.channels.map((ch) => ch.url) ?? [];
+  if (!isUrlAllowedForLiveProxy(source, url, liveSource.url, channelUrls)) {
+    return NextResponse.json(
+      { error: 'URL not allowed for this live source' },
+      { status: 403 }
+    );
+  }
+
   const ua = liveSource.ua || 'AptvPlayer/1.4.10';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), KEY_FETCH_TIMEOUT_MS);

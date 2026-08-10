@@ -45,6 +45,11 @@ export function deleteCachedLiveChannels(key: string) {
   delete cachedLiveChannels[key];
 }
 
+/** 只讀記憶體快取，不觸發網路重整（供 proxy 白名單等熱路徑） */
+export function peekCachedLiveChannels(key: string): LiveChannels | null {
+  return cachedLiveChannels[key] || null;
+}
+
 export async function getCachedLiveChannels(
   key: string
 ): Promise<LiveChannels | null> {

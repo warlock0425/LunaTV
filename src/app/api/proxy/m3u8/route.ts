@@ -9,7 +9,11 @@ import {
 } from '@/lib/api-input-validation';
 import { getConfig } from '@/lib/config';
 import { filterAdsFromM3U8Detailed } from '@/lib/hls-ad-filter';
-import { getBaseUrl, resolveUrl } from '@/lib/live';
+import { getBaseUrl, peekCachedLiveChannels, resolveUrl } from '@/lib/live';
+import {
+  isUrlAllowedForLiveProxy,
+  rememberLiveProxyHost,
+} from '@/lib/live-proxy-allowlist';
 import {
   fetchSafeRemoteUrl,
   isSafeRemoteUrl,
@@ -64,6 +68,16 @@ export async function GET(request: Request) {
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }
+
+  const cachedChannels = peekCachedLiveChannels(source);
+  const channelUrls = cachedChannels?.channels.map((ch) => ch.url) ?? [];
+  if (!isUrlAllowedForLiveProxy(source, url, liveSource.url, channelUrls)) {
+    return NextResponse.json(
+      { error: 'URL not allowed for this live source' },
+      { status: 403 }
+    );
+  }
+
   const ua = liveSource.ua || 'AptvPlayer/1.4.10';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), M3U8_FETCH_TIMEOUT_MS);
@@ -91,6 +105,10 @@ export async function GET(request: Request) {
     // 不信任上游 Content-Type；不少 IPTV 來源會漏掉或錯標類型。
     // 端點只接受真正的 HLS manifest，並以大小與逾時限制完整讀取後重寫。
     const finalUrl = response.url;
+    // 記錄請求與 redirect 後的 host，供後續 segment／key 白名單使用
+    rememberLiveProxyHost(source, url);
+    if (finalUrl) rememberLiveProxyHost(source, finalUrl);
+
     const m3u8Content = await readResponseTextWithLimit(
       response,
       MAX_M3U8_BYTES
