@@ -9,6 +9,7 @@ import { configSelfCheck, getConfig, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { isHashed } from '@/lib/password';
+import { revokeUserSessions } from '@/lib/security-store';
 import { parseStorageKey } from '@/lib/storage-key';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
@@ -167,6 +168,24 @@ async function clearDataForUsers(usernames: Iterable<string>): Promise<void> {
     await db.deleteUser(username);
   }
   await db.clearAllData();
+}
+
+/**
+ * 匯入成功後撤銷 session。必須用 revokeUserSessions（bump version），
+ * 不可只刪 session key：getSessionVersion 讀不到會 NX 寫回 1，
+ * 舊 cookie 的 version 也是 1，照樣 match。
+ */
+async function revokeSessionsForUsernames(
+  usernames: Iterable<string | undefined | null>
+): Promise<void> {
+  const unique = new Set(
+    Array.from(usernames).filter(
+      (name): name is string => typeof name === 'string' && name.length > 0
+    )
+  );
+  for (const username of unique) {
+    await revokeUserSessions(username);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -454,6 +473,7 @@ export async function POST(req: NextRequest) {
         ]);
         await restoreBackup(backup);
         console.error('備份已成功還原');
+        // 回滾成功：不 revoke——舊資料回來了，舊 cookie 仍應有效
         return NextResponse.json(
           { error: '導入中途失敗，已還原為匯入前的資料' },
           { status: 500 }
@@ -466,6 +486,15 @@ export async function POST(req: NextRequest) {
         );
       }
     }
+
+    // 資料已換成匯入內容（密碼／紀錄可能全變）：bump 所有相關 session。
+    // clearAllData / deleteUser 都不碰 security:session-version:*。
+    await revokeSessionsForUsernames([
+      ...Object.keys(backup.userBackups),
+      ...Object.keys(userData),
+      ...importedAdminConfig.UserConfig.Users.map((user) => user.username),
+      ownerUsername,
+    ]);
 
     return NextResponse.json({
       message: '數據導入成功',

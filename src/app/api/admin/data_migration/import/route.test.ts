@@ -8,6 +8,7 @@ import { configSelfCheck, getConfig, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { isHashed } from '@/lib/password';
+import { getSessionVersion, revokeUserSessions } from '@/lib/security-store';
 
 import { POST } from './route';
 
@@ -51,12 +52,28 @@ jest.mock('@/lib/password', () => ({
   isHashed: jest.fn(),
 }));
 
+/** 記憶體版 session store：模擬「讀不到 → 1」與 bump，禁止用刪 key 冒充撤銷 */
+const sessionVersions = new Map<string, number>();
+jest.mock('@/lib/security-store', () => ({
+  getSessionVersion: jest.fn(async (username: string) => {
+    return sessionVersions.get(username) ?? 1;
+  }),
+  revokeUserSessions: jest.fn(async (username: string) => {
+    // 與 production Lua 一致：無 key 從 1 bump 到 2，有 key 則 +1
+    const next = (sessionVersions.get(username) ?? 1) + 1;
+    sessionVersions.set(username, next);
+    return next;
+  }),
+}));
+
 const mockedAuth = jest.mocked(getVerifiedAuthInfo);
 const mockedConfigSelfCheck = jest.mocked(configSelfCheck);
 const mockedGetConfig = jest.mocked(getConfig);
 const mockedSetCachedConfig = jest.mocked(setCachedConfig);
 const mockedDecrypt = jest.mocked(SimpleCrypto.decrypt);
 const mockedIsHashed = jest.mocked(isHashed);
+const mockedGetSessionVersion = jest.mocked(getSessionVersion);
+const mockedRevokeUserSessions = jest.mocked(revokeUserSessions);
 const mockedDb = db as unknown as {
   storage: {
     client: {
@@ -114,6 +131,7 @@ describe('data migration import', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionVersions.clear();
     process.env.STORAGE_TYPE = 'redis';
     process.env.USERNAME = 'owner';
     mockedAuth.mockResolvedValue({ username: 'owner' });
@@ -237,5 +255,67 @@ describe('data migration import', () => {
       'sys:users',
       'alice'
     );
+  });
+
+  it('import 成功後該使用者的 sessionVersion 必須比匯入前大（bump，不是刪 key）', async () => {
+    // 模擬站上已有有效 session（version=1，與預設 cookie 相同）
+    sessionVersions.set('alice', 1);
+    sessionVersions.set('owner', 1);
+    const aliceBefore = await mockedGetSessionVersion('alice');
+    const ownerBefore = await mockedGetSessionVersion('owner');
+    expect(aliceBefore).toBe(1);
+    expect(ownerBefore).toBe(1);
+
+    const response = await POST(
+      createImportRequest({
+        data: {
+          adminConfig: {
+            ...existingConfig,
+            UserConfig: {
+              Users: [{ username: 'alice', role: 'user', banned: false }],
+            },
+          },
+          userData: {
+            alice: {
+              password: 'new-password-hash',
+              playRecords: {},
+              favorites: {},
+              searchHistory: [],
+              skipConfigs: {},
+            },
+          },
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+
+    const aliceAfter = await mockedGetSessionVersion('alice');
+    const ownerAfter = await mockedGetSessionVersion('owner');
+    expect(aliceAfter).toBeGreaterThan(aliceBefore);
+    expect(ownerAfter).toBeGreaterThan(ownerBefore);
+    expect(mockedRevokeUserSessions).toHaveBeenCalledWith('alice');
+    expect(mockedRevokeUserSessions).toHaveBeenCalledWith('owner');
+
+    // 若只刪 key 而不 bump：下次讀回仍是 1，舊 cookie 仍 match——這條守住不是那種修法
+    expect(sessionVersions.get('alice')).toBe(2);
+    expect(sessionVersions.has('alice')).toBe(true);
+  });
+
+  it('import 中途失敗並還原時不撤銷 session（舊 cookie 仍應對回滾資料有效）', async () => {
+    sessionVersions.set('alice', 1);
+    mockedDb.saveAdminConfig
+      .mockRejectedValueOnce(new Error('write failed'))
+      .mockResolvedValueOnce(undefined);
+
+    const response = await POST(
+      createImportRequest({
+        data: { adminConfig: existingConfig, userData: {} },
+      })
+    );
+
+    expect(response.status).toBe(500);
+    expect(mockedRevokeUserSessions).not.toHaveBeenCalled();
+    expect(await mockedGetSessionVersion('alice')).toBe(1);
   });
 });
