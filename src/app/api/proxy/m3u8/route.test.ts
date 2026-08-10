@@ -3,6 +3,10 @@
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import {
+  clearLiveProxyRememberedHosts,
+  isUrlAllowedForLiveProxy,
+} from '@/lib/live-proxy-allowlist';
+import {
   fetchSafeRemoteUrl,
   readResponseTextWithLimit,
 } from '@/lib/url-safety';
@@ -28,6 +32,7 @@ const mockedReadText = jest.mocked(readResponseTextWithLimit);
 describe('/api/proxy/m3u8', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearLiveProxyRememberedHosts();
     process.env.STORAGE_TYPE = 'localstorage';
     process.env.PASSWORD = 'secret';
     mockedGetVerifiedAuth.mockResolvedValue({
@@ -135,5 +140,86 @@ describe('/api/proxy/m3u8', () => {
 
     expect(response.status).toBe(404);
     expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('清單在 hostA、分片／variant 指向 hostB → 抓過清單後 hostB 放行；未出現的 hostC 仍拒', async () => {
+    // 播放清單在 cdn1；絕對 URL 分片與 variant 在 cdn2（多 CDN 常見）
+    const playlistHost = 'https://cdn1.example/live/index.m3u8';
+    const segmentOnB = 'https://cdn2.example/seg/1.ts';
+    const variantOnB = 'https://cdn2.example/variants/720.m3u8';
+    const unknownOnC = 'https://cdn3.example/evil.ts';
+
+    const manifest = [
+      '#EXTM3U',
+      '#EXT-X-STREAM-INF:BANDWIDTH=800000',
+      variantOnB,
+      '#EXTINF:4,',
+      segmentOnB,
+    ].join('\n');
+    const upstream = new Response(manifest, {
+      headers: { 'Content-Type': 'application/vnd.apple.mpegurl' },
+    });
+    Object.defineProperty(upstream, 'url', { value: playlistHost });
+    mockedFetch.mockResolvedValue(upstream);
+    mockedGetConfig.mockResolvedValue({
+      LiveConfig: [
+        {
+          key: 'live',
+          ua: 'Custom UA',
+          // 靜態白名單只有 playlist 所在域；cdn2 必須靠清單內容記住
+          url: 'https://cdn1.example/playlist.m3u',
+          name: 'live',
+          from: 'custom',
+        },
+      ],
+    } as Awaited<ReturnType<typeof getConfig>>);
+
+    // 抓清單前：cdn2 不應放行
+    expect(
+      isUrlAllowedForLiveProxy(
+        'live',
+        segmentOnB,
+        'https://cdn1.example/playlist.m3u',
+        []
+      )
+    ).toBe(false);
+
+    const response = await GET(
+      new Request(
+        `https://app.example/api/proxy/m3u8?url=${encodeURIComponent(playlistHost)}&moontv-source=live`,
+        { headers: { host: 'app.example' } }
+      )
+    );
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain(encodeURIComponent(segmentOnB));
+    expect(body).toContain(encodeURIComponent(variantOnB));
+
+    // 抓過清單後：清單裡出現的 hostB 必須可過
+    expect(
+      isUrlAllowedForLiveProxy(
+        'live',
+        segmentOnB,
+        'https://cdn1.example/playlist.m3u',
+        []
+      )
+    ).toBe(true);
+    expect(
+      isUrlAllowedForLiveProxy(
+        'live',
+        variantOnB,
+        'https://cdn1.example/playlist.m3u',
+        []
+      )
+    ).toBe(true);
+    // 從未出現在任何清單的 hostC 仍拒
+    expect(
+      isUrlAllowedForLiveProxy(
+        'live',
+        unknownOnC,
+        'https://cdn1.example/playlist.m3u',
+        []
+      )
+    ).toBe(false);
   });
 });

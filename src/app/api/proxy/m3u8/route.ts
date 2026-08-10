@@ -216,6 +216,8 @@ function rewriteM3U8Content(
     // 處理 TS 片段 URL 和其他媒體檔案
     if (line && !line.startsWith('#')) {
       const resolvedUrl = resolveUrl(baseUrl, line);
+      // 清單內絕對 URL 可能在別的 CDN host——必須記住，否則 segment 會 403
+      if (source) rememberLiveProxyHost(source, resolvedUrl);
       const proxyUrl = allowCORS
         ? resolvedUrl
         : `${proxyBase}/segment?url=${encodeURIComponent(
@@ -231,7 +233,14 @@ function rewriteM3U8Content(
       line.startsWith('#EXT-X-PART:') ||
       line.startsWith('#EXT-X-PRELOAD-HINT:')
     ) {
-      line = rewriteTagUri(line, baseUrl, proxyBase, sourceParam, 'segment');
+      line = rewriteTagUri(
+        line,
+        baseUrl,
+        proxyBase,
+        sourceParam,
+        'segment',
+        source
+      );
     }
 
     // 處理媒體清單與主清單的加密金鑰 URI
@@ -239,7 +248,14 @@ function rewriteM3U8Content(
       line.startsWith('#EXT-X-KEY:') ||
       line.startsWith('#EXT-X-SESSION-KEY:')
     ) {
-      line = rewriteTagUri(line, baseUrl, proxyBase, sourceParam, 'key');
+      line = rewriteTagUri(
+        line,
+        baseUrl,
+        proxyBase,
+        sourceParam,
+        'key',
+        source
+      );
     }
 
     // 主清單中的替代音軌、字幕、I-frame 與 LL-HLS 回報都指向另一份清單。
@@ -249,7 +265,14 @@ function rewriteM3U8Content(
       line.startsWith('#EXT-X-IMAGE-STREAM-INF:') ||
       line.startsWith('#EXT-X-RENDITION-REPORT:')
     ) {
-      line = rewriteTagUri(line, baseUrl, proxyBase, sourceParam, 'm3u8');
+      line = rewriteTagUri(
+        line,
+        baseUrl,
+        proxyBase,
+        sourceParam,
+        'm3u8',
+        source
+      );
     }
 
     // 處理嵌套的 M3U8 檔案 (EXT-X-STREAM-INF)
@@ -261,6 +284,7 @@ function rewriteM3U8Content(
         const nextLine = lines[i].trim();
         if (nextLine && !nextLine.startsWith('#')) {
           const resolvedUrl = resolveUrl(baseUrl, nextLine);
+          if (source) rememberLiveProxyHost(source, resolvedUrl);
           const proxyUrl = `${proxyBase}/m3u8?url=${encodeURIComponent(
             resolvedUrl
           )}${sourceParam}`;
@@ -283,13 +307,16 @@ function rewriteTagUri(
   baseUrl: string,
   proxyBase: string,
   sourceParam: string,
-  endpoint: 'segment' | 'key' | 'm3u8'
+  endpoint: 'segment' | 'key' | 'm3u8',
+  source: string | null
 ) {
   const uriMatch = line.match(/\bURI=(["'])(.*?)\1/i);
   if (uriMatch) {
     const quote = uriMatch[1];
     const originalUri = uriMatch[2];
     const resolvedUrl = resolveUrl(baseUrl, originalUri);
+    // 與媒體行相同：tag 裡的 URI 也可能跨 CDN
+    if (source) rememberLiveProxyHost(source, resolvedUrl);
     const proxyUrl = `${proxyBase}/${endpoint}?url=${encodeURIComponent(
       resolvedUrl
     )}${sourceParam}`;
