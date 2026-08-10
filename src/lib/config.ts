@@ -939,8 +939,21 @@ export async function getAdminUser(
   return userConfig;
 }
 
-export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
-  const config = await getConfig();
+/**
+ * 依使用者權限篩可用片源（純函式，便於守門）。
+ *
+ * `enabledApis` 語意必須分開——不可用 `length > 0` 把兩者擠在一起：
+ * - 欄位不存在 / `undefined`：未設定 → tags → 全部（歷史行為）
+ * - `[]`：明確零權限 → 回空陣列（刪源濾掉最後一個 key 時會落到此）
+ * - `['a','b']`：白名單
+ *
+ * 管理端「取消全部勾選」會 delete 欄位（不是存 `[]`），見 updateUserApis。
+ */
+export function selectAvailableApiSites(
+  config: AdminConfig,
+  user: string | undefined,
+  options?: { isLocalStorageMode?: boolean }
+): ApiSite[] {
   const allApiSites = config.SourceConfig.filter((s) => !s.disabled);
 
   if (!user) {
@@ -948,7 +961,7 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
   }
 
   if (user === 'localstorage') {
-    return getServerStorageType() === 'localstorage' ? allApiSites : [];
+    return options?.isLocalStorageMode ? allApiSites : [];
   }
 
   const userConfig = config.UserConfig.Users.find((u) => u.username === user);
@@ -956,8 +969,8 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
     return [];
   }
 
-  // 優先根據使用者自己的 enabledApis 設定查找
-  if (userConfig.enabledApis && userConfig.enabledApis.length > 0) {
+  // 有陣列＝已設定過白名單（含空＝零權限）；未設定才落到 tags / 全部
+  if (Array.isArray(userConfig.enabledApis)) {
     const userApiSitesSet = new Set(userConfig.enabledApis);
     return allApiSites
       .filter((s) => userApiSitesSet.has(s.key))
@@ -969,11 +982,10 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
       }));
   }
 
-  // 如果沒有 enabledApis 設定，則根據 tags 查找
+  // 未設定 enabledApis：依 tags 查找
   if (userConfig.tags && userConfig.tags.length > 0 && config.UserConfig.Tags) {
     const enabledApisFromTags = new Set<string>();
 
-    // 遍歷使用者的所有 tags，收集對應的 enabledApis
     userConfig.tags.forEach((tagName) => {
       const tagConfig = config.UserConfig.Tags?.find((t) => t.name === tagName);
       if (tagConfig && tagConfig.enabledApis) {
@@ -995,8 +1007,15 @@ export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
     }
   }
 
-  // 如果都沒有設定，返回所有可用的 API 站點
+  // 未設定白名單也無有效 tags → 全部可用源
   return allApiSites;
+}
+
+export async function getAvailableApiSites(user?: string): Promise<ApiSite[]> {
+  const config = await getConfig();
+  return selectAvailableApiSites(config, user, {
+    isLocalStorageMode: getServerStorageType() === 'localstorage',
+  });
 }
 
 /** @fires-and-forget */
