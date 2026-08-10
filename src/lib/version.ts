@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.3',
+    date: '2026-08-10',
+    content: `
+- 安全：修正刪除片源時，原本被限制片源範圍的使用者會被放寬成可用全部片源的問題。
+- 安全：備份匯入完成後，相關使用者的既有登入狀態會失效，避免舊登入讀取到匯入後的新帳號資料。站長不受影響，可直接繼續操作。
+- 安全：管理端「重置設定」改為只接受由站台自身頁面送出的請求，避免站長點到外部連結就被觸發重置。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.2',
     date: '2026-08-09',
     content: `
