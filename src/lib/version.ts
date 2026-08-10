@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.4',
+    date: '2026-08-10',
+    content: `
+- 安全：直播代理不再接受任意公網網址。分片／播放清單／金鑰請求必須屬於該直播源（含播放清單內引用的其他 CDN），並加上逾時與大小上限，避免被當成無界下載跳板。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.3',
     date: '2026-08-10',
     content: `
