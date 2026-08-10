@@ -42,6 +42,16 @@ interface Exemption {
   requiresRateLimit: boolean;
 }
 
+/**
+ * 單一 HTTP method 豁免（整支 route 仍要驗其餘 handler）。
+ * 例如只回 405 的 stub GET，不該被要求呼叫 getVerifiedAuthInfo。
+ */
+const HANDLER_EXEMPTIONS: Record<string, Record<string, string>> = {
+  'admin/reset/route.ts': {
+    GET: '僅回 405，不變更狀態；重置在 POST，且 POST 有 getVerifiedAuthInfo + Origin 檢查',
+  },
+};
+
 const SECOND_LAYER_EXEMPTIONS: Record<string, Exemption> = {
   'login/route.ts': {
     reason: '登入端點本身，尚未有 session；自帶 consumeLoginAttempt 失敗鎖定',
@@ -195,11 +205,17 @@ describe('API 認證覆蓋', () => {
         return;
       }
 
+      const methodExempt = HANDLER_EXEMPTIONS[route] || {};
       const missing = handlers
-        .filter(
-          (handler) =>
-            !AUTH_HELPERS.some((helper) => handler.body.includes(`${helper}(`))
-        )
+        .filter((handler) => {
+          if (methodExempt[handler.method]) {
+            expect(methodExempt[handler.method].length).toBeGreaterThan(10);
+            return false;
+          }
+          return !AUTH_HELPERS.some((helper) =>
+            handler.body.includes(`${helper}(`)
+          );
+        })
         .map((handler) => handler.method);
 
       expect({ route, missing }).toEqual({ route, missing: [] });
@@ -211,8 +227,12 @@ describe('API 認證覆蓋', () => {
     const stale = Object.keys(SECOND_LAYER_EXEMPTIONS).filter(
       (route) => !existing.has(route)
     );
+    const staleHandlers = Object.keys(HANDLER_EXEMPTIONS).filter(
+      (route) => !existing.has(route)
+    );
 
     expect(stale).toEqual([]);
+    expect(staleHandlers).toEqual([]);
   });
 
   it('會對外發出請求的豁免端點一律有限流', () => {

@@ -110,7 +110,9 @@ function AdminPageClient() {
   const handleConfirmResetConfig = async () => {
     await withLoading('resetConfig', async () => {
       try {
-        const response = await fetch(`/api/admin/reset`);
+        const response = await fetch(`/api/admin/reset`, {
+          method: 'POST',
+        });
         if (!response.ok) {
           throw new Error(`重置失敗: ${response.status}`);
         }
