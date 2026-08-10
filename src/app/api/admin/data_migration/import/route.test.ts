@@ -257,7 +257,7 @@ describe('data migration import', () => {
     );
   });
 
-  it('import 成功後該使用者的 sessionVersion 必須比匯入前大（bump，不是刪 key）', async () => {
+  it('import 成功後一般使用者 sessionVersion 必須變大；站長不變', async () => {
     // 模擬站上已有有效 session（version=1，與預設 cookie 相同）
     sessionVersions.set('alice', 1);
     sessionVersions.set('owner', 1);
@@ -292,14 +292,16 @@ describe('data migration import', () => {
 
     const aliceAfter = await mockedGetSessionVersion('alice');
     const ownerAfter = await mockedGetSessionVersion('owner');
+    // 一般使用者：密碼／資料已被匯入換掉，必須 bump
     expect(aliceAfter).toBeGreaterThan(aliceBefore);
-    expect(ownerAfter).toBeGreaterThan(ownerBefore);
     expect(mockedRevokeUserSessions).toHaveBeenCalledWith('alice');
-    expect(mockedRevokeUserSessions).toHaveBeenCalledWith('owner');
-
-    // 若只刪 key 而不 bump：下次讀回仍是 1，舊 cookie 仍 match——這條守住不是那種修法
+    // 若只刪 key 而不 bump：下次讀回仍是 1，舊 cookie 仍 match
     expect(sessionVersions.get('alice')).toBe(2);
     expect(sessionVersions.has('alice')).toBe(true);
+
+    // 站長：憑證在環境變數，匯入改不到；撤銷只會讓「重新整理」撞 401
+    expect(ownerAfter).toBe(ownerBefore);
+    expect(mockedRevokeUserSessions).not.toHaveBeenCalledWith('owner');
   });
 
   it('import 中途失敗並還原時不撤銷 session（舊 cookie 仍應對回滾資料有效）', async () => {

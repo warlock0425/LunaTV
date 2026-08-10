@@ -487,14 +487,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 資料已換成匯入內容（密碼／紀錄可能全變）：bump 所有相關 session。
+    // 資料已換成匯入內容（密碼／紀錄可能全變）：bump 一般使用者 session。
+    // 不撤銷站長：密碼來自環境變數、匯入改不到；撤銷只會讓成功後的
+    //「重新整理」撞 401，買不到安全性。
     // clearAllData / deleteUser 都不碰 security:session-version:*。
-    await revokeSessionsForUsernames([
-      ...Object.keys(backup.userBackups),
-      ...Object.keys(userData),
-      ...importedAdminConfig.UserConfig.Users.map((user) => user.username),
-      ownerUsername,
-    ]);
+    await revokeSessionsForUsernames(
+      [
+        ...Object.keys(backup.userBackups),
+        ...Object.keys(userData),
+        ...importedAdminConfig.UserConfig.Users.map((user) => user.username),
+      ].filter((name) => name !== ownerUsername)
+    );
 
     return NextResponse.json({
       message: '數據導入成功',
