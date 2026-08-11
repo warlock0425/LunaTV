@@ -7,8 +7,26 @@ import { SearchResult } from '@/lib/types';
 
 export const DETAIL_CACHE_KEY = 'berserker_detail_cache';
 export const DETAIL_CACHE_KEY_LEGACY = 'luna_detail_cache';
-export const DETAIL_CACHE_LIMIT = 100;
-export const DETAIL_CACHE_TTL = 60 * 60 * 1000; // 1 小時過期，防止 M3U8 連結失效
+export const DETAIL_CACHE_LIMIT = 300;
+/** soft TTL：超過可 stale 起播，背景再刷新（SWR） */
+export const DETAIL_CACHE_TTL = 60 * 60 * 1000; // 1 小時
+/** hard TTL：太舊的簽章 URL 不再用來起播 */
+export const DETAIL_CACHE_HARD_TTL = 24 * 60 * 60 * 1000; // 24 小時
+/** 配額爆掉時一次砍掉的最舊筆數 */
+const DETAIL_CACHE_QUOTA_EVICT = 50;
+
+export type DetailCacheEntry = {
+  detail: SearchResult;
+  timestamp: number;
+};
+
+export type DetailCacheStore = Record<string, DetailCacheEntry>;
+
+export type CachedDetailLookup = {
+  detail: SearchResult;
+  /** soft 過期：可起播，應背景刷新 */
+  stale: boolean;
+};
 
 export const DEFAULT_SKIP_CONFIG = {
   enable: false,
@@ -54,31 +72,79 @@ export function migrateDetailCache(): void {
   }
 }
 
+/**
+ * 純函式：依 soft/hard TTL 解讀快取條目。
+ * - soft 內：fresh
+ * - soft～hard：stale（不刪，呼叫端可起播 + 背景刷新）
+ * - 超過 hard：hard_expired（呼叫端才刪）
+ */
+export function resolveCachedDetailEntry(
+  entry: DetailCacheEntry | undefined | null,
+  now: number,
+  softTtlMs: number = DETAIL_CACHE_TTL,
+  hardTtlMs: number = DETAIL_CACHE_HARD_TTL
+): CachedDetailLookup | 'hard_expired' | null {
+  if (!entry?.detail) return null;
+  if (!Number.isFinite(entry.timestamp)) return null;
+  const age = now - entry.timestamp;
+  if (age > hardTtlMs) return 'hard_expired';
+  if (age > softTtlMs) return { detail: entry.detail, stale: true };
+  return { detail: entry.detail, stale: false };
+}
+
+/** 純函式：依 timestamp 砍最舊，保留最多 maxKeep 筆 */
+export function pruneOldestDetailCacheEntries(
+  cache: DetailCacheStore,
+  maxKeep: number
+): DetailCacheStore {
+  const keys = Object.keys(cache);
+  if (maxKeep < 0) maxKeep = 0;
+  if (keys.length <= maxKeep) return { ...cache };
+
+  const entries = Object.entries(cache) as [string, DetailCacheEntry][];
+  entries.sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+  const keep = entries.slice(entries.length - maxKeep);
+  const next: DetailCacheStore = {};
+  for (const [k, v] of keep) next[k] = v;
+  return next;
+}
+
 export function getCachedDetail(
   source: string,
   id: string
-): SearchResult | null {
+): CachedDetailLookup | null {
   if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(DETAIL_CACHE_KEY);
     if (!raw) return null;
-    const cache = JSON.parse(raw) as Record<
-      string,
-      { detail: SearchResult; timestamp: number }
-    >;
-    const entry = cache[`${source}_${id}`];
-    if (entry && entry.detail) {
-      if (Date.now() - entry.timestamp > DETAIL_CACHE_TTL) {
-        delete cache[`${source}_${id}`];
+    const cache = JSON.parse(raw) as DetailCacheStore;
+    const key = `${source}_${id}`;
+    const resolved = resolveCachedDetailEntry(cache[key], Date.now());
+    if (resolved === null) return null;
+    if (resolved === 'hard_expired') {
+      // 只有 hard 過期才刪——soft 過期必須保留給 stale 起播（SWR）
+      delete cache[key];
+      try {
         localStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(cache));
-        return null;
+      } catch {
+        // 刪除寫回失敗可忽略；下次讀仍會 hard_expired
       }
-      return entry.detail;
+      return null;
     }
+    return resolved;
   } catch (e) {
     logger.error('Failed to get cached detail:', e);
   }
   return null;
+}
+
+function writeDetailCache(cache: DetailCacheStore): boolean {
+  try {
+    localStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(cache));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function setCachedDetail(
@@ -89,26 +155,28 @@ export function setCachedDetail(
   if (typeof window === 'undefined' || !source || !id || !detail) return;
   try {
     const raw = localStorage.getItem(DETAIL_CACHE_KEY);
-    const cache = raw ? JSON.parse(raw) : {};
+    let cache: DetailCacheStore = raw ? JSON.parse(raw) : {};
     cache[`${source}_${id}`] = {
       detail,
       timestamp: Date.now(),
     };
 
-    const keys = Object.keys(cache);
-    if (keys.length > DETAIL_CACHE_LIMIT) {
-      const entries = Object.entries(cache) as [
-        string,
-        { detail: SearchResult; timestamp: number },
-      ][];
-      entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
-      const toDelete = entries.slice(0, keys.length - DETAIL_CACHE_LIMIT);
-      toDelete.forEach(([k]) => {
-        delete cache[k];
-      });
+    if (Object.keys(cache).length > DETAIL_CACHE_LIMIT) {
+      cache = pruneOldestDetailCacheEntries(cache, DETAIL_CACHE_LIMIT);
     }
 
-    localStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(cache));
+    if (writeDetailCache(cache)) return;
+
+    // 配額爆掉：再砍一批最舊的重試；仍失敗才放棄（避免每次寫入都 throw）
+    const afterQuota = pruneOldestDetailCacheEntries(
+      cache,
+      Math.max(0, Object.keys(cache).length - DETAIL_CACHE_QUOTA_EVICT)
+    );
+    if (!writeDetailCache(afterQuota)) {
+      logger.error(
+        'Failed to set cached detail: localStorage quota exceeded after eviction'
+      );
+    }
   } catch (e) {
     logger.error('Failed to set cached detail:', e);
   }
@@ -119,12 +187,9 @@ export function clearCachedDetail(source: string, id: string): void {
   try {
     const raw = localStorage.getItem(DETAIL_CACHE_KEY);
     if (!raw) return;
-    const cache = JSON.parse(raw) as Record<
-      string,
-      { detail: SearchResult; timestamp: number }
-    >;
+    const cache = JSON.parse(raw) as DetailCacheStore;
     delete cache[`${source}_${id}`];
-    localStorage.setItem(DETAIL_CACHE_KEY, JSON.stringify(cache));
+    writeDetailCache(cache);
   } catch (e) {
     logger.error('Failed to clear cached detail:', e);
   }

@@ -103,7 +103,7 @@ export function useFavorite({
           cover:
             currentDetail.poster ||
             videoCoverRef.current ||
-            getCachedDetail(source, id)?.poster ||
+            getCachedDetail(source, id)?.detail?.poster ||
             '',
           total_episodes: currentDetail.episodes.length || 1,
           save_time: Date.now(),

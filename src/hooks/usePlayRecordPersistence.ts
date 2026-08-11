@@ -31,7 +31,10 @@ type PlayRecordPersistenceOptions = {
   videoTitleRef: MutableRefObject<string>;
   videoCoverRef: MutableRefObject<string>;
   searchTitle: string;
-  getCachedDetail: (source: string, id: string) => SearchResult | null;
+  getCachedDetail: (
+    source: string,
+    id: string
+  ) => { detail: SearchResult; stale: boolean } | null;
   requestWakeLock: () => void;
   releaseWakeLock: () => void;
   cleanupPlayer: (resetCountdownUi?: boolean) => void;
@@ -85,7 +88,7 @@ export function usePlayRecordPersistence({
         let cover =
           detail.poster ||
           videoCoverRef.current ||
-          getCachedDetail(source, id)?.poster ||
+          getCachedDetail(source, id)?.detail?.poster ||
           '';
 
         if (!cover && !isPageExit) {

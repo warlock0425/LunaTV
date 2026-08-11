@@ -2,12 +2,17 @@ import type { SearchResult } from '@/lib/types';
 
 import {
   clampEpisodeIndex,
+  DETAIL_CACHE_HARD_TTL,
+  DETAIL_CACHE_TTL,
+  type DetailCacheEntry,
   formatEpisodeBadge,
   formatEpisodeUpdateMessage,
   getEpisodeCount,
   getEpisodeUrl,
   mergeDetailPreservingPlayback,
   mergeFreshDetail,
+  pruneOldestDetailCacheEntries,
+  resolveCachedDetailEntry,
   resolveEpisodeIndexAfterRefresh,
 } from './play-page-helpers';
 
@@ -32,6 +37,65 @@ function makeDetail(
     class: overrides.class,
   };
 }
+
+describe('detail cache SWR (resolveCachedDetailEntry)', () => {
+  const soft = DETAIL_CACHE_TTL;
+  const hard = DETAIL_CACHE_HARD_TTL;
+  const base = 1_000_000;
+  const entry = (ageMs: number): DetailCacheEntry => ({
+    detail: makeDetail({ episodes: ['https://cdn.example/1.m3u8'] }),
+    timestamp: base - ageMs,
+  });
+
+  it('soft 內 → fresh（stale=false）', () => {
+    const r = resolveCachedDetailEntry(entry(soft - 1), base, soft, hard);
+    expect(r).toEqual(
+      expect.objectContaining({ stale: false, detail: expect.any(Object) })
+    );
+  });
+
+  it('soft 過期、hard 內 → stale 仍回 detail（不刪）', () => {
+    const r = resolveCachedDetailEntry(entry(soft + 1), base, soft, hard);
+    expect(r).not.toBe('hard_expired');
+    expect(r).not.toBeNull();
+    if (r && r !== 'hard_expired') {
+      expect(r.stale).toBe(true);
+      expect(r.detail.episodes[0]).toBe('https://cdn.example/1.m3u8');
+    }
+  });
+
+  it('hard 過期 → hard_expired（呼叫端才刪）', () => {
+    expect(resolveCachedDetailEntry(entry(hard + 1), base, soft, hard)).toBe(
+      'hard_expired'
+    );
+  });
+
+  it('缺條目 → null', () => {
+    expect(resolveCachedDetailEntry(undefined, base, soft, hard)).toBeNull();
+  });
+});
+
+describe('pruneOldestDetailCacheEntries', () => {
+  it('超過上限時保留最新的 maxKeep 筆', () => {
+    const cache = {
+      a: {
+        detail: makeDetail({ id: 'a', episodes: ['a'] }),
+        timestamp: 1,
+      },
+      b: {
+        detail: makeDetail({ id: 'b', episodes: ['b'] }),
+        timestamp: 3,
+      },
+      c: {
+        detail: makeDetail({ id: 'c', episodes: ['c'] }),
+        timestamp: 2,
+      },
+    };
+    const pruned = pruneOldestDetailCacheEntries(cache, 2);
+    expect(Object.keys(pruned).sort()).toEqual(['b', 'c']);
+    expect(pruned.a).toBeUndefined();
+  });
+});
 
 describe('formatEpisodeBadge', () => {
   it('純數字集標題改寫成「第 N 集」', () => {

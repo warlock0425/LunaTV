@@ -610,13 +610,17 @@ function PlayPageClient() {
           logger.debug(
             `Direct load path for source: ${currentSource}, id: ${currentId}`
           );
-          const cachedDetail = getCachedDetail(currentSource, currentId);
-          if (cachedDetail) {
+          const cachedLookup = getCachedDetail(currentSource, currentId);
+          if (cachedLookup) {
+            // soft 過期也算命中：先 stale 起播，背景 refreshDetailInBackground
+            // 會走 mergeDetailPreservingPlayback（不得直接 setDetail 換 URL）
             logger.debug(
-              'Cache hit for direct load detail:',
-              cachedDetail.title
+              `Cache hit for direct load detail${
+                cachedLookup.stale ? ' (stale, SWR)' : ''
+              }:`,
+              cachedLookup.detail.title
             );
-            detailData = cachedDetail;
+            detailData = cachedLookup.detail;
             sourcesInfo = [detailData];
           } else {
             logger.debug('Cache miss for direct load detail, fetching...');
