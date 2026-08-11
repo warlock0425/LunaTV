@@ -57,6 +57,7 @@ import {
   mergeFreshDetail,
   migrateDetailCache,
   setCachedDetail,
+  shouldApplyBackgroundDetail,
 } from './play-page-helpers';
 import { PlayErrorView, PlayLoadingView } from './play-views';
 import { buildSkipSettings } from './player-skip-settings';
@@ -895,11 +896,14 @@ function PlayPageClient() {
                 currentEpisodeIndexRef.current
               );
               if (!again.applied || !again.detail) return prevDetail;
-              // 雙重保險：播放 URL 變了就不套用
-              const idx = currentEpisodeIndexRef.current;
-              const prevUrl = prevDetail?.episodes?.[idx] || '';
-              const nextUrl = again.detail.episodes?.[idx] || '';
-              if (prevUrl && nextUrl && prevUrl !== nextUrl) {
+              // 雙重保險：播放 URL 變了就不套用（純函式守門，SWR 後更常走）
+              if (
+                !shouldApplyBackgroundDetail(
+                  prevDetail,
+                  again.detail,
+                  currentEpisodeIndexRef.current
+                )
+              ) {
                 return prevDetail;
               }
               return again.detail;
@@ -1267,10 +1271,13 @@ function PlayPageClient() {
               currentEpisodeIndexRef.current
             );
             if (!again.applied || !again.detail) return prevDetail;
-            const idx = currentEpisodeIndexRef.current;
-            const prevUrl = prevDetail?.episodes?.[idx] || '';
-            const nextUrl = again.detail.episodes?.[idx] || '';
-            if (prevUrl && nextUrl && prevUrl !== nextUrl) {
+            if (
+              !shouldApplyBackgroundDetail(
+                prevDetail,
+                again.detail,
+                currentEpisodeIndexRef.current
+              )
+            ) {
               return prevDetail;
             }
             return again.detail;

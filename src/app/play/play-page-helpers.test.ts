@@ -14,6 +14,7 @@ import {
   pruneOldestDetailCacheEntries,
   resolveCachedDetailEntry,
   resolveEpisodeIndexAfterRefresh,
+  shouldApplyBackgroundDetail,
 } from './play-page-helpers';
 
 function makeDetail(
@@ -94,6 +95,47 @@ describe('pruneOldestDetailCacheEntries', () => {
     const pruned = pruneOldestDetailCacheEntries(cache, 2);
     expect(Object.keys(pruned).sort()).toEqual(['b', 'c']);
     expect(pruned.a).toBeUndefined();
+  });
+});
+
+describe('shouldApplyBackgroundDetail（背景刷新 URL 雙重保險）', () => {
+  const prev = makeDetail({
+    episodes: [
+      'https://cdn.example/1.m3u8?s=old',
+      'https://cdn.example/2.m3u8?s=old',
+    ],
+  });
+
+  it('當前集 URL 相同 → 可套用', () => {
+    const next = makeDetail({
+      episodes: [
+        'https://cdn.example/1.m3u8?s=old',
+        'https://cdn.example/2.m3u8?s=new',
+      ],
+    });
+    expect(shouldApplyBackgroundDetail(prev, next, 0)).toBe(true);
+  });
+
+  it('當前集 URL 變了 → 拒絕套用（拿掉這條必紅）', () => {
+    const next = makeDetail({
+      episodes: [
+        'https://cdn.example/1.m3u8?s=ROTATED',
+        'https://cdn.example/2.m3u8?s=old',
+      ],
+    });
+    expect(shouldApplyBackgroundDetail(prev, next, 0)).toBe(false);
+  });
+
+  it('prev 無 URL 時允許套用（無正在播的位址可護）', () => {
+    expect(
+      shouldApplyBackgroundDetail(makeDetail({ episodes: [''] }), prev, 0)
+    ).toBe(true);
+  });
+
+  it('next 無集數 → 拒絕', () => {
+    expect(
+      shouldApplyBackgroundDetail(prev, makeDetail({ episodes: [] }), 0)
+    ).toBe(false);
   });
 });
 

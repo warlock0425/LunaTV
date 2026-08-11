@@ -415,6 +415,27 @@ export function formatEpisodeUpdateMessage(
 }
 
 /**
+ * 背景刷新合併後，是否可把 next 套用到畫面上的 detail。
+ *
+ * 雙重保險（在 mergeDetailPreservingPlayback 鎖 URL 之後）：
+ * 若當前集的 m3u8 URL 仍變了，拒絕套用——否則 videoUrl 變更 → HLS 重建 →
+ * 音畫/字幕累積錯位。SWR 讓這條路徑更常走，必須有純函式守門。
+ *
+ * 規則與 page.tsx 原判斷一致：兩邊都有 URL 且不相等 → 不套用。
+ */
+export function shouldApplyBackgroundDetail(
+  prevDetail: Pick<SearchResult, 'episodes'> | null | undefined,
+  nextDetail: Pick<SearchResult, 'episodes'> | null | undefined,
+  episodeIndex: number
+): boolean {
+  if (!nextDetail?.episodes?.length) return false;
+  const prevUrl = prevDetail?.episodes?.[episodeIndex] || '';
+  const nextUrl = nextDetail.episodes[episodeIndex] || '';
+  if (prevUrl && nextUrl && prevUrl !== nextUrl) return false;
+  return true;
+}
+
+/**
  * 播放中背景刷新專用：可更新集數列表／標題，但：
  * 1) 絕不縮短已在播的集數列表（上游暫時回較少集時保留 prev）
  * 2) 固定目前集的 m3u8 URL（避免重建播放器導致音畫/字幕錯位）
