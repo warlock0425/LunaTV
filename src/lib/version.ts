@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.5',
+    date: '2026-08-10',
+    content: `
+- 改善：「繼續觀看」在詳情快取超過一小時後，仍會先用本機資料起播，並在背景更新最新詳情，不必每次都等來源回應。
+- 改善：直連取得詳情失敗、改以片名搜尋時，載入文字會說清楚目前在做什麼，而不再一直顯示「正在取得影片詳情」。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.4',
     date: '2026-08-10',
     content: `
