@@ -632,6 +632,9 @@ function PlayPageClient() {
               logger.warn(
                 `Failed to fetch detail for direct load: ${currentSource}, ${currentId}`
               );
+              // 直連詳情回空才改文案；本來就沒 source/id 的搜尋路徑不要說「詳情失敗」
+              setLoadingStage('searching');
+              setLoadingMessage('🔍 詳情取得失敗，改以片名搜尋其他片源…');
             }
           }
         }
