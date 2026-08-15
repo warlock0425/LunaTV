@@ -71,6 +71,21 @@ export function rememberLiveProxyHost(sourceKey: string, url: string): void {
   }
 }
 
+/** 直播源本體、EPG、頻道串流與台標，供 logo／precheck 白名單使用 */
+export function collectLiveSourceRelatedUrls(
+  liveSource: { url?: string; epg?: string },
+  channels: Iterable<{ url?: string; logo?: string }> = []
+): string[] {
+  const urls: string[] = [];
+  if (liveSource.url) urls.push(liveSource.url);
+  if (liveSource.epg) urls.push(liveSource.epg);
+  for (const channel of channels) {
+    if (channel.url) urls.push(channel.url);
+    if (channel.logo) urls.push(channel.logo);
+  }
+  return urls;
+}
+
 export function collectStaticLiveProxyHosts(
   liveSourceUrl: string,
   channelUrls: Iterable<string> = []

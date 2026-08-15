@@ -38,13 +38,15 @@ export function usePlayerKeyboardShortcuts(
         onToggleShortcutsHelp,
       } = optionsRef.current;
 
-      // 忽略輸入框中的按鍵事件
+      // 忽略輸入框，以及按鈕／連結上的 Space、方向鍵（讓焦點操作自己生效）
       const target = e.target as HTMLElement | null;
       if (
         target?.tagName === 'INPUT' ||
         target?.tagName === 'TEXTAREA' ||
         target?.tagName === 'SELECT' ||
-        target?.isContentEditable
+        target?.isContentEditable ||
+        (typeof target?.closest === 'function' &&
+          target.closest('button, [role="button"], [role="switch"], a[href]'))
       )
         return;
 

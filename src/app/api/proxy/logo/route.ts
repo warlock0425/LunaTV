@@ -7,7 +7,13 @@ import {
   isValidApiRemoteUrl,
   isValidApiSource,
 } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getConfig } from '@/lib/config';
+import { peekCachedLiveChannels } from '@/lib/live';
+import {
+  collectLiveSourceRelatedUrls,
+  isUrlAllowedForLiveProxy,
+} from '@/lib/live-proxy-allowlist';
 import {
   fetchSafeRemoteUrl,
   getSafeImageContentType,
@@ -19,6 +25,8 @@ import {
 export const runtime = 'nodejs';
 const LOGO_TIMEOUT_MS = 15_000;
 const LOGO_MAX_BYTES = 10 * 1024 * 1024;
+const LOGO_RATE_LIMIT = 180;
+const LOGO_RATE_WINDOW_SECONDS = 60;
 
 export async function GET(request: Request) {
   // 第二道驗證：同目錄的 key / m3u8 / segment 都有，唯獨這支漏掉
@@ -26,10 +34,23 @@ export async function GET(request: Request) {
   if (!authInfo) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  const limited = await enforceRateLimit(request, {
+    namespace: 'api-proxy-logo',
+    limit: LOGO_RATE_LIMIT,
+    windowSeconds: LOGO_RATE_WINDOW_SECONDS,
+  });
+  if (limited) return limited;
 
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get('url');
   const source = searchParams.get('moontv-source');
+
+  if (!source || !isValidApiSource(source)) {
+    return NextResponse.json(
+      { error: 'Missing or invalid moontv-source parameter' },
+      { status: 400 }
+    );
+  }
 
   if (!imageUrl || !isValidApiRemoteUrl(imageUrl)) {
     return NextResponse.json(
@@ -38,16 +59,28 @@ export async function GET(request: Request) {
     );
   }
 
-  if (source && !isValidApiSource(source)) {
+  const config = await getConfig();
+  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
+  if (!liveSource) {
+    return NextResponse.json({ error: 'Source not found' }, { status: 404 });
+  }
+
+  const cached = peekCachedLiveChannels(source);
+  if (
+    !isUrlAllowedForLiveProxy(
+      source,
+      imageUrl,
+      liveSource.url,
+      collectLiveSourceRelatedUrls(liveSource, cached?.channels ?? [])
+    )
+  ) {
     return NextResponse.json(
-      { error: 'Invalid source parameter' },
-      { status: 400 }
+      { error: 'URL not allowed for this live source' },
+      { status: 403 }
     );
   }
 
-  const config = await getConfig();
-  const liveSource = config.LiveConfig?.find((s: any) => s.key === source);
-  const ua = liveSource?.ua || 'AptvPlayer/1.4.10';
+  const ua = liveSource.ua || 'AptvPlayer/1.4.10';
 
   try {
     const controller = new AbortController();

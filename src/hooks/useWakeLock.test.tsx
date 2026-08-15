@@ -100,6 +100,42 @@ describe('useWakeLock', () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it('卸載時會釋放仍在申請中的 sentinel', async () => {
+    let resolveRequest!: (sentinel: FakeSentinel) => void;
+    const request = jest.fn(
+      () =>
+        new Promise<FakeSentinel>((resolve) => {
+          resolveRequest = resolve;
+        })
+    );
+    Object.defineProperty(navigator, 'wakeLock', {
+      value: { request },
+      configurable: true,
+      writable: true,
+    });
+
+    const { result, unmount } = renderHook(() => useWakeLock());
+    let pending!: Promise<void>;
+    await act(async () => {
+      pending = result.current.requestWakeLock();
+    });
+
+    unmount();
+
+    const sentinel: FakeSentinel = {
+      released: false,
+      release: jest.fn(async () => {
+        sentinel.released = true;
+      }),
+    };
+    await act(async () => {
+      resolveRequest(sentinel);
+      await pending;
+    });
+
+    expect(sentinel.release).toHaveBeenCalledTimes(1);
+  });
+
   it('不支援 Wake Lock 的瀏覽器不拋錯', async () => {
     delete (navigator as unknown as Record<string, unknown>).wakeLock;
     const { result } = renderHook(() => useWakeLock());

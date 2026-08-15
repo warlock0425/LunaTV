@@ -9,6 +9,11 @@ import {
 } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getConfig } from '@/lib/config';
+import { peekCachedLiveChannels } from '@/lib/live';
+import {
+  collectLiveSourceRelatedUrls,
+  isUrlAllowedForLiveProxy,
+} from '@/lib/live-proxy-allowlist';
 import {
   fetchSafeRemoteUrl,
   readResponseTextWithLimit,
@@ -40,16 +45,16 @@ export async function GET(request: NextRequest) {
   const url = searchParams.get('url');
   const source = searchParams.get('moontv-source');
 
-  if (!url || !isValidApiRemoteUrl(url)) {
+  if (!source || !isValidApiSource(source)) {
     return NextResponse.json(
-      { error: 'Missing or invalid url' },
+      { error: 'Missing or invalid moontv-source parameter' },
       { status: 400 }
     );
   }
 
-  if (source && !isValidApiSource(source)) {
+  if (!url || !isValidApiRemoteUrl(url)) {
     return NextResponse.json(
-      { error: 'Invalid source parameter' },
+      { error: 'Missing or invalid url' },
       { status: 400 }
     );
   }
@@ -61,6 +66,22 @@ export async function GET(request: NextRequest) {
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
   }
+
+  const cached = peekCachedLiveChannels(source);
+  if (
+    !isUrlAllowedForLiveProxy(
+      source,
+      url,
+      liveSource.url,
+      collectLiveSourceRelatedUrls(liveSource, cached?.channels ?? [])
+    )
+  ) {
+    return NextResponse.json(
+      { error: 'URL not allowed for this live source' },
+      { status: 403 }
+    );
+  }
+
   const ua = liveSource.ua || 'AptvPlayer/1.4.10';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PRECHECK_TIMEOUT_MS);

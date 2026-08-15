@@ -1,5 +1,6 @@
 .env
 .env*.local
+config.json
 .git
 .claude
 .github

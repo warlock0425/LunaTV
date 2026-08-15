@@ -1,5 +1,6 @@
 import {
   clearLiveProxyRememberedHosts,
+  collectLiveSourceRelatedUrls,
   collectStaticLiveProxyHosts,
   getHostnameFromUrl,
   isUrlAllowedForLiveProxy,
@@ -17,6 +18,28 @@ describe('live-proxy-allowlist', () => {
     );
     expect(getHostnameFromUrl('not-a-url')).toBeNull();
     expect(getHostnameFromUrl('ftp://cdn.example.com/x')).toBeNull();
+  });
+
+  it('相關 URL 含 EPG 與頻道台標', () => {
+    expect(
+      collectLiveSourceRelatedUrls(
+        {
+          url: 'https://playlist.example/list.m3u',
+          epg: 'https://epg.example/tv.xml',
+        },
+        [
+          {
+            url: 'https://stream.example/ch.m3u8',
+            logo: 'https://logo.example/ch.png',
+          },
+        ]
+      )
+    ).toEqual([
+      'https://playlist.example/list.m3u',
+      'https://epg.example/tv.xml',
+      'https://stream.example/ch.m3u8',
+      'https://logo.example/ch.png',
+    ]);
   });
 
   it('靜態清單含直播源與頻道 host', () => {

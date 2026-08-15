@@ -105,9 +105,6 @@ export async function GET(request: Request) {
     // 不信任上游 Content-Type；不少 IPTV 來源會漏掉或錯標類型。
     // 端點只接受真正的 HLS manifest，並以大小與逾時限制完整讀取後重寫。
     const finalUrl = response.url;
-    // 記錄請求與 redirect 後的 host，供後續 segment／key 白名單使用
-    rememberLiveProxyHost(source, url);
-    if (finalUrl) rememberLiveProxyHost(source, finalUrl);
 
     const m3u8Content = await readResponseTextWithLimit(
       response,
@@ -120,6 +117,10 @@ export async function GET(request: Request) {
         { status: 415 }
       );
     }
+
+    // 確認是清單後才記住 host，避免開放重導向把攻擊者域名寫進白名單
+    rememberLiveProxyHost(source, url);
+    if (finalUrl) rememberLiveProxyHost(source, finalUrl);
 
     const filteredContent = m3u8Content.includes('#EXTINF')
       ? filterAdsFromM3U8Detailed(m3u8Content).content

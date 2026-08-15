@@ -209,4 +209,30 @@ describe('/api/proxy/m3u8', () => {
       isUrlAllowedForLiveProxy('live', unknownUrl, liveSourceUrl, [])
     ).toBe(false);
   });
+
+  it('does not remember a redirect host when the body is not a playlist', async () => {
+    const upstream = new Response('not a playlist', { status: 200 });
+    Object.defineProperty(upstream, 'url', {
+      value: 'https://evil.example/payload',
+    });
+    mockedFetch.mockResolvedValue(upstream);
+    mockedReadText.mockResolvedValue('not a playlist');
+
+    const response = await GET(
+      new Request(
+        'https://app.example/api/proxy/m3u8?url=https%3A%2F%2Fcdn.example%2Flive%2Fmaster.m3u8&moontv-source=live',
+        { headers: { host: 'app.example' } }
+      )
+    );
+
+    expect(response.status).toBe(415);
+    expect(
+      isUrlAllowedForLiveProxy(
+        'live',
+        'https://evil.example/seg.ts',
+        'https://cdn.example/playlist.m3u',
+        []
+      )
+    ).toBe(false);
+  });
 });

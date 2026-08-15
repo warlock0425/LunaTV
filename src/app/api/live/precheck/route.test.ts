@@ -43,7 +43,13 @@ describe('/api/live/precheck', () => {
     jest.clearAllMocks();
     signedIn();
     mockedGetConfig.mockResolvedValue({
-      LiveConfig: [{ key: 'live', ua: 'Test UA' }],
+      LiveConfig: [
+        {
+          key: 'live',
+          ua: 'Test UA',
+          url: 'https://cdn.example/playlist.m3u',
+        },
+      ],
     } as Awaited<ReturnType<typeof getConfig>>);
   });
 
@@ -84,9 +90,26 @@ describe('/api/live/precheck', () => {
     expect(mockedReadText).toHaveBeenCalledWith(upstream, 512 * 1024);
   });
 
+  it('rejects a host that does not belong to the live source', async () => {
+    const response = await GET(
+      new NextRequest(
+        'http://localhost/api/live/precheck?url=https%3A%2F%2Fevil.example%2Flive&moontv-source=live'
+      )
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
   it('rejects a disabled source before fetching upstream', async () => {
     mockedGetConfig.mockResolvedValue({
-      LiveConfig: [{ key: 'live', disabled: true }],
+      LiveConfig: [
+        {
+          key: 'live',
+          disabled: true,
+          url: 'https://cdn.example/playlist.m3u',
+        },
+      ],
     } as Awaited<ReturnType<typeof getConfig>>);
 
     const response = await GET(request());

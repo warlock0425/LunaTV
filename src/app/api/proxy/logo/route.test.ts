@@ -35,7 +35,14 @@ describe('live logo proxy', () => {
       timestamp: Date.now(),
     });
     mockedConfig.mockResolvedValue({
-      LiveConfig: [],
+      LiveConfig: [
+        {
+          key: 'live',
+          url: 'https://example.com/list.m3u',
+          name: 'live',
+          from: 'custom',
+        },
+      ],
     } as unknown as Awaited<ReturnType<typeof getConfig>>);
     mockedFetch.mockResolvedValue(
       new Response(new Uint8Array([1]), {
@@ -64,11 +71,22 @@ describe('live logo proxy', () => {
 
     const response = await GET(
       new Request(
-        'http://localhost/api/proxy/logo?url=https%3A%2F%2Fexample.com%2Flogo.png'
+        'http://localhost/api/proxy/logo?url=https%3A%2F%2Fexample.com%2Flogo.png&moontv-source=live'
       )
     );
 
     expect(response.status).toBe(413);
+  });
+
+  it('rejects a host that does not belong to the live source', async () => {
+    const response = await GET(
+      new Request(
+        'http://localhost/api/proxy/logo?url=https%3A%2F%2Fevil.example%2Flogo.png&moontv-source=live'
+      )
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockedFetch).not.toHaveBeenCalled();
   });
 
   it('returns 504 when the upstream body times out', async () => {
@@ -78,7 +96,7 @@ describe('live logo proxy', () => {
 
     const response = await GET(
       new Request(
-        'http://localhost/api/proxy/logo?url=https%3A%2F%2Fexample.com%2Flogo.png'
+        'http://localhost/api/proxy/logo?url=https%3A%2F%2Fexample.com%2Flogo.png&moontv-source=live'
       )
     );
 

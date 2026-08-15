@@ -136,4 +136,18 @@ describe('usePlayerKeyboardShortcuts 修飾鍵處理', () => {
     input.remove();
     editable.remove();
   });
+
+  it('焦點在按鈕上時不攔截空白鍵', () => {
+    const player = createPlayer();
+    setup(player);
+
+    const button = document.createElement('button');
+    document.body.append(button);
+    button.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ' ', bubbles: true })
+    );
+
+    expect(player.toggle).not.toHaveBeenCalled();
+    button.remove();
+  });
 });

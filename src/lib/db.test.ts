@@ -164,6 +164,50 @@ describe('DbManager play-record serialization', () => {
     }
   });
 
+  it('releases a lock that arrives after the acquire timeout', async () => {
+    jest.useFakeTimers();
+    try {
+      let resolveAcquire!: (value: boolean) => void;
+      const acquireLock = jest.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveAcquire = resolve;
+          })
+      );
+      const releaseLock = jest.fn().mockResolvedValue(true);
+      const getAllPlayRecords = jest.fn().mockResolvedValue({});
+      const storage = {
+        acquireLock,
+        renewLock: jest.fn(),
+        releaseLock,
+        getAllPlayRecords,
+      } as unknown as IStorage;
+      const manager = new DbManager(storage);
+
+      const savePromise = manager.savePlayRecord(
+        'user',
+        'source',
+        '1',
+        createRecord(100, 100)
+      );
+      const rejection = expect(savePromise).rejects.toBeInstanceOf(
+        StorageLockTimeoutError
+      );
+
+      await jest.advanceTimersByTimeAsync(5_100);
+      await rejection;
+      expect(releaseLock).not.toHaveBeenCalled();
+      expect(getAllPlayRecords).not.toHaveBeenCalled();
+
+      resolveAcquire(true);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(releaseLock).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('renews the lease while a mutation runs longer than its TTL', async () => {
     jest.useFakeTimers();
     try {
@@ -253,6 +297,7 @@ describe('DbManager play-record serialization', () => {
     );
     expect(records.user['old-source+1']).toBeUndefined();
   });
+
   it('updatePlayRecordMetadata only patches the same source+id and keeps progress', async () => {
     const { records, storage } = createMemoryStorage();
     const manager = new DbManager(storage);

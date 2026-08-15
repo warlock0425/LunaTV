@@ -341,19 +341,34 @@ export class DbManager {
       const remainingMs = deadline - Date.now();
       if (remainingMs <= 0) throw new StorageLockTimeoutError(lockKey);
 
+      let timedOut = false;
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const acquirePromise = Promise.resolve(
+        acquireLock.call(this.storage, lockKey, ownerToken, timing.ttlMs)
+      );
       try {
         acquired = await Promise.race([
-          acquireLock.call(this.storage, lockKey, ownerToken, timing.ttlMs),
-          new Promise<never>((_, reject) => {
-            timeoutId = setTimeout(
-              () => reject(new StorageLockTimeoutError(lockKey)),
-              remainingMs
-            );
+          acquirePromise,
+          new Promise<boolean>((resolve) => {
+            timeoutId = setTimeout(() => {
+              timedOut = true;
+              resolve(false);
+            }, remainingMs);
           }),
         ]);
       } finally {
         if (timeoutId) clearTimeout(timeoutId);
+      }
+
+      if (timedOut) {
+        void acquirePromise
+          .then((won) => {
+            if (won) {
+              return releaseLock.call(this.storage, lockKey, ownerToken);
+            }
+          })
+          .catch(() => undefined);
+        throw new StorageLockTimeoutError(lockKey);
       }
 
       if (!acquired) {

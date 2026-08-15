@@ -323,6 +323,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
 
     const handleKeyDown = useCallback(
       (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key !== 'Enter' && e.key !== ' ') return;
         e.preventDefault();
         handleClick();
@@ -643,7 +644,8 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
           className='group relative w-full rounded-lg bg-transparent cursor-pointer transition-all duration-300 ease-out hover:scale-[1.05] hover:-translate-y-1 hover:shadow-xl hover:shadow-accent/20 hover:z-[500] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/70 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-deep'
           onClick={handleClick}
           onKeyDown={handleKeyDown}
-          role='button'
+          role='article'
+          aria-label={actualTitle}
           tabIndex={0}
           {...longPressProps}
           style={
@@ -827,44 +829,60 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(
                 }}
               >
                 {config.showCheckCircle && (
-                  <Trash2
+                  <button
+                    type='button'
+                    data-button='true'
+                    aria-label='刪除觀看紀錄'
                     onClick={handleDeleteRecord}
-                    size={20}
-                    className='text-white transition-all duration-300 ease-out hover:stroke-red-500 hover:scale-[1.1]'
-                    style={
-                      {
-                        WebkitUserSelect: 'none',
-                        userSelect: 'none',
-                        WebkitTouchCallout: 'none',
-                      } as React.CSSProperties
-                    }
+                    className='bg-transparent p-0 border-0 cursor-pointer'
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      return false;
+                      e.stopPropagation();
                     }}
-                  />
+                  >
+                    <Trash2
+                      size={20}
+                      aria-hidden
+                      className='text-white transition-all duration-300 ease-out hover:stroke-red-500 hover:scale-[1.1]'
+                      style={
+                        {
+                          WebkitUserSelect: 'none',
+                          userSelect: 'none',
+                          WebkitTouchCallout: 'none',
+                        } as React.CSSProperties
+                      }
+                    />
+                  </button>
                 )}
                 {config.showHeart && from !== 'search' && (
-                  <Heart
+                  <button
+                    type='button'
+                    data-button='true'
+                    aria-label={favorited ? '取消收藏' : '加入收藏'}
                     onClick={handleToggleFavorite}
-                    size={20}
-                    className={`transition-all duration-300 ease-out ${
-                      favorited
-                        ? 'fill-red-600 stroke-red-600'
-                        : 'fill-transparent stroke-white hover:stroke-red-400'
-                    } hover:scale-[1.1]`}
-                    style={
-                      {
-                        WebkitUserSelect: 'none',
-                        userSelect: 'none',
-                        WebkitTouchCallout: 'none',
-                      } as React.CSSProperties
-                    }
+                    className='bg-transparent p-0 border-0 cursor-pointer'
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      return false;
+                      e.stopPropagation();
                     }}
-                  />
+                  >
+                    <Heart
+                      size={20}
+                      aria-hidden
+                      className={`transition-all duration-300 ease-out ${
+                        favorited
+                          ? 'fill-red-600 stroke-red-600'
+                          : 'fill-transparent stroke-white hover:stroke-red-400'
+                      } hover:scale-[1.1]`}
+                      style={
+                        {
+                          WebkitUserSelect: 'none',
+                          userSelect: 'none',
+                          WebkitTouchCallout: 'none',
+                        } as React.CSSProperties
+                      }
+                    />
+                  </button>
                 )}
               </div>
             )}

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface UseLongPressOptions {
   onLongPress: () => void;
@@ -30,6 +30,8 @@ export const useLongPress = ({
       pressTimer.current = null;
     }
   }, []);
+
+  useEffect(() => () => clearTimer(), [clearTimer]);
 
   const handleStart = useCallback(
     (clientX: number, clientY: number, isButton = false) => {
