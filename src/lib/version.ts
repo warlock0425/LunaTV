@@ -6,6 +6,19 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.6',
+    date: '2026-08-15',
+    content: `
+- 修正：用 HTTP 開正式映像（例如 NAS 的 http://192.168.x.x:3000）時，登入後會立刻被彈回。現在依實際協定判斷，區網 HTTP 也能登入；前面有 HTTPS 反代時可設 COOKIE_SECURE 或 SITE_BASE。
+- 修正：背景更新集數時，不再誤刪「同片名、另一個片源」的觀看進度，也不會把別部片的集數寫回來。
+- 修正：從一部片點進另一部片時，播放頁會乾淨重載，不會繼續播上一片。
+- 安全：直播台標與換台預檢只能抓該直播源相關的網址，不能再當成任意公網下載跳板。
+- 改善：片源 CDN 掛掉時，播放器最多重試三次就提示失敗，不會一直狂刷。
+- 改善：未自訂站名時，預設顯示 LunaTV。舊的 MoonTV／BerserkerTV 預設會自動改名；你自己取的站名不受影響。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.5',
     date: '2026-08-10',
     content: `
