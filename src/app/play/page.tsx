@@ -12,7 +12,6 @@ import {
   warmBangumiAliases,
 } from '@/lib/bangumi-alias-cache';
 import {
-  deletePlayRecord,
   deleteSkipConfig,
   generateStorageKey,
   getAllPlayRecords,
@@ -1109,26 +1108,6 @@ function PlayPageClient() {
         return;
       }
       logger.debug('換源前當前播放時間:', currentPlayTime);
-
-      // 清除前一個歷史記錄
-      if (currentSourceRef.current && currentIdRef.current) {
-        try {
-          await deletePlayRecord(
-            currentSourceRef.current,
-            currentIdRef.current,
-            {
-              title: getStableTitle(
-                videoTitleRef.current,
-                detailRef.current?.title
-              ),
-              source_name: detailRef.current?.source_name || '',
-            }
-          );
-          logger.debug('已清除前一個播放記錄');
-        } catch (err) {
-          logger.error('清除播放記錄失敗:', err);
-        }
-      }
 
       if (!isLatestRequest()) return;
 

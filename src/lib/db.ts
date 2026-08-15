@@ -5,7 +5,6 @@ import { randomUUID } from 'node:crypto';
 import { AdminConfig } from './admin.types';
 import type { BangumiAliasCacheEntry } from './bangumi-alias-storage';
 import { KvrocksStorage } from './kvrocks.db';
-import { getPlayRecordKeysToReplace } from './play-records';
 import { RedisStorage } from './redis.db';
 import {
   generateStorageKey as createStorageKey,
@@ -15,6 +14,7 @@ import {
   getServerStorageType,
   getStorageRuntimeStatus,
 } from './storage-runtime';
+import { cleanSourceName, normalizePlayRecordTitle } from './string-utils';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 import { UpstashRedisStorage } from './upstash.db';
 
@@ -221,25 +221,31 @@ export class DbManager {
     this.storage = storage;
     // 啟動時自動觸發資料遷移（非同步，不阻塞建構）
     if (this.storage && typeof this.storage.migrateData === 'function') {
-      this.migrationPromise = this.storage
-        .migrateData()
-        .then(async () => {
-          // 資料結構遷移完成後，執行密碼雜湊遷移
-          if (typeof this.storage.migratePasswords === 'function') {
-            await this.storage.migratePasswords();
-          }
-        })
-        .catch((err) => {
-          console.error('資料遷移異常:', err);
-        });
+      this.migrationPromise = this.startMigration();
     }
   }
 
-  /** 等待迁移完成（内部方法，首次调用后 migrationPromise 会被置空） */
+  private startMigration(): Promise<void> {
+    return this.storage.migrateData!().then(async () => {
+      if (typeof this.storage.migratePasswords === 'function') {
+        await this.storage.migratePasswords();
+      }
+    });
+  }
+
+  /** 等待遷移完成。失敗會清掉 promise，讓下一次讀寫再試。 */
   private async ensureMigrated(): Promise<void> {
-    if (this.migrationPromise) {
+    if (typeof this.storage.migrateData !== 'function') return;
+    if (!this.migrationPromise) {
+      this.migrationPromise = this.startMigration();
+    }
+    try {
       await this.migrationPromise;
       this.migrationPromise = null;
+    } catch (error) {
+      this.migrationPromise = null;
+      console.error('資料遷移異常:', error);
+      throw error;
     }
   }
 
@@ -258,6 +264,7 @@ export class DbManager {
 
     this.playRecordMutationQueues.set(userName, queueTail);
     await previous?.catch(() => undefined);
+    await this.ensureMigrated();
 
     try {
       return await this.runDistributedPlayRecordMutation(userName, mutation);
@@ -432,6 +439,7 @@ export class DbManager {
     source: string,
     id: string
   ): Promise<PlayRecord | null> {
+    await this.ensureMigrated();
     const key = generateStorageKey(source, id);
     return this.storage.getPlayRecord(userName, key);
   }
@@ -442,39 +450,22 @@ export class DbManager {
     id: string,
     record: PlayRecord
   ): Promise<void> {
-    // 沿用作者的 source + id 作為播放紀錄唯一鍵，避免同名影片互相覆蓋。
+    // 每把 source+id 獨立保存。同片名去重只在 UI，這裡不刪其他源。
     await this.runPlayRecordMutation(userName, async () => {
       const storageKey = createStorageKey(source, id);
-      const enrichedRecord = {
-        ...record,
-        vod_id: id,
-        source,
-      };
-      const targetRecord = { ...enrichedRecord, key: storageKey };
-      const existingRecords =
-        (await this.storage.getAllPlayRecords(userName)) || {};
-      const keysToReplace = getPlayRecordKeysToReplace(
-        existingRecords,
-        targetRecord
-      );
-      const newestExistingSaveTime = keysToReplace.reduce(
-        (latest, key) =>
-          Math.max(latest, Number(existingRecords[key]?.save_time || 0)),
-        0
-      );
-
-      // Delayed requests from this or a replaced source must not roll progress back.
-      if (newestExistingSaveTime > Number(enrichedRecord.save_time || 0)) {
+      const existing = await this.storage.getPlayRecord(userName, storageKey);
+      if (
+        existing &&
+        Number(existing.save_time || 0) > Number(record.save_time || 0)
+      ) {
         return;
       }
 
-      const keysToDelete = new Set(keysToReplace);
-      keysToDelete.delete(storageKey);
-      for (const key of Array.from(keysToDelete)) {
-        await this.storage.deletePlayRecord(userName, key);
-      }
-
-      await this.storage.setPlayRecord(userName, storageKey, enrichedRecord);
+      await this.storage.setPlayRecord(userName, storageKey, {
+        ...record,
+        vod_id: id,
+        source,
+      });
     });
   }
 
@@ -558,12 +549,44 @@ export class DbManager {
     );
   }
 
+  async deletePlayRecordsByTitle(
+    userName: string,
+    title: string,
+    sourceName?: string
+  ): Promise<number> {
+    const targetTitle = normalizePlayRecordTitle(title);
+    if (!targetTitle) return 0;
+    const sourceForMatch = sourceName ? cleanSourceName(sourceName) : '';
+
+    return this.runPlayRecordMutation(userName, async () => {
+      const records = (await this.storage.getAllPlayRecords(userName)) || {};
+      let deleted = 0;
+      for (const [key, record] of Object.entries(records)) {
+        if (!record) continue;
+        const recordTitle = normalizePlayRecordTitle(
+          record.title || (record as { vod_name?: string }).vod_name || ''
+        );
+        if (recordTitle !== targetTitle) continue;
+        if (sourceForMatch) {
+          const matchesSource = [record.source, record.source_name]
+            .map((value) => cleanSourceName(value))
+            .includes(sourceForMatch);
+          if (!matchesSource) continue;
+        }
+        await this.storage.deletePlayRecord(userName, key);
+        deleted += 1;
+      }
+      return deleted;
+    });
+  }
+
   // 收藏相關方法
   async getFavorite(
     userName: string,
     source: string,
     id: string
   ): Promise<Favorite | null> {
+    await this.ensureMigrated();
     const key = generateStorageKey(source, id);
     return this.storage.getFavorite(userName, key);
   }
@@ -574,6 +597,7 @@ export class DbManager {
     id: string,
     favorite: Favorite
   ): Promise<void> {
+    await this.ensureMigrated();
     const key = generateStorageKey(source, id);
     await this.storage.setFavorite(userName, key, favorite);
   }
@@ -644,6 +668,7 @@ export class DbManager {
 
   // 获取全部用户名
   async getAllUsers(): Promise<string[]> {
+    await this.ensureMigrated();
     if (typeof (this.storage as any).getAllUsers === 'function') {
       return (this.storage as any).getAllUsers();
     }

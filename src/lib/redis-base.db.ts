@@ -677,6 +677,7 @@ export abstract class BaseRedisStorage implements IStorage {
       console.log('數據遷移完成');
     } catch (error) {
       console.error('數據遷移失敗:', error);
+      throw error;
     }
   }
 

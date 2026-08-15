@@ -5,8 +5,8 @@ import {
   isValidApiTextParam,
   readJsonObject,
 } from '@/lib/api-input-validation';
-import { storage } from '@/lib/storage';
-import { cleanSourceName, normalizePlayRecordTitle } from '@/lib/string-utils';
+import { db } from '@/lib/db';
+import { normalizePlayRecordTitle } from '@/lib/string-utils';
 
 export const runtime = 'nodejs';
 
@@ -54,40 +54,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userHistory =
-      (await storage.hgetall(`user:history:${username}`)) || {};
-
-    // 允許前端傳入 source 做精確比對，避免抹除不同來源的同名記錄
     const requestedSource =
       typeof body.source_name === 'string'
         ? body.source_name
         : typeof body.source === 'string'
           ? body.source
           : undefined;
-    const sourceForMatch = cleanSourceName(requestedSource);
 
-    // 3. 遍歷所有鍵值，只要劇名匹配，立刻執行 HDEL 徹底抹除，絕不留活口
-    for (const [fieldKey, rawValue] of Object.entries(userHistory)) {
-      if (!rawValue) continue;
-      try {
-        const recordData = JSON.parse(rawValue);
-        const recordTitle = recordData.title || recordData.vod_name || '';
-        const cleanRecordTitle = normalizePlayRecordTitle(recordTitle);
-
-        const sourceInRecord = cleanSourceName(
-          recordData.source || recordData.source_name
-        );
-
-        // 刪除資料必須精確匹配正規化後的標題；模糊包含會誤刪短標題的其他作品。
-        if (cleanRecordTitle && cleanRecordTitle === targetTitle) {
-          if (sourceForMatch && sourceInRecord !== sourceForMatch) continue;
-          await storage.hdel(`user:history:${username}`, fieldKey);
-        }
-      } catch (e) {
-        // 舊的或損壞的 JSON 忽略
-        continue;
-      }
-    }
+    await db.deletePlayRecordsByTitle(username, vod_name, requestedSource);
 
     return NextResponse.json({
       success: true,

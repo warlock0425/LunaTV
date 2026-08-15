@@ -15,7 +15,6 @@ import {
   STORAGE_TYPE,
   triggerGlobalError,
 } from './shared';
-import { getPlayRecordKeysToReplace } from '../play-records';
 
 /**
  * 儲存播放進度後，最短多久才允許再次向伺服器重抓整份播放紀錄。
@@ -107,8 +106,6 @@ export function savePlayRecordOnPageExit(
     vod_id: id,
     source,
   };
-  const targetRecord = { ...enrichedRecord, key };
-
   try {
     if (STORAGE_TYPE === 'localstorage') {
       const raw = localStorage.getItem(PLAY_RECORDS_KEY);
@@ -116,11 +113,6 @@ export function savePlayRecordOnPageExit(
         ? (JSON.parse(raw) as Record<string, PlayRecord>)
         : {};
       const nextRecords = { ...allRecords };
-      getPlayRecordKeysToReplace(nextRecords, targetRecord).forEach(
-        (recordKey) => {
-          delete nextRecords[recordKey];
-        }
-      );
       nextRecords[key] = enrichedRecord;
       localStorage.setItem(PLAY_RECORDS_KEY, JSON.stringify(nextRecords));
       window.dispatchEvent(
@@ -134,11 +126,6 @@ export function savePlayRecordOnPageExit(
     const cachedRecords = cacheManager.getCachedPlayRecords();
     if (cachedRecords) {
       const nextCachedRecords = { ...cachedRecords };
-      getPlayRecordKeysToReplace(nextCachedRecords, targetRecord).forEach(
-        (recordKey) => {
-          delete nextCachedRecords[recordKey];
-        }
-      );
       nextCachedRecords[key] = enrichedRecord;
       cacheManager.cachePlayRecords(nextCachedRecords);
       window.dispatchEvent(
@@ -186,8 +173,6 @@ export async function savePlayRecord(
     vod_id: id,
     source: source,
   };
-  const targetRecord = { ...enrichedRecord, key };
-
   // 資料庫存儲模式：POST 成功後從 API 取得最新資料覆蓋快取。
   // 以服務端回傳資料作為最終狀態，避免樂觀快取和遠端資料不同步。
   if (STORAGE_TYPE !== 'localstorage') {
@@ -203,11 +188,6 @@ export async function savePlayRecord(
       previousRecord.total_episodes !== enrichedRecord.total_episodes;
     if (cachedRecords) {
       const nextCachedRecords = { ...cachedRecords };
-      getPlayRecordKeysToReplace(nextCachedRecords, targetRecord).forEach(
-        (recordKey) => {
-          delete nextCachedRecords[recordKey];
-        }
-      );
       nextCachedRecords[key] = enrichedRecord;
       cacheManager.cachePlayRecords(nextCachedRecords);
       window.dispatchEvent(
@@ -284,11 +264,6 @@ export async function savePlayRecord(
   try {
     const allRecords = await getAllPlayRecords();
     const nextRecords = { ...allRecords };
-    getPlayRecordKeysToReplace(nextRecords, targetRecord).forEach(
-      (recordKey) => {
-        delete nextRecords[recordKey];
-      }
-    );
     nextRecords[key] = enrichedRecord;
     localStorage.setItem(PLAY_RECORDS_KEY, JSON.stringify(nextRecords));
     window.dispatchEvent(

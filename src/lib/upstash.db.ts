@@ -544,8 +544,9 @@ export class UpstashRedisStorage implements IStorage {
           })
           .filter((u): u is string => typeof u === 'string');
         if (userNames.length > 0) {
+          const [first, ...rest] = userNames;
           await withRetry(() =>
-            this.client.sadd(this.usersSetKey(), userNames)
+            this.client.sadd(this.usersSetKey(), first, ...rest)
           );
           console.log(`遷移了 ${userNames.length} 個使用者到 Set`);
         }
@@ -556,6 +557,7 @@ export class UpstashRedisStorage implements IStorage {
       console.log('數據遷移完成');
     } catch (error) {
       console.error('數據遷移失敗:', error);
+      throw error;
     }
   }
 

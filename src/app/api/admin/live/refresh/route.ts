@@ -28,16 +28,17 @@ export async function POST(request: NextRequest) {
           const nums = await refreshLiveChannels(liveInfo);
           return { key: liveInfo.key, nums };
         } catch {
-          return { key: liveInfo.key, nums: 0 };
+          return null;
         }
       })
     );
 
     await db.withAdminConfigLock(async () => {
       const config = await getFreshConfig();
-      for (const { key, nums } of refreshed) {
-        const live = config.LiveConfig?.find((l) => l.key === key);
-        if (live) live.channelNumber = nums;
+      for (const entry of refreshed) {
+        if (!entry) continue;
+        const live = config.LiveConfig?.find((l) => l.key === entry.key);
+        if (live) live.channelNumber = entry.nums;
       }
       await db.saveAdminConfig(config);
       setCachedConfig(config);

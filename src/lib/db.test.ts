@@ -89,12 +89,15 @@ describe('DbManager play-record serialization', () => {
         current.expiresAt = Date.now() + ttlMs;
         return true;
       },
-      async getAllPlayRecords(userName: string) {
+      async getPlayRecord(userName: string, key: string) {
         if (shouldBlockFirstRead) {
           shouldBlockFirstRead = false;
           markFirstReadStarted();
           await firstReadGate;
         }
+        return records[userName]?.[key] || null;
+      },
+      async getAllPlayRecords(userName: string) {
         return { ...(records[userName] || {}) };
       },
       async setPlayRecord(userName: string, key: string, record: PlayRecord) {
@@ -236,8 +239,11 @@ describe('DbManager play-record serialization', () => {
           lock = null;
           return true;
         },
-        async getAllPlayRecords() {
+        async getPlayRecord() {
           await new Promise((resolve) => setTimeout(resolve, 65_000));
+          return null;
+        },
+        async getAllPlayRecords() {
           return {};
         },
         async setPlayRecord() {},
@@ -295,7 +301,40 @@ describe('DbManager play-record serialization', () => {
     expect(records.user['new-source+2']).toEqual(
       expect.objectContaining({ save_time: 200, play_time: 200 })
     );
-    expect(records.user['old-source+1']).toBeUndefined();
+    expect(records.user['old-source+1']).toEqual(
+      expect.objectContaining({ save_time: 100, play_time: 100 })
+    );
+  });
+
+  it('deletePlayRecordsByTitle only removes exact title matches', async () => {
+    const { records, storage } = createMemoryStorage();
+    const manager = new DbManager(storage);
+
+    await manager.savePlayRecord('user', 'a', '1', {
+      ...createRecord(100, 10),
+      title: '一',
+      source_name: 'A',
+    });
+    await manager.savePlayRecord('user', 'a', '2', {
+      ...createRecord(100, 10),
+      title: '一生一世',
+      source_name: 'A',
+    });
+    await manager.savePlayRecord('user', 'b', '3', {
+      ...createRecord(100, 10),
+      title: '一',
+      source_name: 'B',
+    });
+
+    await manager.deletePlayRecordsByTitle('user', '一', 'A');
+
+    expect(records.user['a+1']).toBeUndefined();
+    expect(records.user['a+2']).toEqual(
+      expect.objectContaining({ title: '一生一世' })
+    );
+    expect(records.user['b+3']).toEqual(
+      expect.objectContaining({ title: '一' })
+    );
   });
 
   it('updatePlayRecordMetadata only patches the same source+id and keeps progress', async () => {

@@ -94,6 +94,25 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    let refreshedCount: number | undefined;
+    if (action === 'add' || action === 'edit') {
+      const probe = {
+        key: String(key).trim(),
+        name: String(name).trim(),
+        url: String(url).trim(),
+        ua: (typeof ua === 'string' ? ua.trim() : '') || '',
+        epg: (typeof epg === 'string' ? epg.trim() : '') || '',
+        from: 'custom' as const,
+        channelNumber: 0,
+        disabled: false,
+      };
+      try {
+        refreshedCount = await refreshLiveChannels(probe);
+      } catch (error) {
+        console.error('重新整理直播源失敗:', error);
+      }
+    }
+
     const outcome = await db.withAdminConfigLock(
       async (): Promise<NextResponse | 'ok'> => {
         const config = await getFreshConfig();
@@ -128,17 +147,9 @@ export async function POST(request: NextRequest) {
               ua: (ua as string | undefined)?.trim() || '',
               epg: (epg as string | undefined)?.trim() || '',
               from: 'custom' as 'custom' | 'config',
-              channelNumber: 0,
+              channelNumber: refreshedCount ?? 0,
               disabled: false,
             };
-
-            try {
-              const nums = await refreshLiveChannels(liveInfo);
-              liveInfo.channelNumber = nums;
-            } catch (error) {
-              console.error('重新整理直播源失敗:', error);
-              liveInfo.channelNumber = 0;
-            }
 
             // 新增新的直播源
             config.LiveConfig.push(liveInfo);
@@ -218,13 +229,8 @@ export async function POST(request: NextRequest) {
             editSource.ua = (ua as string | undefined)?.trim() || '';
             editSource.epg = (epg as string | undefined)?.trim() || '';
 
-            // 重新整理頻道數
-            try {
-              const nums = await refreshLiveChannels(editSource);
-              editSource.channelNumber = nums;
-            } catch (error) {
-              console.error('重新整理直播源失敗:', error);
-              editSource.channelNumber = 0;
+            if (refreshedCount !== undefined) {
+              editSource.channelNumber = refreshedCount;
             }
             break;
 

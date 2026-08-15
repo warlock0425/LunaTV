@@ -196,7 +196,6 @@ async function refreshAllLiveChannels(deadline: number) {
         `重新整理直播源失敗 [${liveInfo.name || liveInfo.key}]:`,
         error
       );
-      refreshed.push({ key: liveInfo.key, nums: 0 });
     }
   });
 
