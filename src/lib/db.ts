@@ -463,6 +463,44 @@ export class DbManager {
     });
   }
 
+  /**
+   * 只更新同一把 source+id 的標題／封面／集數，不改進度、不碰跨源去重。
+   * cron 刷新集數必須走這裡，不能呼叫 savePlayRecord。
+   */
+  async updatePlayRecordMetadata(
+    userName: string,
+    source: string,
+    id: string,
+    patch: {
+      total_episodes: number;
+      title?: string;
+      cover?: string;
+      year?: string;
+    }
+  ): Promise<boolean> {
+    return this.runPlayRecordMutation(userName, async () => {
+      const storageKey = createStorageKey(source, id);
+      const existing = await this.storage.getPlayRecord(userName, storageKey);
+      if (!existing) return false;
+
+      const nextEpisodes = Number(patch.total_episodes);
+      if (!Number.isInteger(nextEpisodes) || nextEpisodes < 1) return false;
+      if (nextEpisodes <= Number(existing.total_episodes || 0)) return false;
+
+      const nextTitle = patch.title?.trim();
+      await this.storage.setPlayRecord(userName, storageKey, {
+        ...existing,
+        total_episodes: nextEpisodes,
+        title: nextTitle || existing.title,
+        cover: patch.cover || existing.cover,
+        year: patch.year || existing.year,
+        vod_id: id,
+        source,
+      });
+      return true;
+    });
+  }
+
   async getAllPlayRecords(userName: string): Promise<{
     [key: string]: PlayRecord;
   }> {

@@ -12,7 +12,7 @@ import {
 } from '@/lib/config';
 import { markCronCompleted, markCronStarted } from '@/lib/cron-health';
 import { db } from '@/lib/db';
-import { fetchVideoDetail } from '@/lib/fetchVideoDetail';
+import { fetchVideoDetail, isExactVideoDetail } from '@/lib/fetchVideoDetail';
 import { refreshLiveChannels } from '@/lib/live';
 import { logger } from '@/lib/logger';
 import { parseStorageKey } from '@/lib/storage-key';
@@ -346,24 +346,31 @@ async function refreshRecordAndFavorites(deadline: number) {
               console.warn(`跳過無法取得詳情的播放記錄: ${key}`);
               return;
             }
+            if (!isExactVideoDetail(detail, source, id)) {
+              console.warn(
+                `跳過來源或ID已變更的播放記錄: ${key} -> ${detail.source}+${detail.id}`
+              );
+              return;
+            }
 
             const episodeCount = detail.episodes?.length || 0;
             if (episodeCount > Number(record.total_episodes || 0)) {
-              await db.savePlayRecord(user, source, id, {
-                title: detail.title || record.title,
-                source_name: record.source_name,
-                cover: detail.poster || record.cover,
-                index: record.index,
-                total_episodes: episodeCount,
-                play_time: record.play_time,
-                year: detail.year || record.year,
-                total_time: record.total_time,
-                save_time: record.save_time,
-                search_title: record.search_title,
-              });
-              logger.info(
-                `更新播放記錄: ${record.title} (${record.total_episodes} -> ${episodeCount})`
+              const updated = await db.updatePlayRecordMetadata(
+                user,
+                source,
+                id,
+                {
+                  title: detail.title || record.title,
+                  cover: detail.poster || record.cover,
+                  year: detail.year || record.year,
+                  total_episodes: episodeCount,
+                }
               );
+              if (updated) {
+                logger.info(
+                  `更新播放記錄: ${record.title} (${record.total_episodes} -> ${episodeCount})`
+                );
+              }
             }
 
             processedRecords++;
@@ -402,6 +409,12 @@ async function refreshRecordAndFavorites(deadline: number) {
             const favDetail = await getDetail(source, id, fav.title);
             if (!favDetail) {
               console.warn(`跳過無法取得詳情的收藏: ${key}`);
+              return;
+            }
+            if (!isExactVideoDetail(favDetail, source, id)) {
+              console.warn(
+                `跳過來源或ID已變更的收藏: ${key} -> ${favDetail.source}+${favDetail.id}`
+              );
               return;
             }
 

@@ -357,20 +357,21 @@ docker compose up -d
 
 ### 必填／核心
 
-| 變數                            | 必填         | 說明                                                                                 |
-| ------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
-| `USERNAME`                      | 是           | 站長帳號                                                                             |
-| `PASSWORD`                      | 是           | 站長密碼（請用強密碼）                                                               |
-| `SESSION_SECRET`                | 多使用者建議 | 會話 HMAC 密鑰；未設時回退 `PASSWORD`（改密碼會使所有 session 失效，開機會 warning） |
-| `STORAGE_TYPE`                  | 強烈建議     | `kvrocks` / `redis` / `upstash` / `localstorage`                                     |
-| `NEXT_PUBLIC_STORAGE_TYPE`      | 強烈建議     | 須與 `STORAGE_TYPE` 一致                                                             |
-| `KVROCKS_URL`                   | kvrocks 時   | 例：`redis://kvrocks:6666`                                                           |
-| `REDIS_URL`                     | redis 時     | 例：`redis://redis:6379`                                                             |
-| `UPSTASH_URL` / `UPSTASH_TOKEN` | upstash 時   | Upstash REST 憑證                                                                    |
-| `CRON_SECRET`                   | Vercel 必填  | 保護 `/api/cron`                                                                     |
-| `NEXT_PUBLIC_SITE_NAME`         | 否           | 站名（預設可能顯示 BerserkerTV／LunaTV）                                             |
-| `ANNOUNCEMENT`                  | 否           | 公告                                                                                 |
-| `SITE_BASE`                     | 否           | 公開站台 URL（部分回呼／連結場景）                                                   |
+| 變數                            | 必填         | 說明                                                                                                                                                |
+| ------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `USERNAME`                      | 是           | 站長帳號                                                                                                                                            |
+| `PASSWORD`                      | 是           | 站長密碼（請用強密碼）                                                                                                                              |
+| `SESSION_SECRET`                | 多使用者建議 | 會話 HMAC 密鑰；未設時回退 `PASSWORD`（改密碼會使所有 session 失效，開機會 warning）                                                                |
+| `STORAGE_TYPE`                  | 強烈建議     | `kvrocks` / `redis` / `upstash` / `localstorage`                                                                                                    |
+| `NEXT_PUBLIC_STORAGE_TYPE`      | 強烈建議     | 須與 `STORAGE_TYPE` 一致                                                                                                                            |
+| `KVROCKS_URL`                   | kvrocks 時   | 例：`redis://kvrocks:6666`                                                                                                                          |
+| `REDIS_URL`                     | redis 時     | 例：`redis://redis:6379`                                                                                                                            |
+| `UPSTASH_URL` / `UPSTASH_TOKEN` | upstash 時   | Upstash REST 憑證                                                                                                                                   |
+| `CRON_SECRET`                   | Vercel 必填  | 保護 `/api/cron`                                                                                                                                    |
+| `NEXT_PUBLIC_SITE_NAME`         | 否           | 站名（預設可能顯示 BerserkerTV／LunaTV）                                                                                                            |
+| `ANNOUNCEMENT`                  | 否           | 公告                                                                                                                                                |
+| `SITE_BASE`                     | 否           | 公開站台 URL（部分回呼／連結場景；https 且 host 對得上時也會讓登入 cookie 加 Secure）                                                               |
+| `COOKIE_SECURE`                 | 否           | 強制登入 cookie 的 Secure 屬性（`true` / `false`）。未設時依請求協定與 `SITE_BASE` 判斷，不再綁 `NODE_ENV`，因此 `http://192.168.x.x:3000` 也能登入 |
 
 ### 常用進階
 

@@ -19,6 +19,9 @@ function createRecord(saveTime: number, playTime: number): PlayRecord {
 function createMemoryStorage() {
   const records: Record<string, Record<string, PlayRecord>> = {};
   const storage = {
+    async getPlayRecord(userName: string, key: string) {
+      return records[userName]?.[key] || null;
+    },
     async getAllPlayRecords(userName: string) {
       return { ...(records[userName] || {}) };
     },
@@ -249,5 +252,76 @@ describe('DbManager play-record serialization', () => {
       expect.objectContaining({ save_time: 200, play_time: 200 })
     );
     expect(records.user['old-source+1']).toBeUndefined();
+  });
+  it('updatePlayRecordMetadata only patches the same source+id and keeps progress', async () => {
+    const { records, storage } = createMemoryStorage();
+    const manager = new DbManager(storage);
+
+    await manager.savePlayRecord('user', 'keep', '1', {
+      ...createRecord(100, 40),
+      title: '舊標題',
+      cover: 'old.jpg',
+      total_episodes: 8,
+    });
+    await manager.savePlayRecord('user', 'other', '9', {
+      ...createRecord(200, 200),
+      title: '另一部片',
+      year: '2019',
+    });
+
+    const updated = await manager.updatePlayRecordMetadata(
+      'user',
+      'keep',
+      '1',
+      {
+        title: '新標題',
+        cover: 'new.jpg',
+        year: '2027',
+        total_episodes: 12,
+      }
+    );
+
+    expect(updated).toBe(true);
+    expect(records.user['keep+1']).toEqual(
+      expect.objectContaining({
+        title: '新標題',
+        cover: 'new.jpg',
+        year: '2027',
+        total_episodes: 12,
+        play_time: 40,
+        save_time: 100,
+        index: 1,
+      })
+    );
+    expect(records.user['other+9']).toEqual(
+      expect.objectContaining({ save_time: 200, play_time: 200 })
+    );
+  });
+
+  it('updatePlayRecordMetadata skips missing keys and non-increasing episode counts', async () => {
+    const { storage } = createMemoryStorage();
+    const manager = new DbManager(storage);
+
+    expect(
+      await manager.updatePlayRecordMetadata('user', 'missing', '1', {
+        total_episodes: 12,
+      })
+    ).toBe(false);
+
+    await manager.savePlayRecord('user', 'keep', '1', {
+      ...createRecord(100, 40),
+      total_episodes: 12,
+    });
+
+    expect(
+      await manager.updatePlayRecordMetadata('user', 'keep', '1', {
+        total_episodes: 12,
+      })
+    ).toBe(false);
+    expect(
+      await manager.updatePlayRecordMetadata('user', 'keep', '1', {
+        total_episodes: 8,
+      })
+    ).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import { getAvailableApiSites } from '@/lib/config';
 
 import { getDetailFromApi, searchFromApi } from './downstream';
-import { fetchVideoDetail } from './fetchVideoDetail';
+import { fetchVideoDetail, isExactVideoDetail } from './fetchVideoDetail';
 import { SearchResult } from './types';
 
 jest.mock('@/lib/config', () => ({
@@ -36,6 +36,20 @@ function result(overrides: Partial<SearchResult>): SearchResult {
     ...overrides,
   };
 }
+
+describe('isExactVideoDetail', () => {
+  it('requires both source and id to match the original key', () => {
+    expect(
+      isExactVideoDetail({ source: 'test', id: 'old-id' }, 'test', 'old-id')
+    ).toBe(true);
+    expect(
+      isExactVideoDetail({ source: 'test', id: 'new-id' }, 'test', 'old-id')
+    ).toBe(false);
+    expect(
+      isExactVideoDetail({ source: 'other', id: 'old-id' }, 'test', 'old-id')
+    ).toBe(false);
+  });
+});
 
 describe('fetchVideoDetail', () => {
   beforeEach(() => {

@@ -2262,11 +2262,19 @@ function PlayPageClient() {
   );
 }
 
+function PlayPageKeyed() {
+  const searchParams = useSearchParams();
+  const source = searchParams.get('source') ?? '';
+  const id = searchParams.get('id') ?? '';
+  const title = searchParams.get('title') ?? '';
+  return <PlayPageClient key={`${source}\t${id}\t${title}`} />;
+}
+
 export default function PlayPage() {
   return (
     <ErrorBoundary>
       <Suspense fallback={<PageLoading />}>
-        <PlayPageClient />
+        <PlayPageKeyed />
       </Suspense>
     </ErrorBoundary>
   );

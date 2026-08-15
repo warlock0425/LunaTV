@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthSessionSecret, getAuthSignaturePayload } from '@/lib/auth';
+import {
+  getAuthCookieOptions,
+  getUserInfoCookieOptions,
+} from '@/lib/auth-cookie';
 import { getFreshConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import {
@@ -117,27 +121,18 @@ export async function POST(req: NextRequest) {
     // 本地 / localStorage 模式——僅校驗固定密碼
     if (STORAGE_TYPE === 'localstorage') {
       const envPassword = process.env.PASSWORD;
-      const isProd = process.env.NODE_ENV === 'production';
 
       // 未設定 PASSWORD 時直接放行
       if (!envPassword) {
         const response = NextResponse.json({ ok: true });
+        const expired = new Date(0);
 
-        // 清除可能存在的認證cookie
-        response.cookies.set('auth', '', {
-          path: '/',
-          expires: new Date(0),
-          sameSite: 'lax', // 改為 lax 以支援 PWA
-          httpOnly: true,
-          secure: isProd && !process.env.CI,
-        });
-        response.cookies.set('user_info', '', {
-          path: '/',
-          expires: new Date(0),
-          sameSite: 'lax',
-          httpOnly: false,
-          secure: isProd && !process.env.CI,
-        });
+        response.cookies.set('auth', '', getAuthCookieOptions(req, expired));
+        response.cookies.set(
+          'user_info',
+          '',
+          getUserInfoCookieOptions(req, expired)
+        );
 
         return response;
       }
@@ -200,20 +195,16 @@ export async function POST(req: NextRequest) {
       const expires = new Date();
       expires.setDate(expires.getDate() + 7); // 7天過期
 
-      response.cookies.set('auth', authCookieValue, {
-        path: '/',
-        expires,
-        sameSite: 'lax',
-        httpOnly: true,
-        secure: isProd && !process.env.CI,
-      });
-      response.cookies.set('user_info', userInfoCookieValue, {
-        path: '/',
-        expires,
-        sameSite: 'lax',
-        httpOnly: false,
-        secure: isProd,
-      });
+      response.cookies.set(
+        'auth',
+        authCookieValue,
+        getAuthCookieOptions(req, expires)
+      );
+      response.cookies.set(
+        'user_info',
+        userInfoCookieValue,
+        getUserInfoCookieOptions(req, expires)
+      );
 
       return response;
     }
@@ -265,15 +256,12 @@ export async function POST(req: NextRequest) {
       ); // 資料庫模式不包含 password
       const expires = new Date();
       expires.setDate(expires.getDate() + 7); // 7天過期
-      const isProd = process.env.NODE_ENV === 'production';
 
-      response.cookies.set('auth', cookieValue, {
-        path: '/',
-        expires,
-        sameSite: 'lax', // 改為 lax 以支援 PWA
-        httpOnly: true,
-        secure: isProd && !process.env.CI,
-      });
+      response.cookies.set(
+        'auth',
+        cookieValue,
+        getAuthCookieOptions(req, expires)
+      );
 
       const userInfoCookieValue = encodeURIComponent(
         JSON.stringify({
@@ -281,13 +269,11 @@ export async function POST(req: NextRequest) {
           username,
         })
       );
-      response.cookies.set('user_info', userInfoCookieValue, {
-        path: '/',
-        expires,
-        sameSite: 'lax',
-        httpOnly: false,
-        secure: isProd && !process.env.CI,
-      });
+      response.cookies.set(
+        'user_info',
+        userInfoCookieValue,
+        getUserInfoCookieOptions(req, expires)
+      );
 
       await clearLoginRateLimits(rateLimitIdentities);
       return response;
@@ -324,15 +310,12 @@ export async function POST(req: NextRequest) {
       ); // 資料庫模式不包含 password
       const expires = new Date();
       expires.setDate(expires.getDate() + 7); // 7天過期
-      const isProd = process.env.NODE_ENV === 'production';
 
-      response.cookies.set('auth', cookieValue, {
-        path: '/',
-        expires,
-        sameSite: 'lax', // 改為 lax 以支援 PWA
-        httpOnly: true,
-        secure: isProd && !process.env.CI,
-      });
+      response.cookies.set(
+        'auth',
+        cookieValue,
+        getAuthCookieOptions(req, expires)
+      );
 
       const userInfoCookieValue = encodeURIComponent(
         JSON.stringify({
@@ -340,13 +323,11 @@ export async function POST(req: NextRequest) {
           username,
         })
       );
-      response.cookies.set('user_info', userInfoCookieValue, {
-        path: '/',
-        expires,
-        sameSite: 'lax',
-        httpOnly: false,
-        secure: isProd && !process.env.CI,
-      });
+      response.cookies.set(
+        'user_info',
+        userInfoCookieValue,
+        getUserInfoCookieOptions(req, expires)
+      );
 
       await clearLoginRateLimits(rateLimitIdentities);
       return response;

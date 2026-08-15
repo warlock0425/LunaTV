@@ -100,15 +100,6 @@ jobs:
         run: |
           echo "PLATFORM_NAME=${{ matrix.platform }}" | sed 's|/|-|g' >> $GITHUB_ENV
 
-      - name: Determine Docker tag
-        id: docker-tag
-        run: |
-          if [ "${{ github.event_name }}" = "release" ]; then
-            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.event.inputs.tag || 'latest' }}" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Checkout source code
         uses: actions/checkout@v4
 
@@ -137,6 +128,8 @@ jobs:
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{major}}.{{minor}},enable=${{ github.event_name == 'release' }}
 
+      # 只推 digest，不在這裡打 latest／semver。
+      # 移動 tag 由 merge job 在 e2e 通過後組 manifest，避免單架構先污染 latest。
       - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v5
@@ -145,8 +138,7 @@ jobs:
           file: ./Dockerfile
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          tags: ghcr.io/${{ steps.lowercase.outputs.owner }}/lunatv:${{ steps.docker-tag.outputs.tag }}
-          outputs: type=image,name=ghcr.io/${{ steps.lowercase.outputs.owner }}/lunatv,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
+          outputs: type=image,name=ghcr.io/${{ steps.lowercase.outputs.owner }}/lunatv,push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
           provenance: false
 
       - name: Export digest

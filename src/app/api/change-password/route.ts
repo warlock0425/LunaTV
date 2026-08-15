@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireActiveUser } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
+import {
+  getAuthCookieOptions,
+  getUserInfoCookieOptions,
+} from '@/lib/auth-cookie';
 import { db } from '@/lib/db';
 import {
   clearLoginAttempts,
@@ -96,21 +100,13 @@ export async function POST(request: NextRequest) {
     await revokeUserSessions(username);
 
     const response = NextResponse.json({ ok: true, reloginRequired: true });
-    const isProd = process.env.NODE_ENV === 'production';
-    response.cookies.set('auth', '', {
-      path: '/',
-      expires: new Date(0),
-      sameSite: 'lax',
-      httpOnly: true,
-      secure: isProd,
-    });
-    response.cookies.set('user_info', '', {
-      path: '/',
-      expires: new Date(0),
-      sameSite: 'lax',
-      httpOnly: false,
-      secure: isProd,
-    });
+    const expired = new Date(0);
+    response.cookies.set('auth', '', getAuthCookieOptions(request, expired));
+    response.cookies.set(
+      'user_info',
+      '',
+      getUserInfoCookieOptions(request, expired)
+    );
     return response;
   } catch (error) {
     console.error('修改密碼失敗:', error);

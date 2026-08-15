@@ -87,6 +87,17 @@ function findBestTitleFallback(
   return ranked[0]?.item || null;
 }
 
+/** cron 等寫回原 key 前，確認詳情仍是同一部片，不是標題模糊匹配到的另一個 id */
+export function isExactVideoDetail(
+  detail: Pick<SearchResult, 'source' | 'id'>,
+  source: string,
+  id: string
+): boolean {
+  return (
+    String(detail.source) === String(source) && String(detail.id) === String(id)
+  );
+}
+
 /**
  * 根據 source 與 id 取得影片詳情。
  * 1. 若傳入 fallbackTitle，則先調用 /api/search 搜尋精確匹配。
