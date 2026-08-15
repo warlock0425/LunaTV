@@ -5,6 +5,7 @@ import './globals.css';
 
 import { getConfig } from '@/lib/config';
 import { serializeForInlineScript } from '@/lib/safe-json';
+import { DEFAULT_SITE_NAME } from '@/lib/site-defaults';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
@@ -41,7 +42,7 @@ export const dynamic = 'force-dynamic';
 export async function generateMetadata(): Promise<Metadata> {
   const storageType = getServerStorageType();
   const config = await getConfig();
-  let siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'BerserkerTV';
+  let siteName = process.env.NEXT_PUBLIC_SITE_NAME || DEFAULT_SITE_NAME;
   if (storageType !== 'localstorage') {
     siteName = config.SiteConfig.SiteName;
   }
@@ -75,7 +76,7 @@ export default async function RootLayout({
 }) {
   const storageType = getServerStorageType();
 
-  let siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'BerserkerTV';
+  let siteName = process.env.NEXT_PUBLIC_SITE_NAME || DEFAULT_SITE_NAME;
   let announcement =
     process.env.ANNOUNCEMENT ||
     '本網站僅提供影視資訊搜尋服務，所有內容均來自第三方網站。本站不儲存任何影片資源，不對任何內容的準確性、合法性、完整性負責。';

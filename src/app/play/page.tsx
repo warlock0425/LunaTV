@@ -31,6 +31,7 @@ import {
 import { isFuzzyMatch } from '@/lib/searchEngine';
 import { SearchResult } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
+import { useAutoNextCountdown } from '@/hooks/useAutoNextCountdown';
 import { useFavorite } from '@/hooks/useFavorite';
 import { usePlaybackSourceSearch } from '@/hooks/usePlaybackSourceSearch';
 import { usePlayDetailRefresh } from '@/hooks/usePlayDetailRefresh';
@@ -46,13 +47,17 @@ import PlayerGestureLayer from '@/components/PlayerGestureLayer';
 import { useToast } from '@/components/ToastProvider';
 
 import { CustomHlsJsLoader } from './custom-hls-loader';
+import { nextHlsFatalAction } from './hls-fatal';
 import {
+  applyPlaybackUrlUpdates,
   clearCachedDetail,
   DEFAULT_SKIP_CONFIG,
+  ensureVideoSource,
   formatEpisodeBadge,
   formatEpisodeUpdateMessage,
   getCachedDetail,
   getClientStorageType,
+  getPlayPageRemountKey,
   mergeDetailPreservingPlayback,
   mergeFreshDetail,
   migrateDetailCache,
@@ -129,11 +134,7 @@ function PlayPageClient() {
     autoNextRef.current = autoNext;
   }, [autoNext]);
 
-  // 自動連播倒數計時
-  const [autoNextCountdown, setAutoNextCountdown] = useState(0);
-  const [showCountdownOverlay, setShowCountdownOverlay] = useState(false);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState(false);
-  const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 跳過片頭片尾按鈕狀態
   const [showSkipIntro, setShowSkipIntro] = useState(false);
@@ -225,8 +226,19 @@ function PlayPageClient() {
   const videoCoverRef = useRef(videoCover);
   const detailRef = useRef<SearchResult | null>(detail);
   const currentEpisodeIndexRef = useRef(currentEpisodeIndex);
+  const {
+    autoNextCountdown,
+    showCountdownOverlay,
+    autoNextBusyRef,
+    cancelAutoNextCountdown,
+    startAutoNextCountdown,
+    playNextEpisodeFromCountdown,
+  } = useAutoNextCountdown({
+    detailRef,
+    currentEpisodeIndexRef,
+    setCurrentEpisodeIndex,
+  });
   const skipHistoryRestoreRef = useRef(false);
-  const autoNextBusyRef = useRef(false);
   const episodeRefreshInFlightRef = useRef(false);
   const refreshEpisodesIfNeededRef = useRef<
     | ((options?: {
@@ -349,83 +361,11 @@ function PlayPageClient() {
     removeKeys: string[] = []
   ) => {
     if (typeof window === 'undefined') return;
-    const newUrl = new URL(window.location.href);
-    Object.entries(updates).forEach(([key, value]) => {
-      const nextValue = value === undefined || value === null ? '' : `${value}`;
-      if (!nextValue || nextValue === 'undefined' || nextValue === 'null') {
-        newUrl.searchParams.delete(key);
-      } else {
-        newUrl.searchParams.set(key, nextValue);
-      }
-    });
-    removeKeys.forEach((key) => newUrl.searchParams.delete(key));
-    window.history.replaceState({}, '', newUrl.toString());
-  };
-
-  const ensureVideoSource = (video: HTMLVideoElement | null, url: string) => {
-    if (!video || !url) return;
-    const sources = Array.from(video.getElementsByTagName('source'));
-    const existed = sources.some((s) => s.src === url);
-    if (!existed) {
-      // 移除舊的 source，保持唯一
-      sources.forEach((s) => s.remove());
-      const sourceEl = document.createElement('source');
-      sourceEl.src = url;
-      video.appendChild(sourceEl);
-    }
-
-    // 始終允許遠程播放（AirPlay / Cast）
-    video.disableRemotePlayback = false;
-    // 如果曾經有禁用屬性，移除之
-    if (video.hasAttribute('disableRemotePlayback')) {
-      video.removeAttribute('disableRemotePlayback');
-    }
-  };
-
-  /**
-   * 中止自動連播倒數。
-   * 使用者在倒數期間手動切集時務必呼叫，否則倒數結束仍會強制跳到「倒數開始那一刻
-   * 的下一集」，把人從剛選的集數拉走。
-   */
-  const cancelAutoNextCountdown = (resetUi = true) => {
-    if (countdownTimerRef.current) {
-      clearInterval(countdownTimerRef.current);
-      countdownTimerRef.current = null;
-    }
-    if (resetUi) {
-      setShowCountdownOverlay(false);
-      setAutoNextCountdown(0);
-    }
-    autoNextBusyRef.current = false;
-  };
-
-  const playNextEpisodeFromCountdown = () => {
-    const d = detailRef.current;
-    const idx = currentEpisodeIndexRef.current;
-    if (d?.episodes && idx < d.episodes.length - 1) {
-      setCurrentEpisodeIndex(idx + 1);
-    }
-  };
-
-  /**
-   * 啟動自動連播倒數。切集時才讀取當下的集數索引——不可沿用倒數開始時捕獲的值，
-   * 否則使用者在這 5 秒內手動換集會被拉回去。
-   */
-  const startAutoNextCountdown = () => {
-    autoNextBusyRef.current = true;
-    let remaining = 5;
-    setAutoNextCountdown(remaining);
-    setShowCountdownOverlay(true);
-    countdownTimerRef.current = setInterval(() => {
-      remaining -= 1;
-      if (remaining > 0) {
-        setAutoNextCountdown(remaining);
-        return;
-      }
-
-      cancelAutoNextCountdown();
-      playNextEpisodeFromCountdown();
-    }, 1000);
+    window.history.replaceState(
+      {},
+      '',
+      applyPlaybackUrlUpdates(window.location.href, updates, removeKeys)
+    );
   };
 
   // 清理播放器資源的統一函數
@@ -1587,30 +1527,31 @@ function PlayPageClient() {
 
             ensureVideoSource(video, url);
 
+            let networkRetries = 0;
             hls.on(
               Hls.Events.ERROR,
               function (event: Events.ERROR, data: ErrorData) {
                 logger.error('HLS Error:', event, data);
-                if (data.fatal) {
-                  switch (data.type) {
-                    case Hls.ErrorTypes.NETWORK_ERROR:
-                      logger.debug('網路錯誤，嘗試恢復...');
-                      hls.startLoad();
-                      break;
-                    case Hls.ErrorTypes.MEDIA_ERROR:
-                      logger.debug('媒體錯誤，嘗試恢復...');
-                      hls.recoverMediaError();
-                      break;
-                    default:
-                      logger.debug('無法恢復的錯誤');
-                      hls.destroy();
-                      setIsVideoLoading(false);
-                      setPlaybackSoftError(
-                        '播放失敗，可重新整理或換一個片源再試'
-                      );
-                      break;
-                  }
+                if (!data.fatal) return;
+                const { action, nextNetworkRetries } = nextHlsFatalAction(
+                  data.type,
+                  networkRetries
+                );
+                networkRetries = nextNetworkRetries;
+                if (action.type === 'startLoad') {
+                  logger.debug('網路錯誤，嘗試恢復...');
+                  hls.startLoad();
+                  return;
                 }
+                if (action.type === 'recoverMedia') {
+                  logger.debug('媒體錯誤，嘗試恢復...');
+                  hls.recoverMediaError();
+                  return;
+                }
+                logger.debug('無法恢復的錯誤');
+                hls.destroy();
+                setIsVideoLoading(false);
+                setPlaybackSoftError(action.message);
               }
             );
           },
@@ -2267,7 +2208,7 @@ function PlayPageKeyed() {
   const source = searchParams.get('source') ?? '';
   const id = searchParams.get('id') ?? '';
   const title = searchParams.get('title') ?? '';
-  return <PlayPageClient key={`${source}\t${id}\t${title}`} />;
+  return <PlayPageClient key={getPlayPageRemountKey(source, id, title)} />;
 }
 
 export default function PlayPage() {

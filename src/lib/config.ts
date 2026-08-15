@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 
 import { AdminConfig } from './admin.types';
 import { toDisplayLanguage } from './chinese';
+import { DEFAULT_SITE_NAME, isLegacyDefaultSiteName } from './site-defaults';
 import { getServerStorageType } from './storage-runtime';
 import { fetchSafeRemoteUrl, readResponseTextWithLimit } from './url-safety';
 
@@ -352,7 +353,7 @@ async function getInitConfig(
     ConfigFile: configFile,
     ConfigSubscription: subConfig,
     SiteConfig: {
-      SiteName: process.env.NEXT_PUBLIC_SITE_NAME || 'BerserkerTV',
+      SiteName: process.env.NEXT_PUBLIC_SITE_NAME || DEFAULT_SITE_NAME,
       Announcement:
         process.env.ANNOUNCEMENT ||
         '本網站僅提供影視資訊搜尋服務，所有內容均來自第三方網站。本站不儲存任何影片資源，不對任何內容的準確性、合法性、完整性負責。',
@@ -578,7 +579,7 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   // 確保必要的屬性存在和初始化
   if (!isPlainRecord(adminConfig.SiteConfig as unknown)) {
     adminConfig.SiteConfig = {
-      SiteName: 'BerserkerTV',
+      SiteName: DEFAULT_SITE_NAME,
       Announcement:
         '本網站僅提供影視資訊搜尋服務，所有內容均來自第三方網站。本站不儲存任何影片資源，不對任何內容的準確性、合法性、完整性負責。',
       SearchDownstreamMaxPage: 5,
@@ -595,9 +596,10 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
   }
   if (
     !adminConfig.SiteConfig.SiteName ||
-    adminConfig.SiteConfig.SiteName === 'MoonTV'
+    isLegacyDefaultSiteName(adminConfig.SiteConfig.SiteName)
   ) {
-    adminConfig.SiteConfig.SiteName = 'BerserkerTV';
+    adminConfig.SiteConfig.SiteName =
+      process.env.NEXT_PUBLIC_SITE_NAME?.trim() || DEFAULT_SITE_NAME;
   }
   if (typeof adminConfig.SiteConfig.Announcement !== 'string') {
     adminConfig.SiteConfig.Announcement = '';

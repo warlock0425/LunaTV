@@ -1,6 +1,6 @@
 'use client';
 
-// Keep the legacy MoonTV key so existing favorite tags survive BerserkerTV upgrades.
+// Keep the legacy MoonTV key so existing favorite tags survive upgrades.
 const STORAGE_KEY = 'moontv_favorite_tags';
 
 export interface FavoriteTag {

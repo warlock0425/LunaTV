@@ -5,6 +5,7 @@ import { SearchResult } from '@/lib/types';
 // 常數
 // ---------------------------------------------------------------------------
 
+// 鍵名沿用舊 fork，勿改——使用者本機快取靠這個 key
 export const DETAIL_CACHE_KEY = 'berserker_detail_cache';
 export const DETAIL_CACHE_KEY_LEGACY = 'luna_detail_cache';
 export const DETAIL_CACHE_LIMIT = 300;
@@ -546,4 +547,51 @@ export function mergeDetailPreservingPlayback(
     currentEpisodeUrlChanged: false,
     reason: 'applied',
   };
+}
+
+export function getPlayPageRemountKey(
+  source: string,
+  id: string,
+  title: string
+): string {
+  return `${source}\t${id}\t${title}`;
+}
+
+export function applyPlaybackUrlUpdates(
+  href: string,
+  updates: Record<string, string | number | undefined | null>,
+  removeKeys: string[] = []
+): string {
+  const nextUrl = new URL(href);
+  for (const [key, value] of Object.entries(updates)) {
+    const nextValue = value === undefined || value === null ? '' : `${value}`;
+    if (!nextValue || nextValue === 'undefined' || nextValue === 'null') {
+      nextUrl.searchParams.delete(key);
+    } else {
+      nextUrl.searchParams.set(key, nextValue);
+    }
+  }
+  for (const key of removeKeys) {
+    nextUrl.searchParams.delete(key);
+  }
+  return nextUrl.toString();
+}
+
+export function ensureVideoSource(
+  video: HTMLVideoElement | null,
+  url: string
+): void {
+  if (!video || !url) return;
+  const sources = Array.from(video.getElementsByTagName('source'));
+  if (!sources.some((source) => source.src === url)) {
+    sources.forEach((source) => source.remove());
+    const sourceEl = document.createElement('source');
+    sourceEl.src = url;
+    video.appendChild(sourceEl);
+  }
+
+  video.disableRemotePlayback = false;
+  if (video.hasAttribute('disableRemotePlayback')) {
+    video.removeAttribute('disableRemotePlayback');
+  }
 }

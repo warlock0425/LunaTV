@@ -3,7 +3,7 @@ import { Metadata } from 'next';
 import { CURRENT_VERSION } from '@/lib/version';
 
 export const metadata: Metadata = {
-  title: '安全警告 - BerserkerTV',
+  title: '安全警告 - LunaTV',
   description: '站點安全設定警告',
 };
 
@@ -88,7 +88,7 @@ export default function WarningPage() {
           <div className='mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-zinc-800'>
             <div className='text-center text-xs sm:text-sm text-zinc-500'>
               <p>
-                BerserkerTV v{CURRENT_VERSION} ·
+                LunaTV v{CURRENT_VERSION} ·
                 為確保系統安全性和合規性，請及時完成安全設定
               </p>
             </div>
@@ -97,7 +97,7 @@ export default function WarningPage() {
       </div>
 
       <footer className='py-4 text-center text-xs text-zinc-600 border-t border-zinc-800'>
-        BerserkerTV v{CURRENT_VERSION}
+        LunaTV v{CURRENT_VERSION}
       </footer>
     </div>
   );

@@ -1,14 +1,17 @@
 import type { SearchResult } from '@/lib/types';
 
 import {
+  applyPlaybackUrlUpdates,
   clampEpisodeIndex,
   DETAIL_CACHE_HARD_TTL,
   DETAIL_CACHE_TTL,
   type DetailCacheEntry,
+  ensureVideoSource,
   formatEpisodeBadge,
   formatEpisodeUpdateMessage,
   getEpisodeCount,
   getEpisodeUrl,
+  getPlayPageRemountKey,
   mergeDetailPreservingPlayback,
   mergeFreshDetail,
   pruneOldestDetailCacheEntries,
@@ -311,5 +314,41 @@ describe('play page detail merge helpers', () => {
     expect(merged.applied).toBe(true);
     expect(merged.detail?.episodes).toEqual(['a', 'b', 'c']);
     expect(merged.episodeIndex).toBe(2);
+  });
+});
+
+describe('play page URL / remount helpers', () => {
+  it('builds a remount key that does not collide on underscore titles', () => {
+    expect(getPlayPageRemountKey('src', '1', 'a_b')).not.toBe(
+      getPlayPageRemountKey('src', '1_a', 'b')
+    );
+  });
+
+  it('updates playback query params without touching unrelated ones', () => {
+    const next = applyPlaybackUrlUpdates(
+      'https://tv.example/play?source=a&id=1&keep=yes',
+      { episode: 3, title: '新片名', id: '' },
+      ['prefer']
+    );
+    const parsed = new URL(next);
+    expect(parsed.searchParams.get('source')).toBe('a');
+    expect(parsed.searchParams.get('keep')).toBe('yes');
+    expect(parsed.searchParams.get('episode')).toBe('3');
+    expect(parsed.searchParams.get('title')).toBe('新片名');
+    expect(parsed.searchParams.get('id')).toBeNull();
+    expect(parsed.searchParams.get('prefer')).toBeNull();
+  });
+
+  it('keeps a single video source element and re-enables remote playback', () => {
+    const video = document.createElement('video');
+    video.setAttribute('disableRemotePlayback', '');
+    const stale = document.createElement('source');
+    stale.src = 'https://cdn.example/old.m3u8';
+    video.appendChild(stale);
+
+    ensureVideoSource(video, 'https://cdn.example/new.m3u8');
+    expect(video.querySelectorAll('source')).toHaveLength(1);
+    expect(video.querySelector('source')?.src).toContain('/new.m3u8');
+    expect(video.hasAttribute('disableRemotePlayback')).toBe(false);
   });
 });

@@ -21,7 +21,7 @@ const MAX_SUBJECT_RESPONSE_BYTES = 2 * 1024 * 1024;
  * bgm.tv 的 API 規範要求帶可識別的 User-Agent。接到 CURRENT_VERSION 而非寫死，
  * 否則每次發版都會漏改——這裡原本停在 2.0，calendar 那支停在 2.1.9。
  */
-export const BANGUMI_USER_AGENT = `BerserkerTV/${CURRENT_VERSION.replace(
+export const BANGUMI_USER_AGENT = `LunaTV/${CURRENT_VERSION.replace(
   /^v/,
   ''
 )} (+https://github.com/Berserker8888/LunaTV)`;

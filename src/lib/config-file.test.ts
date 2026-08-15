@@ -99,6 +99,20 @@ describe('parseConfigFile', () => {
     expect(repaired.CustomCategories).toEqual([]);
     expect(repaired.LiveConfig).toEqual([]);
   });
+
+  it('migrates legacy default site names to LunaTV', () => {
+    process.env.USERNAME = 'owner';
+    delete process.env.NEXT_PUBLIC_SITE_NAME;
+    const repaired = configSelfCheck({
+      ...baseAdminConfig({
+        SiteConfig: {
+          ...baseAdminConfig().SiteConfig,
+          SiteName: 'BerserkerTV',
+        },
+      }),
+    });
+    expect(repaired.SiteConfig.SiteName).toBe('LunaTV');
+  });
 });
 
 describe('refineConfig 安全契約', () => {

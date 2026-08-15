@@ -1,5 +1,5 @@
 /**
- * BerserkerTV 智慧搜尋與繁簡容錯核心引擎
+ * LunaTV 智慧搜尋與繁簡容錯核心引擎
  *
  * isFuzzyMatch 採用 hybrid 比對策略：
  *   1. 精確／互相包含（含長度差護欄）

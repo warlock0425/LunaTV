@@ -11,7 +11,7 @@ const publicDir = path.join(projectRoot, 'public');
 const manifestPath = path.join(publicDir, 'manifest.json');
 
 // 從環境變數取得站點名稱
-const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'BerserkerTV';
+const siteName = process.env.NEXT_PUBLIC_SITE_NAME || 'LunaTV';
 
 // manifest.json 模板
 const manifestTemplate = {

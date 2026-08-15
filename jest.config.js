@@ -26,6 +26,9 @@ const customJestConfig = {
     '!src/hooks/**/*.test.{ts,tsx}',
     'src/app/live/live-epg-utils.ts',
     'src/app/play/player-skip-settings.ts',
+    'src/app/play/play-page-helpers.ts',
+    'src/app/play/detail-refresh.ts',
+    'src/app/play/hls-fatal.ts',
   ],
   // 防倒退門檻。統計範圍含 src/lib、src/hooks 與抽出的純邏輯模組。
   //

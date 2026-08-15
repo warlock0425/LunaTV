@@ -2,11 +2,12 @@
 
 import { createContext, ReactNode, useContext } from 'react';
 
+import { DEFAULT_SITE_NAME } from '@/lib/site-defaults';
 import { useClientValue } from '@/hooks/useClientMount';
 
 const SiteContext = createContext<{ siteName: string; announcement?: string }>({
   // 預設值
-  siteName: 'BerserkerTV',
+  siteName: DEFAULT_SITE_NAME,
   announcement:
     '本網站僅提供影視資訊搜尋服務，所有內容均來自第三方網站。本站不儲存任何影片資源，不對任何內容的準確性、合法性、完整性負責。',
 });

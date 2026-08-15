@@ -3,7 +3,7 @@ version: '3.8'
 services:
   redis:
     image: redis:7-alpine
-    container_name: berserkertv-redis
+    container_name: lunatv-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
@@ -18,7 +18,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: berserkertv-app
+    container_name: lunatv-app
     restart: unless-stopped
     ports:
       - '3000:3000'
@@ -35,7 +35,7 @@ services:
       # 站长密码
       - PASSWORD=${PASSWORD:?Set PASSWORD in your environment or .env file}
       # 站点名称（可选）
-      - NEXT_PUBLIC_SITE_NAME=BerserkerTV
+      - NEXT_PUBLIC_SITE_NAME=LunaTV
 
 volumes:
   redis-data:

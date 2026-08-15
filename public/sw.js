@@ -1,5 +1,5 @@
 /**
- * BerserkerTV Service Worker
+ * LunaTV Service Worker
  *
  * 策略：
  * - 只快取同源的不可變靜態資源（/_next/static 帶內容雜湊）與圖示、字型。
@@ -8,7 +8,7 @@
  * - 頁面導覽走網路，失敗時回退到預快取的離線頁。
  * - activate 時清除所有非本版快取（包含舊 next-pwa/workbox 時代的殘留）。
  */
-const STATIC_CACHE = 'berserker-static-v2';
+const STATIC_CACHE = 'lunatv-static-v1';
 const OWNED_CACHES = new Set([STATIC_CACHE]);
 const OFFLINE_URL = '/offline.html';
 const PRECACHE_URLS = [OFFLINE_URL, '/logo.png'];
