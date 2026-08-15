@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 
+import { getClientIp } from '@/lib/api-rate-limit';
 import { getAuthSessionSecret, getAuthSignaturePayload } from '@/lib/auth';
 import {
   getAuthCookieOptions,
@@ -112,11 +113,7 @@ async function generateAuthCookie(
 export async function POST(req: NextRequest) {
   try {
     // 速率限制檢查
-    const clientIp = (
-      req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
-      req.headers.get('x-real-ip') ||
-      'unknown'
-    ).slice(0, 128);
+    const clientIp = getClientIp(req);
     const isE2ETest = process.env.PASSWORD === 'e2e-test-password';
     // 本地 / localStorage 模式——僅校驗固定密碼
     if (STORAGE_TYPE === 'localstorage') {

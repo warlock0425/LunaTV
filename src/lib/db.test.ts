@@ -409,3 +409,61 @@ describe('DbManager play-record serialization', () => {
     ).toBe(false);
   });
 });
+
+describe('DbManager tryCronLock', () => {
+  it('runs the job and returns ran when the lock is acquired', async () => {
+    const releaseLock = jest.fn().mockResolvedValue(true);
+    const storage = {
+      acquireLock: jest.fn().mockResolvedValue(true),
+      renewLock: jest.fn().mockResolvedValue(true),
+      releaseLock,
+    } as unknown as IStorage;
+    const manager = new DbManager(storage);
+    const fn = jest.fn().mockResolvedValue(undefined);
+
+    await expect(manager.tryCronLock(fn)).resolves.toBe('ran');
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(releaseLock).toHaveBeenCalled();
+  });
+
+  it('runs immediately when storage has no distributed lock', async () => {
+    const manager = new DbManager({} as IStorage);
+    const fn = jest.fn().mockResolvedValue(undefined);
+
+    await expect(manager.tryCronLock(fn)).resolves.toBe('ran');
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns busy without running the job when the lock is held', async () => {
+    jest.useFakeTimers();
+    try {
+      const fn = jest.fn();
+      const storage = {
+        acquireLock: jest.fn().mockResolvedValue(false),
+        renewLock: jest.fn().mockResolvedValue(true),
+        releaseLock: jest.fn().mockResolvedValue(true),
+      } as unknown as IStorage;
+      const manager = new DbManager(storage);
+
+      const resultPromise = manager.tryCronLock(fn);
+      await jest.advanceTimersByTimeAsync(300);
+      await expect(resultPromise).resolves.toBe('busy');
+      expect(fn).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('rethrows unexpected lock errors', async () => {
+    const storage = {
+      acquireLock: jest.fn().mockRejectedValue(new Error('redis down')),
+      renewLock: jest.fn(),
+      releaseLock: jest.fn(),
+    } as unknown as IStorage;
+    const manager = new DbManager(storage);
+
+    await expect(manager.tryCronLock(async () => undefined)).rejects.toThrow(
+      'redis down'
+    );
+  });
+});

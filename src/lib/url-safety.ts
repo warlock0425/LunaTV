@@ -363,7 +363,6 @@ export function getSafeImageContentType(
     'image/webp',
     'image/x-icon',
     'image/vnd.microsoft.icon',
-    'application/octet-stream',
   ]);
 
   return allowedTypes.has(normalizedType) ? normalizedType : null;

@@ -34,7 +34,7 @@ let retryCount = 0;
 const MAX_RETRIES = 60;
 const rawHostname = process.env.HOSTNAME || 'localhost';
 const pollHostname = rawHostname === '0.0.0.0' ? '127.0.0.1' : rawHostname;
-const TARGET_URL = `http://${pollHostname}:${process.env.PORT || 3000}/login`;
+const TARGET_URL = `http://${pollHostname}:${process.env.PORT || 3000}/api/server-config`;
 const CRON_REQUEST_TIMEOUT_MS = 10 * 60 * 1000;
 
 function checkServer() {
@@ -45,11 +45,39 @@ function checkServer() {
 
   const req = http.get(TARGET_URL, (res) => {
     if (resolved) return;
-    res.resume(); // Ensure response is consumed to free up socket
 
-    if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+    let body = '';
+    res.setEncoding('utf8');
+    res.on('data', (chunk) => {
+      body += chunk;
+    });
+    res.on('end', () => {
+      if (resolved) return;
       resolved = true;
-      console.log('Server is up, stop polling.');
+
+      if (!(res.statusCode && res.statusCode >= 200 && res.statusCode < 300)) {
+        handleFailure(new Error(`Bad status code: ${res.statusCode}`));
+        return;
+      }
+
+      let payload;
+      try {
+        payload = JSON.parse(body);
+      } catch {
+        handleFailure(new Error('server-config returned invalid JSON'));
+        return;
+      }
+
+      if (payload.StorageConfigured !== true) {
+        handleFailure(
+          new Error(
+            `Storage not configured: ${payload.StorageMessage || 'unknown'}`
+          )
+        );
+        return;
+      }
+
+      console.log('Server is up, storage is configured, stop polling.');
 
       setTimeout(() => {
         // 服务器启动后，立即执行一次 cron 任务
@@ -63,10 +91,7 @@ function checkServer() {
         },
         60 * 60 * 1000
       ); // 每小时执行一次
-    } else {
-      resolved = true;
-      handleFailure(new Error(`Bad status code: ${res.statusCode}`));
-    }
+    });
   });
 
   req.setTimeout(2000, () => {
@@ -99,7 +124,7 @@ checkServer();
 function executeCronJob() {
   const rawHostname = process.env.HOSTNAME || 'localhost';
   const pollHostname = rawHostname === '0.0.0.0' ? '127.0.0.1' : rawHostname;
-  const cronUrl = `http://${pollHostname}:${process.env.PORT || 3000}/api/cron`;
+  const cronUrl = `http://${pollHostname}:${process.env.PORT || 3000}/api/cron?wait=true`;
 
   console.log(`Executing cron job: ${cronUrl}`);
 

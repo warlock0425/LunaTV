@@ -22,6 +22,8 @@ import PageLayout from '@/components/PageLayout';
 import PageLoading from '@/components/PageLoading';
 import { useToast } from '@/components/ToastProvider';
 
+import { nextHlsFatalAction } from '@/app/play/hls-fatal';
+
 import { cleanEpgData } from './live-epg-utils';
 import { LiveChannel, LiveSource } from './live-types';
 import { buildLiveLogoProxyUrl } from './live-url';
@@ -859,37 +861,43 @@ function LivePageClient() {
     hls.attachMedia(video);
     video.hls = hls;
 
+    let networkRetries = 0;
     hls.on(Hls.Events.ERROR, function (event: Events.ERROR, data: ErrorData) {
       if (video.hls !== hls) return;
       console.error('HLS Error:', event, data);
+      if (!data.fatal) return;
 
-      if (data.fatal) {
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            try {
-              hls.startLoad();
-            } catch (err) {
-              console.error('HLS 網路錯誤恢復失敗:', err);
-              setIsVideoLoading(false);
-              setPlaybackError('直播串流網路錯誤，請嘗試其他頻道');
-            }
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            try {
-              hls.recoverMediaError();
-            } catch (err) {
-              console.error('HLS 媒體錯誤恢復失敗:', err);
-              setIsVideoLoading(false);
-              setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
-            }
-            break;
-          default:
-            hls.destroy();
-            setIsVideoLoading(false);
-            setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
-            break;
+      const { action, nextNetworkRetries } = nextHlsFatalAction(
+        data.type,
+        networkRetries,
+        '直播串流播放失敗，請嘗試其他頻道'
+      );
+      networkRetries = nextNetworkRetries;
+
+      if (action.type === 'startLoad') {
+        try {
+          hls.startLoad();
+        } catch (err) {
+          console.error('HLS 網路錯誤恢復失敗:', err);
+          setIsVideoLoading(false);
+          setPlaybackError('直播串流網路錯誤，請嘗試其他頻道');
         }
+        return;
       }
+      if (action.type === 'recoverMedia') {
+        try {
+          hls.recoverMediaError();
+        } catch (err) {
+          console.error('HLS 媒體錯誤恢復失敗:', err);
+          setIsVideoLoading(false);
+          setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
+        }
+        return;
+      }
+
+      hls.destroy();
+      setIsVideoLoading(false);
+      setPlaybackError(action.message);
     });
   }
 

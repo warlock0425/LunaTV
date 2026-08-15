@@ -320,6 +320,25 @@ export class DbManager {
     }
   }
 
+  /**
+   * 多副本 cron：搶不到鎖就立刻放棄，不要卡住呼叫端。
+   * 沒有分散式鎖的儲存（localStorage）會直接執行。
+   */
+  async tryCronLock(fn: () => Promise<void>): Promise<'ran' | 'busy'> {
+    try {
+      await this.runWithDistributedLock('lock:cron', fn, {
+        ttlMs: 10 * 60 * 1000,
+        heartbeatMs: 20 * 1000,
+        acquireTimeoutMs: 250,
+        retryMs: 50,
+      });
+      return 'ran';
+    } catch (error) {
+      if (error instanceof StorageLockTimeoutError) return 'busy';
+      throw error;
+    }
+  }
+
   private async runWithDistributedLock<T>(
     lockKey: string,
     mutation: () => Promise<T>,

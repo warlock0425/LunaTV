@@ -4,6 +4,7 @@ import { TextDecoder, TextEncoder } from 'node:util';
 
 import {
   fetchSafeRemoteUrl,
+  getSafeImageContentType,
   parseSafeRemoteUrl,
   readResponseBytesWithLimit,
   readResponseJsonWithLimit,
@@ -265,5 +266,16 @@ describe('url safety helpers', () => {
 
       expect(mockedLookup).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+describe('getSafeImageContentType', () => {
+  it('allows real image types and rejects generic binaries', () => {
+    expect(getSafeImageContentType('image/png')).toBe('image/png');
+    expect(getSafeImageContentType('image/jpeg; charset=binary')).toBe(
+      'image/jpeg'
+    );
+    expect(getSafeImageContentType('application/octet-stream')).toBeNull();
+    expect(getSafeImageContentType('text/html')).toBeNull();
   });
 });

@@ -12,7 +12,8 @@ export type HlsFatalAction =
  */
 export function nextHlsFatalAction(
   errorType: string,
-  networkRetries: number
+  networkRetries: number,
+  giveUpMessage = HLS_SOFT_ERROR_MESSAGE
 ): { action: HlsFatalAction; nextNetworkRetries: number } {
   if (errorType === 'networkError') {
     if (networkRetries < HLS_NETWORK_RETRY_LIMIT) {
@@ -22,7 +23,7 @@ export function nextHlsFatalAction(
       };
     }
     return {
-      action: { type: 'giveUp', message: HLS_SOFT_ERROR_MESSAGE },
+      action: { type: 'giveUp', message: giveUpMessage },
       nextNetworkRetries: networkRetries,
     };
   }
@@ -35,7 +36,7 @@ export function nextHlsFatalAction(
   }
 
   return {
-    action: { type: 'giveUp', message: HLS_SOFT_ERROR_MESSAGE },
+    action: { type: 'giveUp', message: giveUpMessage },
     nextNetworkRetries: networkRetries,
   };
 }

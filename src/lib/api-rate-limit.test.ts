@@ -4,6 +4,7 @@ import {
   enforceRateLimit,
   getClientIp,
   getRateLimitIdentity,
+  isTrustedProxy,
 } from './api-rate-limit';
 import { consumeRateLimit } from './security-store';
 import { getServerStorageType } from './storage-runtime';
@@ -37,23 +38,46 @@ beforeEach(() => {
 });
 
 describe('getClientIp', () => {
-  it('取 x-forwarded-for 的第一段並去除空白', () => {
+  const originalTrustProxy = process.env.TRUST_PROXY;
+
+  afterEach(() => {
+    if (originalTrustProxy === undefined) delete process.env.TRUST_PROXY;
+    else process.env.TRUST_PROXY = originalTrustProxy;
+  });
+
+  it('未設 TRUST_PROXY 時不採信客戶端 XFF', () => {
+    delete process.env.TRUST_PROXY;
+    expect(isTrustedProxy({})).toBe(false);
+    expect(getClientIp(requestWith({ 'x-forwarded-for': '1.2.3.4' }))).toBe(
+      'unknown'
+    );
+  });
+
+  it.each(['true', '1', 'yes'])('TRUST_PROXY=%s 視為開啟', (value) => {
+    expect(isTrustedProxy({ TRUST_PROXY: value })).toBe(true);
+  });
+
+  it('TRUST_PROXY 時取 x-forwarded-for 的第一段並去除空白', () => {
+    process.env.TRUST_PROXY = 'true';
     expect(
       getClientIp(requestWith({ 'x-forwarded-for': ' 1.2.3.4 , 5.6.7.8' }))
     ).toBe('1.2.3.4');
   });
 
-  it('沒有 x-forwarded-for 時退回 x-real-ip', () => {
+  it('TRUST_PROXY 且沒有 x-forwarded-for 時退回 x-real-ip', () => {
+    process.env.TRUST_PROXY = 'true';
     expect(getClientIp(requestWith({ 'x-real-ip': '9.9.9.9' }))).toBe(
       '9.9.9.9'
     );
   });
 
   it('兩者皆無時回 unknown', () => {
+    process.env.TRUST_PROXY = 'true';
     expect(getClientIp(requestWith())).toBe('unknown');
   });
 
   it('截斷過長的標頭，避免灌爆 key 空間', () => {
+    process.env.TRUST_PROXY = 'true';
     const long = 'a'.repeat(500);
     expect(getClientIp(requestWith({ 'x-real-ip': long }))).toHaveLength(128);
   });
@@ -84,9 +108,11 @@ describe('enforceRateLimit', () => {
   });
 
   it('沒有 cookie 時退回 IP 計數', async () => {
+    process.env.TRUST_PROXY = 'true';
     await enforceRateLimit(requestWith({ 'x-real-ip': '1.2.3.4' }), OPTIONS);
 
     expect(mockedConsume).toHaveBeenCalledWith('test-ns', 'ip:1.2.3.4', 10, 60);
+    delete process.env.TRUST_PROXY;
   });
 
   it('cookie 中的 username 同樣會被截斷', async () => {
@@ -100,12 +126,14 @@ describe('enforceRateLimit', () => {
   });
 
   it('cookie 損毀時不拋錯，退回 IP 計數', async () => {
+    process.env.TRUST_PROXY = 'true';
     await enforceRateLimit(
       requestWith({ cookie: 'auth=%7Bnot-json', 'x-real-ip': '1.2.3.4' }),
       OPTIONS
     );
 
     expect(mockedConsume).toHaveBeenCalledWith('test-ns', 'ip:1.2.3.4', 10, 60);
+    delete process.env.TRUST_PROXY;
   });
 
   it('不同 namespace 使用各自的計數桶', async () => {
@@ -124,6 +152,7 @@ describe('enforceRateLimit', () => {
  */
 describe('getRateLimitIdentity：只有被簽章覆蓋的 username 才能當身分', () => {
   it('localstorage 模式下輪換 username，身分不變（額度無法重置）', () => {
+    process.env.TRUST_PROXY = 'true';
     mockedStorageType.mockReturnValue('localstorage');
 
     const identities = [
@@ -141,14 +170,17 @@ describe('getRateLimitIdentity：只有被簽章覆蓋的 username 才能當身�
     );
 
     expect(new Set(identities)).toEqual(new Set(['ip:1.2.3.4']));
+    delete process.env.TRUST_PROXY;
   });
 
   it('localstorage 模式即使 cookie 完全沒有 username 也是同一個身分', () => {
+    process.env.TRUST_PROXY = 'true';
     mockedStorageType.mockReturnValue('localstorage');
 
     expect(getRateLimitIdentity(requestWith({ 'x-real-ip': '1.2.3.4' }))).toBe(
       'ip:1.2.3.4'
     );
+    delete process.env.TRUST_PROXY;
   });
 
   it.each(['redis', 'kvrocks', 'upstash'] as const)(
@@ -181,6 +213,7 @@ describe('getRateLimitIdentity：只有被簽章覆蓋的 username 才能當身�
   });
 
   it('enforceRateLimit 走的是同一套身分判斷', async () => {
+    process.env.TRUST_PROXY = 'true';
     mockedStorageType.mockReturnValue('localstorage');
 
     await enforceRateLimit(
@@ -192,5 +225,6 @@ describe('getRateLimitIdentity：只有被簽章覆蓋的 username 才能當身�
     );
 
     expect(mockedConsume).toHaveBeenCalledWith('test-ns', 'ip:1.2.3.4', 10, 60);
+    delete process.env.TRUST_PROXY;
   });
 });

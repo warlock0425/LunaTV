@@ -22,7 +22,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-let activeCronJob: Promise<void> | null = null;
+let activeCronJob: Promise<'ran' | 'busy'> | null = null;
 let activeCronStartedAt = '';
 
 const DEFAULT_CRON_MAX_RUNTIME_MS = process.env.VERCEL
@@ -51,21 +51,24 @@ function shouldStopCron(deadline: number, phase: string) {
   return true;
 }
 
-function startCronJob(): Promise<void> {
+function startCronJob(): Promise<'ran' | 'busy'> {
   if (activeCronJob) return activeCronJob;
 
-  activeCronStartedAt = new Date().toISOString();
-  markCronStarted(activeCronStartedAt);
-  const job = cronJob().then(
-    () => markCronCompleted(),
-    (error) => {
+  const job = db.tryCronLock(async () => {
+    activeCronStartedAt = new Date().toISOString();
+    markCronStarted(activeCronStartedAt);
+    try {
+      await cronJob();
+      markCronCompleted();
+    } catch (error) {
       markCronCompleted(error);
       throw error;
+    } finally {
+      activeCronStartedAt = '';
     }
-  );
+  });
   activeCronJob = job.finally(() => {
     activeCronJob = null;
-    activeCronStartedAt = '';
   });
   return activeCronJob;
 }
@@ -112,7 +115,22 @@ export async function GET(request: NextRequest) {
     }
 
     if (waitForCompletion) {
-      await startCronJob();
+      const outcome = await startCronJob();
+      if (outcome === 'busy') {
+        return NextResponse.json(
+          {
+            success: true,
+            message: 'Cron job already running',
+            running: true,
+            timestamp: new Date().toISOString(),
+          },
+          {
+            headers: {
+              'Cache-Control': 'no-store',
+            },
+          }
+        );
+      }
 
       return NextResponse.json(
         {

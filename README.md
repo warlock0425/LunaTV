@@ -372,6 +372,7 @@ docker compose up -d
 | `ANNOUNCEMENT`                  | 否           | 公告                                                                                                                                                |
 | `SITE_BASE`                     | 否           | 公開站台 URL（部分回呼／連結場景；https 且 host 對得上時也會讓登入 cookie 加 Secure）                                                               |
 | `COOKIE_SECURE`                 | 否           | 強制登入 cookie 的 Secure 屬性（`true` / `false`）。未設時依請求協定與 `SITE_BASE` 判斷，不再綁 `NODE_ENV`，因此 `http://192.168.x.x:3000` 也能登入 |
+| `TRUST_PROXY`                   | 否           | 設 `true` 才採信 `X-Forwarded-For`／`X-Real-IP` 做限流。直連 `3000:3000` 不要開，否則客戶端可輪換標頭繞過登入／API 限流                             |
 
 ### 常用進階
 
