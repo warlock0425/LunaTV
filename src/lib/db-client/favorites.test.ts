@@ -79,6 +79,21 @@ describe('收藏：靜默資料遺失路徑', () => {
     );
   });
 
+  it('背景同步失敗不彈全域錯誤', async () => {
+    seedCache({ 'a+1': FAV_A });
+    const messages: string[] = [];
+    window.addEventListener('globalError', (event) => {
+      messages.push((event as CustomEvent<{ message: string }>).detail.message);
+    });
+    setFetch(jest.fn().mockRejectedValue(new Error('offline')));
+
+    const { getAllFavorites } = loadModule();
+    await expect(getAllFavorites()).resolves.toEqual({ 'a+1': FAV_A });
+    await flush();
+
+    expect(messages).toEqual([]);
+  });
+
   it('背景同步的舊資料不得蓋掉同時間剛存下的收藏', async () => {
     seedCache({ 'a+1': FAV_A });
 

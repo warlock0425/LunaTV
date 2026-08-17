@@ -40,7 +40,11 @@ const mockedRevoke = jest.mocked(revokeUserSessions);
 function request(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/change-password', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      origin: 'http://localhost',
+      host: 'localhost',
+    },
     body: JSON.stringify(body),
   });
 }
@@ -55,6 +59,22 @@ describe('change-password API', () => {
     mockedRevoke.mockResolvedValue(0);
     mockedVerify.mockResolvedValue(true);
     mockedChange.mockResolvedValue(undefined);
+  });
+
+  it('缺少 Origin 時回 403 且不改密', async () => {
+    const response = await POST(
+      new NextRequest('http://localhost/api/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', host: 'localhost' },
+        body: JSON.stringify({
+          currentPassword: 'old-pass',
+          newPassword: 'new-pass-1',
+        }),
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockedChange).not.toHaveBeenCalled();
   });
 
   it('連續失敗達上限後回 429 且不呼叫 changePassword', async () => {

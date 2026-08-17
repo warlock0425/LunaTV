@@ -7,6 +7,8 @@ import {
 import { getConfig } from './config';
 import { getServerStorageType } from './storage-runtime';
 
+export { isSameSiteHost, rejectCrossSiteRequest } from './same-site';
+
 /**
  * 讀取並「驗證」cookie 中的認證資訊。
  *

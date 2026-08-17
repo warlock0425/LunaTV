@@ -35,7 +35,11 @@ function request(body: Record<string, unknown>) {
   return new NextRequest('http://localhost/api/admin/user', {
     method: 'POST',
     body: JSON.stringify(body),
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      origin: 'http://localhost',
+      host: 'localhost',
+    },
   });
 }
 

@@ -862,17 +862,21 @@ function LivePageClient() {
     video.hls = hls;
 
     let networkRetries = 0;
+    let mediaRetries = 0;
     hls.on(Hls.Events.ERROR, function (event: Events.ERROR, data: ErrorData) {
       if (video.hls !== hls) return;
       console.error('HLS Error:', event, data);
       if (!data.fatal) return;
 
-      const { action, nextNetworkRetries } = nextHlsFatalAction(
-        data.type,
-        networkRetries,
-        '直播串流播放失敗，請嘗試其他頻道'
-      );
+      const { action, nextNetworkRetries, nextMediaRetries } =
+        nextHlsFatalAction(
+          data.type,
+          networkRetries,
+          mediaRetries,
+          '直播串流播放失敗，請嘗試其他頻道'
+        );
       networkRetries = nextNetworkRetries;
+      mediaRetries = nextMediaRetries;
 
       if (action.type === 'startLoad') {
         try {
@@ -889,6 +893,17 @@ function LivePageClient() {
           hls.recoverMediaError();
         } catch (err) {
           console.error('HLS 媒體錯誤恢復失敗:', err);
+          setIsVideoLoading(false);
+          setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
+        }
+        return;
+      }
+      if (action.type === 'swapAudioCodec') {
+        try {
+          hls.swapAudioCodec();
+          hls.recoverMediaError();
+        } catch (err) {
+          console.error('HLS 音訊編碼切換失敗:', err);
           setIsVideoLoading(false);
           setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
         }

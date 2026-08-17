@@ -11,6 +11,7 @@ import {
 } from '@/lib/api-input-validation';
 import { getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import { revokeUserSessions } from '@/lib/security-store';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
@@ -77,6 +78,9 @@ function isValidNewPassword(value: unknown): value is string {
 }
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(

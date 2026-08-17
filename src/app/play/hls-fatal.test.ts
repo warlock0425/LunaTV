@@ -1,4 +1,6 @@
 import {
+  HLS_MEDIA_ERROR_MESSAGE,
+  HLS_MEDIA_RETRY_LIMIT,
   HLS_NETWORK_RETRY_LIMIT,
   HLS_SOFT_ERROR_MESSAGE,
   nextHlsFatalAction,
@@ -17,10 +19,21 @@ describe('nextHlsFatalAction', () => {
     ).toEqual({ type: 'giveUp', message: HLS_SOFT_ERROR_MESSAGE });
   });
 
-  it('recovers media errors and gives up on other fatal types', () => {
-    expect(nextHlsFatalAction('mediaError', 2)).toEqual({
+  it('recovers media errors, then swaps audio codec, then gives up', () => {
+    expect(nextHlsFatalAction('mediaError', 0, 0)).toEqual({
       action: { type: 'recoverMedia' },
-      nextNetworkRetries: 2,
+      nextNetworkRetries: 0,
+      nextMediaRetries: 1,
+    });
+    expect(nextHlsFatalAction('mediaError', 0, 1)).toEqual({
+      action: { type: 'swapAudioCodec' },
+      nextNetworkRetries: 0,
+      nextMediaRetries: 2,
+    });
+    expect(nextHlsFatalAction('mediaError', 0, HLS_MEDIA_RETRY_LIMIT)).toEqual({
+      action: { type: 'giveUp', message: HLS_MEDIA_ERROR_MESSAGE },
+      nextNetworkRetries: 0,
+      nextMediaRetries: HLS_MEDIA_RETRY_LIMIT,
     });
     expect(nextHlsFatalAction('muxError', 0).action.type).toBe('giveUp');
   });
@@ -30,6 +43,7 @@ describe('nextHlsFatalAction', () => {
       nextHlsFatalAction(
         'networkError',
         HLS_NETWORK_RETRY_LIMIT,
+        0,
         '直播串流播放失敗，請嘗試其他頻道'
       ).action
     ).toEqual({

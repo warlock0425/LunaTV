@@ -12,6 +12,7 @@ import {
 import { getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { deleteCachedLiveChannels, refreshLiveChannels } from '@/lib/live';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 
 export const runtime = 'nodejs';
 
@@ -45,6 +46,9 @@ function isOptionalRemoteUrl(value: unknown): value is string | undefined {
 }
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   try {
     const authInfo = await getVerifiedAuthInfo(request);
     const username = authInfo?.username;

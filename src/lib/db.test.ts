@@ -410,6 +410,30 @@ describe('DbManager play-record serialization', () => {
   });
 });
 
+describe('DbManager migration gates', () => {
+  it('waits for migration before deleting favorites or reading skip configs', async () => {
+    const deleteFavorite = jest.fn();
+    const getSkipConfig = jest.fn();
+    const storage = {
+      migrateData: jest.fn().mockRejectedValue(new Error('migration failed')),
+      deleteFavorite,
+      getSkipConfig,
+    } as unknown as IStorage;
+    const manager = new DbManager(storage);
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(manager.deleteFavorite('user', 'source', '1')).rejects.toThrow(
+      'migration failed'
+    );
+    await expect(manager.getSkipConfig('user', 'source', '1')).rejects.toThrow(
+      'migration failed'
+    );
+    expect(deleteFavorite).not.toHaveBeenCalled();
+    expect(getSkipConfig).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+});
+
 describe('DbManager tryCronLock', () => {
   it('runs the job and returns ran when the lock is acquired', async () => {
     const releaseLock = jest.fn().mockResolvedValue(true);

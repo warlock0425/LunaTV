@@ -53,7 +53,11 @@ describe('/api/admin/site', () => {
           FluidSearch: true,
           EnableWebLive: true,
         }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          origin: 'http://localhost',
+          host: 'localhost',
+        },
       })
     );
 

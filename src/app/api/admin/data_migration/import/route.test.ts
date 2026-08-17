@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server';
 import { gzipSync } from 'node:zlib';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { configSelfCheck, getConfig, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
@@ -14,6 +15,9 @@ import { POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({
   getVerifiedAuthInfo: jest.fn(),
+}));
+jest.mock('@/lib/api-rate-limit', () => ({
+  enforceRateLimit: jest.fn().mockResolvedValue(null),
 }));
 jest.mock('@/lib/config', () => ({
   configSelfCheck: jest.fn(),
@@ -67,6 +71,7 @@ jest.mock('@/lib/security-store', () => ({
 }));
 
 const mockedAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedRateLimit = jest.mocked(enforceRateLimit);
 const mockedConfigSelfCheck = jest.mocked(configSelfCheck);
 const mockedGetConfig = jest.mocked(getConfig);
 const mockedSetCachedConfig = jest.mocked(setCachedConfig);
@@ -107,6 +112,10 @@ function createImportRequest(payload: unknown): NextRequest {
   return new NextRequest('http://localhost/api/admin/data_migration/import', {
     method: 'POST',
     body: form,
+    headers: {
+      origin: 'http://localhost',
+      host: 'localhost',
+    },
   });
 }
 
@@ -319,5 +328,22 @@ describe('data migration import', () => {
     expect(response.status).toBe(500);
     expect(mockedRevokeUserSessions).not.toHaveBeenCalled();
     expect(await mockedGetSessionVersion('alice')).toBe(1);
+  });
+
+  it('rate-limits repeated import attempts', async () => {
+    mockedRateLimit.mockResolvedValue(
+      new Response(JSON.stringify({ error: '請求過於頻繁，請稍後再試' }), {
+        status: 429,
+      }) as never
+    );
+
+    const response = await POST(
+      createImportRequest({
+        data: { adminConfig: existingConfig, userData: {} },
+      })
+    );
+
+    expect(response.status).toBe(429);
+    expect(mockedDb.clearAllData).not.toHaveBeenCalled();
   });
 });

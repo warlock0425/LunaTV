@@ -58,7 +58,7 @@ const SECOND_LAYER_EXEMPTIONS: Record<string, Exemption> = {
     requiresRateLimit: false,
   },
   'logout/route.ts': {
-    reason: '只清除 cookie，未授權呼叫的後果就是把自己登出',
+    reason: '預設只清除本機 cookie；?all=true 才會驗簽並 revokeUserSessions',
     requiresRateLimit: false,
   },
   'cron/route.ts': {
@@ -112,6 +112,23 @@ const SECOND_LAYER_EXEMPTIONS: Record<string, Exemption> = {
  * 往這裡加東西＝把一支 API 完全裸露到公網，所以刻意寫死：改動會讓測試紅燈，
  * 強迫改的人回來重新確認一次。
  */
+const MUTATING_SAME_SITE_POSTS = [
+  'admin/reset/route.ts',
+  'admin/user/route.ts',
+  'admin/site/route.ts',
+  'admin/source/route.ts',
+  'admin/category/route.ts',
+  'admin/config_file/route.ts',
+  'admin/live/route.ts',
+  'admin/live/refresh/route.ts',
+  'admin/source/health-reset/route.ts',
+  'admin/config_subscription/fetch/route.ts',
+  'admin/data_migration/import/route.ts',
+  'admin/data_migration/export/route.ts',
+  'change-password/route.ts',
+  'logout/route.ts',
+];
+
 const EXPECTED_PROXY_EXCLUSIONS = [
   '_next/static',
   '_next/image',
@@ -233,6 +250,19 @@ describe('API 認證覆蓋', () => {
 
     expect(stale).toEqual([]);
     expect(staleHandlers).toEqual([]);
+  });
+
+  it('狀態變更 POST 都檢查同源 Origin', () => {
+    const missing = MUTATING_SAME_SITE_POSTS.filter((route) => {
+      const entry = routes.find((candidate) => candidate.route === route);
+      if (!entry) return true;
+      const post = extractHandlers(entry.source, route).find(
+        (handler) => handler.method === 'POST'
+      );
+      return !post || !post.body.includes('rejectCrossSiteRequest(');
+    });
+
+    expect(missing).toEqual([]);
   });
 
   it('會對外發出請求的豁免端點一律有限流', () => {

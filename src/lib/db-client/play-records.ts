@@ -62,7 +62,6 @@ export async function getAllPlayRecords(): Promise<Record<string, PlayRecord>> {
         })
         .catch((err) => {
           console.warn('后台同步播放記錄失敗:', err);
-          triggerGlobalError('后台同步播放記錄失敗');
         });
 
       return cachedData;

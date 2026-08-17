@@ -1507,16 +1507,16 @@ function PlayPageClient() {
             ensureVideoSource(video, url);
 
             let networkRetries = 0;
+            let mediaRetries = 0;
             hls.on(
               Hls.Events.ERROR,
               function (event: Events.ERROR, data: ErrorData) {
                 logger.error('HLS Error:', event, data);
                 if (!data.fatal) return;
-                const { action, nextNetworkRetries } = nextHlsFatalAction(
-                  data.type,
-                  networkRetries
-                );
+                const { action, nextNetworkRetries, nextMediaRetries } =
+                  nextHlsFatalAction(data.type, networkRetries, mediaRetries);
                 networkRetries = nextNetworkRetries;
+                mediaRetries = nextMediaRetries;
                 if (action.type === 'startLoad') {
                   logger.debug('網路錯誤，嘗試恢復...');
                   hls.startLoad();
@@ -1524,6 +1524,12 @@ function PlayPageClient() {
                 }
                 if (action.type === 'recoverMedia') {
                   logger.debug('媒體錯誤，嘗試恢復...');
+                  hls.recoverMediaError();
+                  return;
+                }
+                if (action.type === 'swapAudioCodec') {
+                  logger.debug('媒體錯誤，嘗試切換音訊編碼...');
+                  hls.swapAudioCodec();
                   hls.recoverMediaError();
                   return;
                 }

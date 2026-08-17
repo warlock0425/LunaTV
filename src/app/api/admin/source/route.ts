@@ -11,6 +11,7 @@ import {
 } from '@/lib/api-input-validation';
 import { getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
@@ -43,6 +44,9 @@ function isValidSourceKeyList(value: unknown): value is string[] {
 }
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(

@@ -153,14 +153,9 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${inter.className} ${notoSansTC.variable} font-primary min-h-screen bg-white text-zinc-900 dark:bg-deep dark:text-zinc-200`}
+        className={`${inter.className} ${notoSansTC.variable} font-primary min-h-screen bg-deep text-zinc-200`}
       >
-        <ThemeProvider
-          attribute='class'
-          defaultTheme='system'
-          enableSystem
-          disableTransitionOnChange
-        >
+        <ThemeProvider disableTransitionOnChange>
           <ToastProvider>
             <SiteProvider siteName={siteName} announcement={announcement}>
               {children}

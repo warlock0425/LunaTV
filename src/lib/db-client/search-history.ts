@@ -41,7 +41,6 @@ export async function getSearchHistory(): Promise<string[]> {
         })
         .catch((err) => {
           console.warn('后台同步搜索歷史失敗:', err);
-          triggerGlobalError('后台同步搜索歷史失敗');
         });
 
       return cachedData;

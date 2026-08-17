@@ -7,6 +7,7 @@ import {
   getUserInfoCookieOptions,
 } from '@/lib/auth-cookie';
 import { db } from '@/lib/db';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import {
   clearLoginAttempts,
   consumeLoginAttempt,
@@ -25,6 +26,9 @@ function changePasswordIdentity(username: string): string {
 }
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   const storageType = getServerStorageType();
 
   // 不支援 localstorage 模式

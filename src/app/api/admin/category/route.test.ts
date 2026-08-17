@@ -52,7 +52,11 @@ describe('/api/admin/category', () => {
           type: 'sports',
           query: 'bad',
         }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          origin: 'http://localhost',
+          host: 'localhost',
+        },
       })
     );
 

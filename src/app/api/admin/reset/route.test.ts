@@ -45,6 +45,8 @@ function postRequest(
 }
 
 describe('/api/admin/reset', () => {
+  const originalTrustProxy = process.env.TRUST_PROXY;
+
   beforeEach(() => {
     jest.clearAllMocks();
     process.env.USERNAME = 'owner';
@@ -54,6 +56,11 @@ describe('/api/admin/reset', () => {
       timestamp: Date.now(),
     });
     mockedResetConfig.mockResolvedValue(undefined as never);
+  });
+
+  afterEach(() => {
+    if (originalTrustProxy === undefined) delete process.env.TRUST_PROXY;
+    else process.env.TRUST_PROXY = originalTrustProxy;
   });
 
   it('GET 必須回 405（不得再以頂層導覽 CSRF 重置）', async () => {
@@ -86,6 +93,7 @@ describe('/api/admin/reset', () => {
   });
 
   it('POST + https Origin 與 x-forwarded-host 一致 → 放行', async () => {
+    process.env.TRUST_PROXY = 'true';
     const response = await POST(
       postRequest('https://tv.example.com', {
         url: 'http://10.0.0.2:3000/api/admin/reset',
@@ -95,6 +103,20 @@ describe('/api/admin/reset', () => {
     );
     expect(response.status).toBe(200);
     expect(mockedResetConfig).toHaveBeenCalledTimes(1);
+    delete process.env.TRUST_PROXY;
+  });
+
+  it('未設 TRUST_PROXY 時不採信偽造的 X-Forwarded-Host', async () => {
+    delete process.env.TRUST_PROXY;
+    const response = await POST(
+      postRequest('https://evil.example', {
+        url: 'http://localhost/api/admin/reset',
+        host: 'localhost',
+        forwardedHost: 'evil.example',
+      })
+    );
+    expect(response.status).toBe(403);
+    expect(mockedResetConfig).not.toHaveBeenCalled();
   });
 
   it('POST + 跨站 Origin → 403', async () => {

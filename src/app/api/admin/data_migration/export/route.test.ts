@@ -3,6 +3,7 @@
 import { NextRequest } from 'next/server';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { getServerStorageType } from '@/lib/storage-runtime';
@@ -11,6 +12,9 @@ import { POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({
   getVerifiedAuthInfo: jest.fn(),
+}));
+jest.mock('@/lib/api-rate-limit', () => ({
+  enforceRateLimit: jest.fn().mockResolvedValue(null),
 }));
 jest.mock('@/lib/crypto', () => ({
   SimpleCrypto: { encrypt: jest.fn(() => 'encrypted-backup') },
@@ -31,6 +35,7 @@ jest.mock('@/lib/storage-runtime', () => ({
 }));
 
 const mockedAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedRateLimit = jest.mocked(enforceRateLimit);
 const mockedEncrypt = jest.mocked(SimpleCrypto.encrypt);
 const mockedStorageType = jest.mocked(getServerStorageType);
 const mockedDb = db as unknown as {
@@ -48,6 +53,7 @@ describe('data migration export', () => {
     jest.clearAllMocks();
     process.env.USERNAME = 'owner';
     mockedStorageType.mockReturnValue('redis');
+    mockedRateLimit.mockResolvedValue(null);
     mockedAuth.mockResolvedValue({ username: 'owner' });
     mockedDb.getAdminConfig.mockResolvedValue({
       SiteConfig: {},
@@ -75,7 +81,11 @@ describe('data migration export', () => {
       {
         method: 'POST',
         body: JSON.stringify({ password: 'backup-password' }),
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          origin: 'http://localhost',
+          host: 'localhost',
+        },
       }
     );
 
@@ -88,5 +98,28 @@ describe('data migration export', () => {
       expect.any(String),
       'backup-password'
     );
+  });
+
+  it('rate-limits repeated export attempts', async () => {
+    mockedRateLimit.mockResolvedValue(
+      new Response(JSON.stringify({ error: '請求過於頻繁，請稍後再試' }), {
+        status: 429,
+      }) as never
+    );
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/admin/data_migration/export', {
+        method: 'POST',
+        body: JSON.stringify({ password: 'backup-password' }),
+        headers: {
+          'Content-Type': 'application/json',
+          origin: 'http://localhost',
+          host: 'localhost',
+        },
+      })
+    );
+
+    expect(response.status).toBe(429);
+    expect(mockedEncrypt).not.toHaveBeenCalled();
   });
 });

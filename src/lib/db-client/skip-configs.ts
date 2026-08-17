@@ -189,7 +189,6 @@ export async function getAllSkipConfigs(): Promise<Record<string, SkipConfig>> {
         })
         .catch((err) => {
           console.warn('后台同步跳過片头片尾設定失敗:', err);
-          triggerGlobalError('后台同步跳過片头片尾設定失敗');
         });
 
       return cachedData;

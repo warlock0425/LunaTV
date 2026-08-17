@@ -5,10 +5,12 @@ import { gunzip } from 'zlib';
 
 import { AdminConfig } from '@/lib/admin.types';
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { configSelfCheck, getConfig, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
 import { isHashed } from '@/lib/password';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import { revokeUserSessions } from '@/lib/security-store';
 import { parseStorageKey } from '@/lib/storage-key';
 import { getServerStorageType } from '@/lib/storage-runtime';
@@ -189,6 +191,9 @@ async function revokeSessionsForUsernames(
 }
 
 export async function POST(req: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(req);
+  if (crossSite) return crossSite;
+
   try {
     // 檢查存儲類型
     const storageType = getServerStorageType();
@@ -212,6 +217,13 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    const limited = await enforceRateLimit(req, {
+      namespace: 'admin-migration',
+      limit: 5,
+      windowSeconds: 60,
+    });
+    if (limited) return limited;
 
     const contentLength = Number(req.headers.get('content-length'));
     if (Number.isFinite(contentLength) && contentLength > MAX_MULTIPART_BYTES) {

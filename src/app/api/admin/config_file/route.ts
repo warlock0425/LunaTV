@@ -9,12 +9,16 @@ import {
   setCachedConfig,
 } from '@/lib/config';
 import { db } from '@/lib/db';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   const storageType = getServerStorageType();
   if (storageType === 'localstorage') {
     return NextResponse.json(

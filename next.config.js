@@ -42,6 +42,8 @@ const nextConfig = {
         : false,
   },
 
+  // 關閉 StrictMode，避免開發模式雙重掛載讓 Artplayer／HLS.js 重複建立
+  // 解碼器與 DOM 節點，造成資源洩漏與播放器行為異常。
   reactStrictMode: false,
   productionBrowserSourceMaps: false,
 

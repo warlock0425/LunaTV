@@ -71,12 +71,23 @@ export function UserMenu() {
       router.push(`/settings?${params.toString()}`);
     } else if (type === 'admin') {
       router.push('/admin');
-    } else if (type === 'logout') {
+    } else if (type === 'logout' || type === 'logout-all') {
+      if (
+        type === 'logout-all' &&
+        !window.confirm(
+          '這會讓其他已登入的裝置立刻失效，確定要登出全部裝置嗎？'
+        )
+      ) {
+        return;
+      }
       try {
-        const response = await fetch('/api/logout', {
-          method: 'POST',
-          cache: 'no-store',
-        });
+        const response = await fetch(
+          type === 'logout-all' ? '/api/logout?all=true' : '/api/logout',
+          {
+            method: 'POST',
+            cache: 'no-store',
+          }
+        );
         if (!response.ok) {
           throw new Error(`Logout failed: ${response.status}`);
         }
@@ -175,6 +186,13 @@ export function UserMenu() {
             >
               <LogOut className='w-4 h-4 text-red-500' />
               <span>登出</span>
+            </button>
+            <button
+              onClick={(e) => handleAction(e, 'logout-all')}
+              className='w-full flex items-center space-x-3 px-3 py-2.5 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-950/20 rounded-xl text-sm transition text-left cursor-pointer relative z-[999999]'
+            >
+              <LogOut className='w-4 h-4 text-red-500' />
+              <span>登出所有裝置</span>
             </button>
           </div>
 

@@ -4,10 +4,14 @@ import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { getConfig, getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { refreshLiveChannels } from '@/lib/live';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   try {
     // 權限檢查（可讀快取，不必佔寫鎖）
     const authInfo = await getVerifiedAuthInfo(request);

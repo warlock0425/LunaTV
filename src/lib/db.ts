@@ -633,11 +633,13 @@ export class DbManager {
     source: string,
     id: string
   ): Promise<void> {
+    await this.ensureMigrated();
     const key = generateStorageKey(source, id);
     await this.storage.deleteFavorite(userName, key);
   }
 
   async deleteAllFavorites(userName: string): Promise<void> {
+    await this.ensureMigrated();
     await this.storage.deleteAllFavorites(userName);
   }
 
@@ -732,6 +734,7 @@ export class DbManager {
     source: string,
     id: string
   ): Promise<SkipConfig | null> {
+    await this.ensureMigrated();
     if (typeof (this.storage as any).getSkipConfig === 'function') {
       return (this.storage as any).getSkipConfig(userName, source, id);
     }
@@ -744,6 +747,7 @@ export class DbManager {
     id: string,
     config: SkipConfig
   ): Promise<void> {
+    await this.ensureMigrated();
     if (typeof (this.storage as any).setSkipConfig === 'function') {
       await (this.storage as any).setSkipConfig(userName, source, id, config);
     }
@@ -754,6 +758,7 @@ export class DbManager {
     source: string,
     id: string
   ): Promise<void> {
+    await this.ensureMigrated();
     if (typeof (this.storage as any).deleteSkipConfig === 'function') {
       await (this.storage as any).deleteSkipConfig(userName, source, id);
     }
@@ -762,6 +767,7 @@ export class DbManager {
   async getAllSkipConfigs(
     userName: string
   ): Promise<{ [key: string]: SkipConfig }> {
+    await this.ensureMigrated();
     if (typeof (this.storage as any).getAllSkipConfigs === 'function') {
       return (this.storage as any).getAllSkipConfigs(userName);
     }

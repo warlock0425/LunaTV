@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import {
   fetchSafeRemoteUrl,
   parseSafeRemoteUrl,
@@ -17,6 +18,9 @@ const CONFIG_SUBSCRIPTION_FETCH_RATE_LIMIT = 30;
 const CONFIG_SUBSCRIPTION_FETCH_RATE_WINDOW_SECONDS = 60;
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   try {
     // 權限檢查：僅站長可以取得設定訂閱
     const authInfo = await getVerifiedAuthInfo(request);

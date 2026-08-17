@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import { getAdminUser } from '@/lib/config';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import {
   resetAllBreakers,
   resetSourceBreaker,
@@ -19,6 +20,9 @@ export const runtime = 'nodejs';
  * 只清記憶體中的健康/熔斷/最近三級檢測結果，不改 SourceConfig 啟停。
  */
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   const authInfo = await getVerifiedAuthInfo(request);
   const user = await getAdminUser(authInfo?.username);
   if (!user) {

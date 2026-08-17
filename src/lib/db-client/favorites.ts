@@ -48,7 +48,6 @@ export async function getAllFavorites(): Promise<Record<string, Favorite>> {
         })
         .catch((err) => {
           console.warn('后台同步收藏失敗:', err);
-          triggerGlobalError('后台同步收藏失敗');
         });
 
       return cachedData;
@@ -253,7 +252,6 @@ export async function isFavorited(
         })
         .catch((err) => {
           console.warn('后台同步收藏失敗:', err);
-          triggerGlobalError('后台同步收藏失敗');
         });
 
       return !!cachedFavorites[key];

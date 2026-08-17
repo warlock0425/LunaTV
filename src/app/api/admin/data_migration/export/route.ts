@@ -6,8 +6,10 @@ import { gzip } from 'zlib';
 
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
+import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
+import { rejectCrossSiteRequest } from '@/lib/same-site';
 import { getServerStorageType } from '@/lib/storage-runtime';
 import { CURRENT_VERSION } from '@/lib/version';
 
@@ -40,6 +42,9 @@ function formatTimestamp(date: Date): string {
 }
 
 export async function POST(req: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(req);
+  if (crossSite) return crossSite;
+
   try {
     if (getServerStorageType() === 'localstorage') {
       return NextResponse.json(
@@ -58,6 +63,13 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
+
+    const limited = await enforceRateLimit(req, {
+      namespace: 'admin-migration',
+      limit: 5,
+      windowSeconds: 60,
+    });
+    if (limited) return limited;
 
     const body = await readJsonObject(req);
     if (!body) {
