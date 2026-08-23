@@ -6,6 +6,19 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.9',
+    date: '2026-08-23',
+    content: `
+- 修正：觀看進度若比播放器就緒晚到，仍會跳到上次位置，不會從 0 秒重播。
+- 修正：跳過片頭片尾儲存失敗時畫面會還原；片尾提示時間不再顯示成破格式。
+- 修正：後台關閉網頁直播後，直播 API 與代理也不再對外抓源。
+- 安全：站長／管理員／一般使用者權限分開；管理員不能操作站長或其他管理員。
+- 安全：限流改驗 session 簽章，避免偽造 cookie 重置額度。
+- 改善：管理端權限不足時顯示真正原因，不再誤報登入過期。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.8',
     date: '2026-08-17',
     content: `
