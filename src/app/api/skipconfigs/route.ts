@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(configs);
     }
   } catch (error) {
-    console.error('获取跳过片头片尾設定失敗:', error);
+    console.error('取得跳過片頭片尾設定失敗:', error);
     return NextResponse.json(
       { error: '取得跳過片頭片尾設定失敗' },
       { status: 500 }

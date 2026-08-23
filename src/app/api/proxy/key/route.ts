@@ -8,7 +8,11 @@ import {
   isValidApiSource,
 } from '@/lib/api-input-validation';
 import { getConfig } from '@/lib/config';
-import { peekCachedLiveChannels } from '@/lib/live';
+import {
+  isWebLiveEnabled,
+  peekCachedLiveChannels,
+  WEB_LIVE_DISABLED_MESSAGE,
+} from '@/lib/live';
 import { isUrlAllowedForLiveProxy } from '@/lib/live-proxy-allowlist';
 import { logger } from '@/lib/logger';
 import {
@@ -44,7 +48,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unsafe remote URL' }, { status: 403 });
   }
 
-  if (source && !isValidApiSource(source)) {
+  if (!source) {
+    return NextResponse.json(
+      { error: 'Missing moontv-source parameter' },
+      { status: 400 }
+    );
+  }
+  if (!isValidApiSource(source)) {
     return NextResponse.json(
       { error: 'Invalid source parameter' },
       { status: 400 }
@@ -52,18 +62,17 @@ export async function GET(request: Request) {
   }
 
   const config = await getConfig();
+  if (!isWebLiveEnabled(config)) {
+    return NextResponse.json(
+      { error: WEB_LIVE_DISABLED_MESSAGE },
+      { status: 403 }
+    );
+  }
   const liveSource = config.LiveConfig?.find(
     (s: any) => s.key === source && !s.disabled
   );
   if (!liveSource) {
     return NextResponse.json({ error: 'Source not found' }, { status: 404 });
-  }
-
-  if (!source) {
-    return NextResponse.json(
-      { error: 'Missing moontv-source parameter' },
-      { status: 400 }
-    );
   }
 
   const cachedChannels = peekCachedLiveChannels(source);

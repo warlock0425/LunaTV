@@ -11,12 +11,12 @@ import { revokeUserSessions } from '@/lib/security-store';
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
+  const crossSite = rejectCrossSiteRequest(request);
+  if (crossSite) return crossSite;
+
   const revokeAll = request.nextUrl.searchParams.get('all') === 'true';
 
   if (revokeAll) {
-    const crossSite = rejectCrossSiteRequest(request);
-    if (crossSite) return crossSite;
-
     const user = await requireActiveUser(request);
     if (user) {
       await revokeUserSessions(user.username);

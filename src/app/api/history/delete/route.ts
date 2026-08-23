@@ -74,9 +74,9 @@ export async function POST(req: NextRequest) {
       message: '資料庫實體髒數據已完全清洗',
     });
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error('刪除播放記錄失敗:', err);
     return NextResponse.json(
-      { success: false, error: errorMessage },
+      { success: false, error: '刪除播放記錄失敗' },
       { status: 500 }
     );
   }

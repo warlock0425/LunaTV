@@ -6,7 +6,12 @@ import {
   isValidApiSource,
 } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
-import { getCachedLiveChannels } from '@/lib/live';
+import { getConfig } from '@/lib/config';
+import {
+  getCachedLiveChannels,
+  isWebLiveEnabled,
+  WEB_LIVE_DISABLED_MESSAGE,
+} from '@/lib/live';
 
 export const runtime = 'nodejs';
 const LIVE_EPG_RATE_LIMIT = 90;
@@ -26,6 +31,14 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   try {
+    const config = await getConfig();
+    if (!isWebLiveEnabled(config)) {
+      return NextResponse.json(
+        { error: WEB_LIVE_DISABLED_MESSAGE },
+        { status: 403 }
+      );
+    }
+
     const { searchParams } = new URL(request.url);
     const sourceKey = searchParams.get('source');
     const tvgId = searchParams.get('tvgId');

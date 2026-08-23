@@ -9,7 +9,13 @@ import {
 } from '@/lib/api-input-validation';
 import { getConfig } from '@/lib/config';
 import { filterAdsFromM3U8Detailed } from '@/lib/hls-ad-filter';
-import { getBaseUrl, peekCachedLiveChannels, resolveUrl } from '@/lib/live';
+import {
+  getBaseUrl,
+  isWebLiveEnabled,
+  peekCachedLiveChannels,
+  resolveUrl,
+  WEB_LIVE_DISABLED_MESSAGE,
+} from '@/lib/live';
 import {
   isUrlAllowedForLiveProxy,
   rememberLiveProxyHost,
@@ -62,6 +68,12 @@ export async function GET(request: Request) {
   }
 
   const config = await getConfig();
+  if (!isWebLiveEnabled(config)) {
+    return NextResponse.json(
+      { error: WEB_LIVE_DISABLED_MESSAGE },
+      { status: 403 }
+    );
+  }
   const liveSource = config.LiveConfig?.find(
     (s: any) => s.key === source && !s.disabled
   );

@@ -34,8 +34,16 @@ describe('/api/logout', () => {
   });
 
   it('預設只清 cookie，不撤銷其他裝置', async () => {
-    const response = await POST(logoutRequest('http://localhost/api/logout'));
+    const response = await POST(
+      logoutRequest('http://localhost/api/logout', 'http://localhost')
+    );
     expect(response.status).toBe(200);
+    expect(mockedRevoke).not.toHaveBeenCalled();
+  });
+
+  it('缺少 Origin 時回 403，不清除登入狀態', async () => {
+    const response = await POST(logoutRequest('http://localhost/api/logout'));
+    expect(response.status).toBe(403);
     expect(mockedRevoke).not.toHaveBeenCalled();
   });
 

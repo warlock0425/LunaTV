@@ -33,6 +33,7 @@ describe('/api/proxy/segment', () => {
       timestamp: Date.now(),
     });
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',
@@ -102,6 +103,7 @@ describe('/api/proxy/segment', () => {
 
   it('rejects a disabled live source before fetching upstream', async () => {
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',

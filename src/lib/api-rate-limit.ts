@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { getAuthInfoFromCookie } from './auth';
+import { getVerifiedAuthInfo } from './api-auth';
 import { consumeRateLimit } from './security-store';
 import { getServerStorageType } from './storage-runtime';
 
@@ -48,33 +48,22 @@ export interface RateLimitOptions {
 /**
  * 決定限流的計數身分。
  *
- * 規則只有一條：**只有被簽章覆蓋的 username 才能當身分。**
+ * 規則只有一條：**只有驗過 HMAC 的 username 才能當身分。**
  *
- * cookie 內容全部由客戶端控制，簽章保護的是 getAuthSignaturePayload 的三個值
- * ——`subject`、`timestamp`、`sessionVersion`（見 auth.ts）。注意被簽的是
- * subject，不是 cookie 裡的 `username` 欄位；兩者是不是同一個值要看儲存模式：
+ * cookie 內容全部由客戶端控制。豆瓣／海報代理等豁免端點在 matcher 被繞過時
+ * 仍會走到這裡——若只解析 cookie 不驗簽，輪換偽造 username 就能重置額度。
  *
- * - 多使用者模式（redis / kvrocks / upstash）：subject 就是 authInfo.username
- *   （proxy.ts、api-auth.ts 皆然）。改動 username 會讓簽章驗不過，請求在
- *   proxy 第一層就被擋掉，所以這個值可以信任。
  * - localstorage 模式：subject 固定是字面值 'localstorage'，`username` 欄位
- *   完全不在簽章範圍內。使用者可以把它改成任意值而簽章照樣通過——若拿它當
- *   計數 key，輪換 username 就能無限重置額度，限流形同虛設。
- *
- * 因此 localstorage 模式一律退回 IP。該模式只有一個主體（唯一的 PASSWORD），
- * username 本來就沒有區辨力；退回 IP 除了安全，多裝置的誤傷也比現在全部擠在
- * 同一個 'user:localstorage' 桶更少。
- *
- * 之後若要在限流裡讀 cookie 的其他欄位，先回來確認那個欄位在你的目標模式下
- * 是否真的被簽章覆蓋。
+ *   不在簽章範圍內。一律退回 IP。
+ * - 多使用者模式：先走 getVerifiedAuthInfo，驗不過就當未登入、改用 IP。
  */
-export function getRateLimitIdentity(request: Request): string {
+export async function getRateLimitIdentity(request: Request): Promise<string> {
   const ipIdentity = () => `ip:${getClientIp(request)}`;
 
   if (getServerStorageType() === 'localstorage') return ipIdentity();
 
-  // 與 IP 一樣要截斷：長度同樣由客戶端決定，未經處理就當 key 會灌爆 key 空間
-  const username = getAuthInfoFromCookie(request)?.username?.slice(0, 128);
+  const auth = await getVerifiedAuthInfo(request);
+  const username = auth?.username?.slice(0, 128);
   return username ? `user:${username}` : ipIdentity();
 }
 
@@ -90,7 +79,7 @@ export async function enforceRateLimit(
   request: Request,
   { namespace, limit, windowSeconds }: RateLimitOptions
 ): Promise<NextResponse | null> {
-  const identity = getRateLimitIdentity(request);
+  const identity = await getRateLimitIdentity(request);
 
   const { blocked, retryAfter } = await consumeRateLimit(
     namespace,

@@ -3,6 +3,7 @@ import type { SearchResult } from '@/lib/types';
 import {
   applyPlaybackUrlUpdates,
   clampEpisodeIndex,
+  clampResumeTarget,
   DETAIL_CACHE_HARD_TTL,
   DETAIL_CACHE_TTL,
   type DetailCacheEntry,
@@ -18,6 +19,7 @@ import {
   resolveCachedDetailEntry,
   resolveEpisodeIndexAfterRefresh,
   shouldApplyBackgroundDetail,
+  shouldSeekLateResume,
 } from './play-page-helpers';
 
 function makeDetail(
@@ -337,6 +339,19 @@ describe('play page URL / remount helpers', () => {
     expect(parsed.searchParams.get('title')).toBe('新片名');
     expect(parsed.searchParams.get('id')).toBeNull();
     expect(parsed.searchParams.get('prefer')).toBeNull();
+  });
+
+  it('only late-seeks resume when the player has not started watching', () => {
+    expect(shouldSeekLateResume(120, 0)).toBe(true);
+    expect(shouldSeekLateResume(120, 2.9)).toBe(true);
+    expect(shouldSeekLateResume(120, 3)).toBe(false);
+    expect(shouldSeekLateResume(2, 0)).toBe(false);
+  });
+
+  it('clamps resume targets that sit on the last seconds of duration', () => {
+    expect(clampResumeTarget(95, 100)).toBe(95);
+    expect(clampResumeTarget(99, 100)).toBe(95);
+    expect(clampResumeTarget(10, 0)).toBe(10);
   });
 
   it('keeps a single video source element and re-enables remote playback', () => {

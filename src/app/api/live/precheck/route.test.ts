@@ -43,6 +43,7 @@ describe('/api/live/precheck', () => {
     jest.clearAllMocks();
     signedIn();
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',
@@ -59,6 +60,24 @@ describe('/api/live/precheck', () => {
     const response = await GET(request());
 
     expect(response.status).toBe(401);
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
+  it('網頁直播關閉時回 403，且不會對外發出請求', async () => {
+    mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: false },
+      LiveConfig: [
+        {
+          key: 'live',
+          ua: 'Test UA',
+          url: 'https://cdn.example/playlist.m3u',
+        },
+      ],
+    } as Awaited<ReturnType<typeof getConfig>>);
+
+    const response = await GET(request());
+
+    expect(response.status).toBe(403);
     expect(mockedFetch).not.toHaveBeenCalled();
   });
 
@@ -103,6 +122,7 @@ describe('/api/live/precheck', () => {
 
   it('rejects a disabled source before fetching upstream', async () => {
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',

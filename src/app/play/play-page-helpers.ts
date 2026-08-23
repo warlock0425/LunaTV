@@ -35,6 +35,26 @@ export const DEFAULT_SKIP_CONFIG = {
   outro_time: 0,
 };
 
+/** 歷史進度晚於 canplay 抵達時，只在使用者還沒真正開始看才補 seek。 */
+export const LATE_RESUME_PLAYED_THRESHOLD_SECONDS = 3;
+
+export function shouldSeekLateResume(
+  resumeTime: number,
+  currentTime: number
+): boolean {
+  return (
+    resumeTime > LATE_RESUME_PLAYED_THRESHOLD_SECONDS &&
+    currentTime < LATE_RESUME_PLAYED_THRESHOLD_SECONDS
+  );
+}
+
+export function clampResumeTarget(target: number, duration: number): number {
+  if (duration > 0 && target >= duration - 2) {
+    return Math.max(0, duration - 5);
+  }
+  return target;
+}
+
 // ---------------------------------------------------------------------------
 // 環境工具
 // ---------------------------------------------------------------------------

@@ -8,7 +8,11 @@ import {
   isValidApiSource,
 } from '@/lib/api-input-validation';
 import { getConfig } from '@/lib/config';
-import { peekCachedLiveChannels } from '@/lib/live';
+import {
+  isWebLiveEnabled,
+  peekCachedLiveChannels,
+  WEB_LIVE_DISABLED_MESSAGE,
+} from '@/lib/live';
 import { isUrlAllowedForLiveProxy } from '@/lib/live-proxy-allowlist';
 import { RemoteResponseTooLargeError } from '@/lib/response-limit';
 import {
@@ -111,6 +115,12 @@ export async function GET(request: Request) {
   }
 
   const config = await getConfig();
+  if (!isWebLiveEnabled(config)) {
+    return NextResponse.json(
+      { error: WEB_LIVE_DISABLED_MESSAGE },
+      { status: 403 }
+    );
+  }
   const liveSource = config.LiveConfig?.find(
     (s: any) => s.key === source && !s.disabled
   );

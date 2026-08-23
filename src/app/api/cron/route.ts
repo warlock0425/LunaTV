@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { timingSafeEqual } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { mapWithConcurrency } from '@/lib/concurrency';
@@ -87,7 +88,11 @@ export async function GET(request: NextRequest) {
 
   const authHeader = request.headers.get('authorization');
   const expectedAuth = `Bearer ${cronSecret}`;
-  if (!authHeader || authHeader !== expectedAuth) {
+  const provided = Buffer.from(authHeader ?? '');
+  const expected = Buffer.from(expectedAuth);
+  const authorized =
+    provided.length === expected.length && timingSafeEqual(provided, expected);
+  if (!authorized) {
     console.warn('Cron job: 未授權的訪問嘗試');
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

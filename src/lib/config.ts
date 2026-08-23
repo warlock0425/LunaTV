@@ -901,46 +901,6 @@ export async function getCacheTime(): Promise<number> {
   return config.SiteConfig.SiteInterfaceCacheTime || 7200;
 }
 
-export async function getValidUser(
-  username?: string
-): Promise<ConfigUser | null> {
-  if (!username) {
-    return null;
-  }
-
-  if (
-    username === 'localstorage' &&
-    getServerStorageType() === 'localstorage'
-  ) {
-    return {
-      username,
-      role: 'user',
-      banned: false,
-    };
-  }
-
-  const config = await getConfig();
-  const userConfig = config.UserConfig.Users.find(
-    (u) => u.username === username
-  );
-  if (!userConfig || userConfig.banned) {
-    return null;
-  }
-
-  return userConfig;
-}
-
-export async function getAdminUser(
-  username?: string
-): Promise<ConfigUser | null> {
-  const userConfig = await getValidUser(username);
-  if (!userConfig || !['owner', 'admin'].includes(userConfig.role)) {
-    return null;
-  }
-
-  return userConfig;
-}
-
 /**
  * 依使用者權限篩可用片源（純函式，便於守門）。
  *

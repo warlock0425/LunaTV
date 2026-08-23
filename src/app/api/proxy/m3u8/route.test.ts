@@ -41,6 +41,7 @@ describe('/api/proxy/m3u8', () => {
       timestamp: Date.now(),
     });
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',
@@ -129,6 +130,7 @@ describe('/api/proxy/m3u8', () => {
 
   it('rejects a disabled live source before fetching upstream', async () => {
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [{ key: 'live', disabled: true }],
     } as Awaited<ReturnType<typeof getConfig>>);
 
@@ -166,6 +168,7 @@ describe('/api/proxy/m3u8', () => {
     Object.defineProperty(upstream, 'url', { value: playlistUrl });
     mockedFetch.mockResolvedValue(upstream);
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',

@@ -1,5 +1,6 @@
 /** @jest-environment node */
 
+import { getVerifiedAuthInfo } from './api-auth';
 import {
   enforceRateLimit,
   getClientIp,
@@ -9,6 +10,9 @@ import {
 import { consumeRateLimit } from './security-store';
 import { getServerStorageType } from './storage-runtime';
 
+jest.mock('./api-auth', () => ({
+  getVerifiedAuthInfo: jest.fn(),
+}));
 jest.mock('./security-store', () => ({
   consumeRateLimit: jest.fn(),
 }));
@@ -19,6 +23,7 @@ jest.mock('./storage-runtime', () => ({
 
 const mockedConsume = jest.mocked(consumeRateLimit);
 const mockedStorageType = jest.mocked(getServerStorageType);
+const mockedGetVerifiedAuth = jest.mocked(getVerifiedAuthInfo);
 
 const OPTIONS = { namespace: 'test-ns', limit: 10, windowSeconds: 60 };
 
@@ -33,6 +38,7 @@ function authCookie(payload: Record<string, unknown>) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedConsume.mockResolvedValue({ blocked: false, retryAfter: 0 });
+  mockedGetVerifiedAuth.mockResolvedValue(null);
   // 預設用多使用者模式：該模式下 username 有簽章覆蓋，可以當身分
   mockedStorageType.mockReturnValue('redis');
 });
@@ -99,6 +105,9 @@ describe('enforceRateLimit', () => {
   });
 
   it('已登入時以使用者名稱計數，同一 NAT 後的使用者不互相拖累', async () => {
+    mockedGetVerifiedAuth.mockResolvedValue({
+      username: 'alice',
+    } as Awaited<ReturnType<typeof getVerifiedAuthInfo>>);
     await enforceRateLimit(
       requestWith({ cookie: authCookie({ username: 'alice' }) }),
       OPTIONS
@@ -116,6 +125,9 @@ describe('enforceRateLimit', () => {
   });
 
   it('cookie 中的 username 同樣會被截斷', async () => {
+    mockedGetVerifiedAuth.mockResolvedValue({
+      username: 'u'.repeat(500),
+    } as Awaited<ReturnType<typeof getVerifiedAuthInfo>>);
     await enforceRateLimit(
       requestWith({ cookie: authCookie({ username: 'u'.repeat(500) }) }),
       OPTIONS
@@ -123,6 +135,21 @@ describe('enforceRateLimit', () => {
 
     const identity = mockedConsume.mock.calls[0][1];
     expect(identity).toBe(`user:${'u'.repeat(128)}`);
+  });
+
+  it('未驗簽的 cookie username 不當作身分', async () => {
+    mockedGetVerifiedAuth.mockResolvedValue(null);
+    process.env.TRUST_PROXY = 'true';
+    await enforceRateLimit(
+      requestWith({
+        cookie: authCookie({ username: 'forged' }),
+        'x-real-ip': '1.2.3.4',
+      }),
+      OPTIONS
+    );
+
+    expect(mockedConsume).toHaveBeenCalledWith('test-ns', 'ip:1.2.3.4', 10, 60);
+    delete process.env.TRUST_PROXY;
   });
 
   it('cookie 損毀時不拋錯，退回 IP 計數', async () => {
@@ -151,21 +178,19 @@ describe('enforceRateLimit', () => {
  * 而簽章照樣通過。若拿它當計數 key，輪換 username 就能無限重置額度。
  */
 describe('getRateLimitIdentity：只有被簽章覆蓋的 username 才能當身分', () => {
-  it('localstorage 模式下輪換 username，身分不變（額度無法重置）', () => {
+  it('localstorage 模式下輪換 username，身分不變（額度無法重置）', async () => {
     process.env.TRUST_PROXY = 'true';
     mockedStorageType.mockReturnValue('localstorage');
 
-    const identities = [
-      'localstorage',
-      'attacker-bucket-1',
-      'attacker-bucket-2',
-      '',
-    ].map((username) =>
-      getRateLimitIdentity(
-        requestWith({
-          cookie: authCookie({ username }),
-          'x-real-ip': '1.2.3.4',
-        })
+    const identities = await Promise.all(
+      ['localstorage', 'attacker-bucket-1', 'attacker-bucket-2', ''].map(
+        (username) =>
+          getRateLimitIdentity(
+            requestWith({
+              cookie: authCookie({ username }),
+              'x-real-ip': '1.2.3.4',
+            })
+          )
       )
     );
 
@@ -173,39 +198,49 @@ describe('getRateLimitIdentity：只有被簽章覆蓋的 username 才能當身�
     delete process.env.TRUST_PROXY;
   });
 
-  it('localstorage 模式即使 cookie 完全沒有 username 也是同一個身分', () => {
+  it('localstorage 模式即使 cookie 完全沒有 username 也是同一個身分', async () => {
     process.env.TRUST_PROXY = 'true';
     mockedStorageType.mockReturnValue('localstorage');
 
-    expect(getRateLimitIdentity(requestWith({ 'x-real-ip': '1.2.3.4' }))).toBe(
-      'ip:1.2.3.4'
-    );
+    await expect(
+      getRateLimitIdentity(requestWith({ 'x-real-ip': '1.2.3.4' }))
+    ).resolves.toBe('ip:1.2.3.4');
     delete process.env.TRUST_PROXY;
   });
 
   it.each(['redis', 'kvrocks', 'upstash'] as const)(
     '%s 模式下 username 有簽章覆蓋，仍以使用者計數',
-    (storageType) => {
+    async (storageType) => {
       mockedStorageType.mockReturnValue(storageType);
+      mockedGetVerifiedAuth.mockResolvedValue({
+        username: 'alice',
+      } as Awaited<ReturnType<typeof getVerifiedAuthInfo>>);
 
-      expect(
+      await expect(
         getRateLimitIdentity(
           requestWith({
             cookie: authCookie({ username: 'alice' }),
             'x-real-ip': '1.2.3.4',
           })
         )
-      ).toBe('user:alice');
+      ).resolves.toBe('user:alice');
     }
   );
 
-  it('多使用者模式下不同使用者仍分開計數，不會互相拖累', () => {
+  it('多使用者模式下不同使用者仍分開計數，不會互相拖累', async () => {
     mockedStorageType.mockReturnValue('redis');
+    mockedGetVerifiedAuth
+      .mockResolvedValueOnce({
+        username: 'alice',
+      } as Awaited<ReturnType<typeof getVerifiedAuthInfo>>)
+      .mockResolvedValueOnce({
+        username: 'bob',
+      } as Awaited<ReturnType<typeof getVerifiedAuthInfo>>);
 
-    const alice = getRateLimitIdentity(
+    const alice = await getRateLimitIdentity(
       requestWith({ cookie: authCookie({ username: 'alice' }) })
     );
-    const bob = getRateLimitIdentity(
+    const bob = await getRateLimitIdentity(
       requestWith({ cookie: authCookie({ username: 'bob' }) })
     );
 

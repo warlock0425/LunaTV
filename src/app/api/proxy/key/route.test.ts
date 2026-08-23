@@ -36,6 +36,7 @@ describe('/api/proxy/key', () => {
       timestamp: Date.now(),
     });
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',
@@ -72,8 +73,20 @@ describe('/api/proxy/key', () => {
     );
   });
 
+  it('missing moontv-source returns 400 instead of source-not-found', async () => {
+    const response = await GET(
+      new Request(
+        'http://localhost/api/proxy/key?url=https%3A%2F%2Fcdn.example%2Fkey.bin'
+      )
+    );
+
+    expect(response.status).toBe(400);
+    expect(mockedFetch).not.toHaveBeenCalled();
+  });
+
   it('rejects a disabled live source before fetching upstream', async () => {
     mockedGetConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [{ key: 'live', disabled: true }],
     } as Awaited<ReturnType<typeof getConfig>>);
 

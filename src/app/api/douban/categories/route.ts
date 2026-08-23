@@ -52,7 +52,7 @@ export async function GET(request: Request) {
   // 驗證參數
   if (!kind || !category || !type) {
     return NextResponse.json(
-      { error: '缺少必要参数: kind 或 category 或 type' },
+      { error: '缺少必要參數: kind 或 category 或 type' },
       { status: 400 }
     );
   }

@@ -35,6 +35,7 @@ describe('live logo proxy', () => {
       timestamp: Date.now(),
     });
     mockedConfig.mockResolvedValue({
+      SiteConfig: { EnableWebLive: true },
       LiveConfig: [
         {
           key: 'live',

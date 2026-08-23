@@ -18,6 +18,7 @@ import {
   getSkipConfig,
   type PlayRecord,
   saveSkipConfig,
+  subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { logger } from '@/lib/logger';
 import { formatPlayerTime, getStableTitle } from '@/lib/play-page-utils';
@@ -28,7 +29,7 @@ import {
   PlaybackSearchPlanStage,
 } from '@/lib/play-search';
 import { isFuzzyMatch } from '@/lib/searchEngine';
-import { SearchResult } from '@/lib/types';
+import { SearchResult, SkipConfig } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 import { useAutoNextCountdown } from '@/hooks/useAutoNextCountdown';
 import { useFavorite } from '@/hooks/useFavorite';
@@ -49,6 +50,7 @@ import { CustomHlsJsLoader } from './custom-hls-loader';
 import { nextHlsFatalAction } from './hls-fatal';
 import {
   applyPlaybackUrlUpdates,
+  clampResumeTarget,
   clearCachedDetail,
   DEFAULT_SKIP_CONFIG,
   ensureVideoSource,
@@ -62,6 +64,7 @@ import {
   migrateDetailCache,
   setCachedDetail,
   shouldApplyBackgroundDetail,
+  shouldSeekLateResume,
 } from './play-page-helpers';
 import { PlayErrorView, PlayLoadingView } from './play-views';
 import { buildSkipSettings } from './player-skip-settings';
@@ -399,6 +402,14 @@ function PlayPageClient() {
       onChange: (cfg) => handleSkipConfigChange(cfg),
     });
 
+  const syncSkipSettingsToPlayer = () => {
+    if (!artPlayerRef.current) return;
+    const { skipToggle, setIntro, setOutro } = buildSkipSettingsForPlayer();
+    artPlayerRef.current.setting.update(skipToggle);
+    artPlayerRef.current.setting.update(setIntro);
+    artPlayerRef.current.setting.update(setOutro);
+  };
+
   // 跳過片頭片尾設定相關函數
   const handleSkipConfigChange = async (newConfig: {
     enable: boolean;
@@ -406,19 +417,14 @@ function PlayPageClient() {
     outro_time: number;
   }) => {
     if (!currentSourceRef.current || !currentIdRef.current) return;
+    const previous = skipConfigRef.current;
 
     try {
       setSkipConfig(newConfig);
       skipConfigRef.current = newConfig;
       if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
-        if (artPlayerRef.current) {
-          const { skipToggle, setIntro, setOutro } =
-            buildSkipSettingsForPlayer();
-          artPlayerRef.current.setting.update(skipToggle);
-          artPlayerRef.current.setting.update(setIntro);
-          artPlayerRef.current.setting.update(setOutro);
-        }
+        syncSkipSettingsToPlayer();
       } else {
         await saveSkipConfig(
           currentSourceRef.current,
@@ -429,6 +435,9 @@ function PlayPageClient() {
       logger.debug('跳過片頭片尾設定已儲存:', newConfig);
     } catch (err) {
       logger.error('儲存跳過片頭片尾設定失敗:', err);
+      setSkipConfig(previous);
+      skipConfigRef.current = previous;
+      syncSkipSettingsToPlayer();
     }
   };
 
@@ -978,66 +987,85 @@ function PlayPageClient() {
     if (!currentSource || !currentId) return;
 
     let cancelled = false;
+    const skipHistory = skipHistoryRestoreRef.current;
+    if (skipHistory) {
+      skipHistoryRestoreRef.current = false;
+    }
+
+    const pickRecord = (allRecords: Record<string, PlayRecord>) => {
+      const key = generateStorageKey(currentSource, currentId);
+      let record: PlayRecord | undefined = allRecords[key];
+      if (!record) {
+        record =
+          Object.values(allRecords).find(
+            (r) =>
+              r &&
+              (r.vod_id === currentId ||
+                r.id === currentId ||
+                (r.source === currentSource && r.vod_id === currentId)) &&
+              r.source === currentSource
+          ) ?? undefined;
+      }
+      return record;
+    };
+
+    const applyResumeFromRecord = (record: PlayRecord | undefined) => {
+      if (cancelled || skipHistory || !record) return;
+
+      const epParam = searchParams.get('episode');
+      let targetIndex = -1;
+      let targetTime = 0;
+
+      if (epParam) {
+        const epNum = parseInt(epParam, 10);
+        if (!isNaN(epNum) && epNum > 0) {
+          targetIndex = epNum - 1;
+          const recordIndex =
+            typeof record.index === 'number' ? record.index : 1;
+          const oneBasedRecordIndex = recordIndex <= 0 ? 1 : recordIndex;
+          if (oneBasedRecordIndex === epNum) {
+            targetTime = record.play_time || 0;
+          }
+        }
+      }
+
+      if (targetIndex === -1) {
+        const rawIndex = typeof record.index === 'number' ? record.index : 1;
+        const oneBasedIndex = rawIndex <= 0 ? 1 : rawIndex;
+        targetIndex = Math.max(0, oneBasedIndex - 1);
+        targetTime = record.play_time || 0;
+      }
+
+      const player = artPlayerRef.current;
+      const currentTime = player?.currentTime || 0;
+      if (currentTime >= 3) return;
+
+      currentEpisodeIndexRef.current = targetIndex;
+      setCurrentEpisodeIndex(targetIndex);
+
+      if (targetTime > 3) {
+        resumeTimeRef.current = targetTime;
+        if (player && shouldSeekLateResume(targetTime, currentTime)) {
+          try {
+            player.currentTime = clampResumeTarget(
+              targetTime,
+              player.duration || 0
+            );
+            resumeTimeRef.current = null;
+          } catch (err) {
+            logger.warn('恢復播放進度失敗:', err);
+          }
+        }
+      } else {
+        resumeTimeRef.current = 0;
+      }
+    };
 
     const initFromHistory = async () => {
-      if (skipHistoryRestoreRef.current) {
-        skipHistoryRestoreRef.current = false;
-        return;
-      }
+      if (skipHistory) return;
       try {
         const allRecords = await getAllPlayRecords();
-        const key = generateStorageKey(currentSource, currentId);
-        let record: PlayRecord | undefined = allRecords[key];
-        if (!record) {
-          record =
-            Object.values(allRecords).find(
-              (r) =>
-                r &&
-                (r.vod_id === currentId ||
-                  r.id === currentId ||
-                  (r.source === currentSource && r.vod_id === currentId)) &&
-                r.source === currentSource
-            ) ?? undefined;
-        }
-
-        const epParam = searchParams.get('episode');
-        let targetIndex = -1;
-        let targetTime = 0;
-
-        if (epParam) {
-          const epNum = parseInt(epParam, 10);
-          if (!isNaN(epNum) && epNum > 0) {
-            targetIndex = epNum - 1;
-            // 如果歷史記錄的集數與 URL 指定的集數一致，則恢復播放進度時間
-            const recordIndex =
-              record && typeof record.index === 'number' ? record.index : 1;
-            const oneBasedRecordIndex = recordIndex <= 0 ? 1 : recordIndex;
-            if (oneBasedRecordIndex === epNum && record) {
-              targetTime = record.play_time || 0;
-            }
-          }
-        }
-
-        // 如果 URL 中沒有指定集數，則回退使用播放歷史中的集數和進度
-        if (targetIndex === -1 && record) {
-          const rawIndex = typeof record.index === 'number' ? record.index : 1;
-          const oneBasedIndex = rawIndex <= 0 ? 1 : rawIndex;
-          targetIndex = Math.max(0, oneBasedIndex - 1);
-          targetTime = record.play_time || 0;
-        }
-
-        if (targetIndex !== -1 && !cancelled) {
-          // 同步更新 ref 以避免 timeupdate 在 state 生效前用舊值存檔
-          currentEpisodeIndexRef.current = targetIndex;
-          setCurrentEpisodeIndex(targetIndex);
-
-          // 儲存待恢復的播放進度，待播放器就緒後跳轉
-          if (targetTime > 3) {
-            resumeTimeRef.current = targetTime;
-          } else {
-            resumeTimeRef.current = 0;
-          }
-        }
+        applyResumeFromRecord(pickRecord(allRecords));
       } catch (err) {
         logger.error('讀取播放記錄失敗:', err);
       }
@@ -1045,28 +1073,40 @@ function PlayPageClient() {
 
     initFromHistory();
 
+    const unsubscribe = subscribeToDataUpdates<Record<string, PlayRecord>>(
+      'playRecordsUpdated',
+      (records) => {
+        applyResumeFromRecord(pickRecord(records));
+      }
+    );
+
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [currentSource, currentId]);
 
   // 跳過片頭片尾設定處理
   useEffect(() => {
+    if (!currentSource || !currentId) return;
+
     let cancelled = false;
 
-    // 僅在初次掛載時檢查跳過片頭片尾設定
+    const applySkip = (config: SkipConfig | null | undefined) => {
+      if (cancelled) return;
+      const nextConfig = config || DEFAULT_SKIP_CONFIG;
+      setSkipConfig(nextConfig);
+      skipConfigRef.current = nextConfig;
+      syncSkipSettingsToPlayer();
+    };
+
+    skipConfigRef.current = DEFAULT_SKIP_CONFIG;
+
     const initSkipConfig = async () => {
-      if (!currentSource || !currentId) return;
-
       setSkipConfig(DEFAULT_SKIP_CONFIG);
-      skipConfigRef.current = DEFAULT_SKIP_CONFIG;
-
       try {
         const config = await getSkipConfig(currentSource, currentId);
-        if (cancelled) return;
-        const nextConfig = config || DEFAULT_SKIP_CONFIG;
-        setSkipConfig(nextConfig);
-        skipConfigRef.current = nextConfig;
+        applySkip(config);
       } catch (err) {
         logger.error('讀取跳過片頭片尾設定失敗:', err);
       }
@@ -1074,8 +1114,17 @@ function PlayPageClient() {
 
     initSkipConfig();
 
+    const unsubscribe = subscribeToDataUpdates<Record<string, SkipConfig>>(
+      'skipConfigsUpdated',
+      (configs) => {
+        const key = generateStorageKey(currentSource, currentId);
+        applySkip(configs[key]);
+      }
+    );
+
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, [currentSource, currentId]);
 
@@ -1655,10 +1704,7 @@ function PlayPageClient() {
         if (resumeTimeRef.current && resumeTimeRef.current > 0) {
           try {
             const duration = player.duration || 0;
-            let target = resumeTimeRef.current;
-            if (duration && target >= duration - 2) {
-              target = Math.max(0, duration - 5);
-            }
+            const target = clampResumeTarget(resumeTimeRef.current, duration);
             player.currentTime = target;
             logger.debug('成功恢復播放進度到:', resumeTimeRef.current);
             // seek 完成後手動恢復播放（autoplay 已關閉避免 0:00 閃爍）
@@ -2030,7 +2076,7 @@ function PlayPageClient() {
                           artPlayerRef.current.pause();
                         }
                         artPlayerRef.current.notice.show = `已跳過片尾 (${formatPlayerTime(
-                          skipConfigRef.current.outro_time
+                          Math.abs(skipConfigRef.current.outro_time)
                         )})`;
                       }
                     }}

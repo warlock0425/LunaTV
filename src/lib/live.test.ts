@@ -1,6 +1,10 @@
 import { getConfig, getFreshConfig } from './config';
 import { db } from './db';
-import { getCachedLiveChannels, refreshLiveChannels } from './live';
+import {
+  getCachedLiveChannels,
+  isWebLiveEnabled,
+  refreshLiveChannels,
+} from './live';
 import { fetchSafeRemoteUrl, readResponseTextWithLimit } from './url-safety';
 
 jest.mock('./config', () => ({
@@ -24,6 +28,19 @@ const mockedGetFreshConfig = jest.mocked(getFreshConfig);
 const mockedSaveAdminConfig = jest.mocked(db.saveAdminConfig);
 const mockedFetch = jest.mocked(fetchSafeRemoteUrl);
 const mockedReadText = jest.mocked(readResponseTextWithLimit);
+
+describe('isWebLiveEnabled', () => {
+  it('only treats an explicit true flag as enabled', () => {
+    expect(isWebLiveEnabled(undefined)).toBe(false);
+    expect(isWebLiveEnabled({ SiteConfig: {} })).toBe(false);
+    expect(isWebLiveEnabled({ SiteConfig: { EnableWebLive: false } })).toBe(
+      false
+    );
+    expect(isWebLiveEnabled({ SiteConfig: { EnableWebLive: true } })).toBe(
+      true
+    );
+  });
+});
 
 describe('live channel cache', () => {
   beforeEach(() => {

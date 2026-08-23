@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getConfig } from '@/lib/config';
+import { isWebLiveEnabled, WEB_LIVE_DISABLED_MESSAGE } from '@/lib/live';
 import { logger } from '@/lib/logger';
 
 export const runtime = 'nodejs';
@@ -32,7 +33,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: '設定未找到' }, { status: 404 });
     }
 
-    // 过滤出所有非 disabled 的直播源
+    if (!isWebLiveEnabled(config)) {
+      return NextResponse.json(
+        { error: WEB_LIVE_DISABLED_MESSAGE },
+        { status: 403 }
+      );
+    }
+
+    // 過濾出所有非 disabled 的直播源
     const liveSources = (config.LiveConfig || []).filter(
       (source) => !source.disabled
     );

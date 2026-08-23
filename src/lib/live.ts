@@ -10,6 +10,20 @@ import {
   XmlTvPrograms,
 } from '@/lib/xmltv';
 
+export const WEB_LIVE_DISABLED_MESSAGE = '網頁直播未開啟';
+
+/** 與前台 ENABLE_WEB_LIVE 對齊：關閉時使用者直播 API／proxy 一律拒絕。 */
+export function isWebLiveEnabled(
+  config:
+    | {
+        SiteConfig?: { EnableWebLive?: boolean };
+      }
+    | null
+    | undefined
+): boolean {
+  return config?.SiteConfig?.EnableWebLive === true;
+}
+
 const defaultUA = 'AptvPlayer/1.4.10';
 const LIVE_FETCH_TIMEOUT_MS = 10000;
 const EPG_FETCH_TIMEOUT_MS = 12000;

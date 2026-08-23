@@ -15,20 +15,17 @@ export function serializeForInlineScript(value: unknown): string {
  */
 export async function readErrorMessage(
   response: Response,
-  fallback = '\u8acb\u6c42\u5931\u6557'
+  fallback = '請求失敗'
 ): Promise<string> {
-  if (response.status === 401)
-    return '\u767b\u5165\u5df2\u904e\u671f\uff0c\u8acb\u91cd\u65b0\u767b\u5165';
-
   let raw = '';
   try {
     raw = await response.text();
   } catch {
+    if (response.status === 401) return '登入已過期，請重新登入';
     return fallback;
   }
 
   const trimmed = raw.trim();
-  if (!trimmed) return fallback;
 
   try {
     const parsed = JSON.parse(trimmed);
@@ -37,8 +34,11 @@ export async function readErrorMessage(
       if (typeof message === 'string' && message.trim()) return message;
     }
   } catch {
-    // \u975e JSON\uff1a\u76f4\u63a5\u7528\u7d14\u6587\u5b57\uff0c\u4f46\u622a\u65b7\u907f\u514d\u6574\u9801 HTML \u932f\u8aa4\u9801\u704c\u9032\u63d0\u793a\u6846
+    // 非 JSON：純文字 Unauthorized 才視為登入過期；其餘截斷後回傳
   }
+
+  if (response.status === 401) return '登入已過期，請重新登入';
+  if (!trimmed) return fallback;
 
   return trimmed.slice(0, 200);
 }

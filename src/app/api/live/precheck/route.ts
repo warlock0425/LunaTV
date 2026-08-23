@@ -9,7 +9,11 @@ import {
 } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { getConfig } from '@/lib/config';
-import { peekCachedLiveChannels } from '@/lib/live';
+import {
+  isWebLiveEnabled,
+  peekCachedLiveChannels,
+  WEB_LIVE_DISABLED_MESSAGE,
+} from '@/lib/live';
 import {
   collectLiveSourceRelatedUrls,
   isUrlAllowedForLiveProxy,
@@ -60,6 +64,12 @@ export async function GET(request: NextRequest) {
   }
 
   const config = await getConfig();
+  if (!isWebLiveEnabled(config)) {
+    return NextResponse.json(
+      { error: WEB_LIVE_DISABLED_MESSAGE },
+      { status: 403 }
+    );
+  }
   const liveSource = config.LiveConfig?.find(
     (s: any) => s.key === source && !s.disabled
   );

@@ -1003,7 +1003,7 @@ function LivePageClient() {
           autoPlayback: false,
           airplay: true,
           theme: '#ff3e6c',
-          lang: 'zh-cn',
+          lang: 'zh-tw',
           hotkey: false,
           fastForward: false, // 直播不需要快進
           autoOrientation: true,

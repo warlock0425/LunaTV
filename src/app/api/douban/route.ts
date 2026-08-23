@@ -43,7 +43,7 @@ export async function GET(request: Request) {
   // 驗證參數
   if (!type || !tag) {
     return NextResponse.json(
-      { error: '缺少必要参数: type 或 tag' },
+      { error: '缺少必要參數: type 或 tag' },
       { status: 400 }
     );
   }
