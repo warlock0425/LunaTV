@@ -2,13 +2,13 @@
 
 import { NextRequest } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { db } from '@/lib/db';
 
 import { POST } from './route';
 
 jest.mock('next/cache', () => ({ revalidatePath: jest.fn() }));
-jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ requireAdmin: jest.fn() }));
 jest.mock('@/lib/config', () => ({
   getFreshConfig: jest.fn(),
   setCachedConfig: jest.fn(),
@@ -20,7 +20,7 @@ jest.mock('@/lib/db', () => ({
   },
 }));
 
-const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedGetAuth = jest.mocked(requireAdmin);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);
 
 describe('/api/admin/site', () => {
@@ -29,8 +29,8 @@ describe('/api/admin/site', () => {
     process.env.STORAGE_TYPE = 'redis';
     mockedGetAuth.mockResolvedValue({
       username: 'owner',
-      signature: 'signed',
-      timestamp: Date.now(),
+      role: 'owner',
+      auth: { username: 'owner', signature: 'signed', timestamp: Date.now() },
     });
   });
 

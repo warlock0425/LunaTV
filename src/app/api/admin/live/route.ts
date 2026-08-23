@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import {
   isValidApiRemoteUrl,
   isValidApiSource,
@@ -50,8 +50,9 @@ export async function POST(request: NextRequest) {
   if (crossSite) return crossSite;
 
   try {
-    const authInfo = await getVerifiedAuthInfo(request);
-    const username = authInfo?.username;
+    if (!(await requireAdmin(request))) {
+      return NextResponse.json({ error: '權限不足' }, { status: 401 });
+    }
 
     const body = await readJsonObject(request);
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -120,14 +121,6 @@ export async function POST(request: NextRequest) {
     const outcome = await db.withAdminConfigLock(
       async (): Promise<NextResponse | 'ok'> => {
         const config = await getFreshConfig();
-        if (username !== process.env.USERNAME) {
-          const user = config.UserConfig.Users.find(
-            (u) => u.username === username
-          );
-          if (!user || user.role !== 'admin' || user.banned) {
-            return NextResponse.json({ error: '權限不足' }, { status: 401 });
-          }
-        }
 
         // 確保 LiveConfig 存在
         if (!config.LiveConfig) {

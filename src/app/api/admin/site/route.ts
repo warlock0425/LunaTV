@@ -1,7 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import { getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
@@ -25,6 +25,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    if (!(await requireAdmin(request))) {
+      return NextResponse.json({ error: '權限不足' }, { status: 401 });
+    }
+
     const body = await readJsonObject(request);
     if (!body) {
       return NextResponse.json(
@@ -32,12 +36,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-
-    const authInfo = await getVerifiedAuthInfo(request);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const username = authInfo.username;
 
     const {
       SiteName,
@@ -90,16 +88,6 @@ export async function POST(request: NextRequest) {
 
     const response = await db.withAdminConfigLock(async () => {
       const adminConfig = await getFreshConfig();
-
-      // 權限校驗（鎖內重讀後再判定）
-      if (username !== process.env.USERNAME) {
-        const user = adminConfig.UserConfig.Users.find(
-          (u) => u.username === username
-        );
-        if (!user || user.role !== 'admin' || user.banned) {
-          return NextResponse.json({ error: '權限不足' }, { status: 401 });
-        }
-      }
 
       adminConfig.SiteConfig = {
         SiteName,

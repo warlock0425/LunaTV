@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { AdminConfigResult } from '@/lib/admin.types';
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
@@ -18,28 +18,17 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const authInfo = await getVerifiedAuthInfo(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const admin = await requireAdmin(request);
+  if (!admin) {
+    return NextResponse.json({ error: '權限不足' }, { status: 401 });
   }
-  const username = authInfo.username;
 
   try {
     const config = await getConfig();
     const result: AdminConfigResult = {
-      Role: 'owner',
+      Role: admin.role,
       Config: config,
     };
-    if (username === process.env.USERNAME) {
-      result.Role = 'owner';
-    } else {
-      const user = config.UserConfig.Users.find((u) => u.username === username);
-      if (user && user.role === 'admin' && !user.banned) {
-        result.Role = 'admin';
-      } else {
-        return NextResponse.json({ error: '無管理員權限' }, { status: 401 });
-      }
-    }
 
     return NextResponse.json(result, {
       headers: {

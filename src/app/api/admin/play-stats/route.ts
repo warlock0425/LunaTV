@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import type { PlayRecord } from '@/lib/db.client';
@@ -33,22 +33,11 @@ interface PlayStatsResponse {
 
 export async function GET(request: NextRequest) {
   try {
-    const authInfo = await getVerifiedAuthInfo(request);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!(await requireAdmin(request))) {
+      return NextResponse.json({ error: '權限不足' }, { status: 401 });
     }
 
     const config = await getConfig();
-
-    // 只有 owner 或 admin 可以查看
-    if (authInfo.username !== process.env.USERNAME) {
-      const user = config.UserConfig.Users.find(
-        (u) => u.username === authInfo.username
-      );
-      if (!user || user.role === 'user' || user.banned) {
-        return NextResponse.json({ error: '權限不足' }, { status: 403 });
-      }
-    }
 
     // 取得所有使用者（去重：owner 可能同時出現在 env 和 UserConfig 中）
     const ownerUsername = process.env.USERNAME || 'admin';

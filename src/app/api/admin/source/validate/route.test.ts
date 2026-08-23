@@ -2,23 +2,21 @@
 
 import { NextRequest } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import { getAdminUser, getConfig } from '@/lib/config';
+import { requireAdmin } from '@/lib/api-auth';
+import { getConfig } from '@/lib/config';
 import { validateSourceSite } from '@/lib/source-validation';
 
 import { GET } from './route';
 
-jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ requireAdmin: jest.fn() }));
 jest.mock('@/lib/config', () => ({
-  getAdminUser: jest.fn(),
   getConfig: jest.fn(),
 }));
 jest.mock('@/lib/source-validation', () => ({
   validateSourceSite: jest.fn(),
 }));
 
-const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
-const mockedGetAdminUser = jest.mocked(getAdminUser);
+const mockedGetAuth = jest.mocked(requireAdmin);
 const mockedGetConfig = jest.mocked(getConfig);
 const mockedValidate = jest.mocked(validateSourceSite);
 
@@ -49,12 +47,9 @@ describe('/api/admin/source/validate', () => {
     jest.clearAllMocks();
     mockedGetAuth.mockResolvedValue({
       username: 'owner',
-      signature: 'signed',
-      timestamp: Date.now(),
+      role: 'owner',
+      auth: { username: 'owner', signature: 'signed', timestamp: Date.now() },
     });
-    mockedGetAdminUser.mockResolvedValue({
-      username: 'owner',
-    } as Awaited<ReturnType<typeof getAdminUser>>);
     jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
@@ -171,7 +166,6 @@ describe('/api/admin/source/validate', () => {
 
   it('rejects unauthorized callers', async () => {
     mockedGetAuth.mockResolvedValue(null);
-    mockedGetAdminUser.mockResolvedValue(null);
     const response = await GET(createRequest());
     expect(response.status).toBe(401);
   });

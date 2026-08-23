@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { getConfig } from '@/lib/config';
 import { getCronHealthStatus } from '@/lib/cron-health';
 import { db } from '@/lib/db';
@@ -14,10 +14,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const authInfo = await getVerifiedAuthInfo(request);
-  const owner = process.env.USERNAME;
-  if (!authInfo?.username || !owner || authInfo.username !== owner) {
-    return NextResponse.json({ error: '未授權' }, { status: 401 });
+  if (!(await requireOwner(request))) {
+    return NextResponse.json({ error: '權限不足' }, { status: 401 });
   }
 
   const storage = getStorageRuntimeStatus();

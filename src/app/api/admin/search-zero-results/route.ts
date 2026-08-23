@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import { getAdminUser } from '@/lib/config';
+import { requireAdmin } from '@/lib/api-auth';
 import { listSearchZeroResults } from '@/lib/search-zero-results';
 
 export const runtime = 'nodejs';
@@ -13,9 +12,7 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   try {
-    const authInfo = await getVerifiedAuthInfo(request);
-    const user = await getAdminUser(authInfo?.username);
-    if (!user) {
+    if (!(await requireAdmin(request))) {
       return NextResponse.json({ error: '權限不足' }, { status: 401 });
     }
 

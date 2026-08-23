@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import {
   isValidApiTextParam,
   readJsonObject,
@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    if (!(await requireAdmin(request))) {
+      return NextResponse.json({ error: '權限不足' }, { status: 401 });
+    }
+
     const body = await readJsonObject<BaseBody & Record<string, any>>(request);
     if (!body) {
       return NextResponse.json(
@@ -49,15 +53,9 @@ export async function POST(request: NextRequest) {
     }
     const { action } = body;
 
-    const authInfo = await getVerifiedAuthInfo(request);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const username = authInfo.username;
-
     // 基礎校驗
     const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort'];
-    if (!username || !action || !ACTIONS.includes(action)) {
+    if (!action || !ACTIONS.includes(action)) {
       return NextResponse.json({ error: '參數格式錯誤' }, { status: 400 });
     }
 
@@ -65,16 +63,6 @@ export async function POST(request: NextRequest) {
       async (): Promise<NextResponse | 'ok'> => {
         // 鎖內重讀設定
         const adminConfig = await getFreshConfig();
-
-        // 權限與身份校驗
-        if (username !== process.env.USERNAME) {
-          const userEntry = adminConfig.UserConfig.Users.find(
-            (u) => u.username === username
-          );
-          if (!userEntry || userEntry.role !== 'admin' || userEntry.banned) {
-            return NextResponse.json({ error: '權限不足' }, { status: 401 });
-          }
-        }
 
         switch (action) {
           case 'add': {

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
-import { getAdminUser } from '@/lib/config';
 import { rejectCrossSiteRequest } from '@/lib/same-site';
 import {
   resetAllBreakers,
@@ -23,9 +22,7 @@ export async function POST(request: NextRequest) {
   const crossSite = rejectCrossSiteRequest(request);
   if (crossSite) return crossSite;
 
-  const authInfo = await getVerifiedAuthInfo(request);
-  const user = await getAdminUser(authInfo?.username);
-  if (!user) {
+  if (!(await requireAdmin(request))) {
     return NextResponse.json({ error: '權限不足' }, { status: 401 });
   }
 

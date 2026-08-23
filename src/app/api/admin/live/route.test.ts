@@ -2,14 +2,14 @@
 
 import { NextRequest } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { getFreshConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { deleteCachedLiveChannels, refreshLiveChannels } from '@/lib/live';
 
 import { POST } from './route';
 
-jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ requireAdmin: jest.fn() }));
 jest.mock('@/lib/config', () => ({
   getFreshConfig: jest.fn(),
   setCachedConfig: jest.fn(),
@@ -25,7 +25,7 @@ jest.mock('@/lib/live', () => ({
   refreshLiveChannels: jest.fn(),
 }));
 
-const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedGetAuth = jest.mocked(requireAdmin);
 const mockedGetConfig = jest.mocked(getFreshConfig);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);
 const mockedDeleteCache = jest.mocked(deleteCachedLiveChannels);
@@ -49,8 +49,8 @@ describe('/api/admin/live', () => {
     process.env.USERNAME = 'owner';
     mockedGetAuth.mockResolvedValue({
       username: 'owner',
-      signature: 'signed',
-      timestamp: Date.now(),
+      role: 'owner',
+      auth: { username: 'owner', signature: 'signed', timestamp: Date.now() },
     });
     mockedGetConfig.mockResolvedValue({
       UserConfig: { Users: [] },

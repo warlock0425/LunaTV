@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import {
   createLinkedAbortController,
   mapWithConcurrency,
 } from '@/lib/concurrency';
-import { getAdminUser, getConfig } from '@/lib/config';
+import { getConfig } from '@/lib/config';
 import { validateSourceSite } from '@/lib/source-validation';
 
 export const runtime = 'nodejs';
@@ -23,9 +23,7 @@ function sseData(payload: unknown): string {
 }
 
 export async function GET(request: NextRequest) {
-  const authInfo = await getVerifiedAuthInfo(request);
-  const user = await getAdminUser(authInfo?.username);
-  if (!user) {
+  if (!(await requireAdmin(request))) {
     return NextResponse.json({ error: '權限不足' }, { status: 401 });
   }
   // 限「建立 SSE 連線」次數，不是每個事件

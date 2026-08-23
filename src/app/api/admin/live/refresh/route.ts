@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { getConfig, getFreshConfig, setCachedConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 import { refreshLiveChannels } from '@/lib/live';
@@ -13,16 +13,12 @@ export async function POST(request: NextRequest) {
   if (crossSite) return crossSite;
 
   try {
-    // 權限檢查（可讀快取，不必佔寫鎖）
-    const authInfo = await getVerifiedAuthInfo(request);
-    const username = authInfo?.username;
-    const peek = await getConfig();
-    if (username !== process.env.USERNAME) {
-      const user = peek.UserConfig.Users.find((u) => u.username === username);
-      if (!user || user.role !== 'admin' || user.banned) {
-        return NextResponse.json({ error: '權限不足' }, { status: 401 });
-      }
+    if (!(await requireAdmin(request))) {
+      return NextResponse.json({ error: '權限不足' }, { status: 401 });
     }
+
+    // 可讀快取，不必佔寫鎖
+    const peek = await getConfig();
 
     // 網路抓取在鎖外；結果以 key→channelNumber 帶回
     const enabled = (peek.LiveConfig || []).filter((live) => !live.disabled);
