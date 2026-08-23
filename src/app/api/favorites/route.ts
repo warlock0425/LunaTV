@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireActiveUser } from '@/lib/api-auth';
 import {
+  hasDisallowedUserOverride,
   isValidApiTextParam,
   parseAndValidateApiStorageKey,
   readJsonObject,
@@ -25,6 +26,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const username = activeUser.username;
+    if (hasDisallowedUserOverride(request)) {
+      return NextResponse.json(
+        { error: '不得指定其他使用者' },
+        { status: 400 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');
@@ -73,6 +80,12 @@ export async function POST(request: NextRequest) {
     }>(request);
     if (!body) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    if (hasDisallowedUserOverride(request, body)) {
+      return NextResponse.json(
+        { error: '不得指定其他使用者' },
+        { status: 400 }
+      );
     }
     const { key, favorite } = body;
 
@@ -137,6 +150,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const username = activeUser.username;
+    if (hasDisallowedUserOverride(request)) {
+      return NextResponse.json(
+        { error: '不得指定其他使用者' },
+        { status: 400 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const key = searchParams.get('key');

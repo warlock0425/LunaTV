@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { resetConfig } from '@/lib/config';
 import { rejectCrossSiteRequest } from '@/lib/same-site';
 import { getServerStorageType } from '@/lib/storage-runtime';
@@ -35,13 +35,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const authInfo = await getVerifiedAuthInfo(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  const username = authInfo.username;
-
-  if (username !== process.env.USERNAME) {
+  const owner = await requireOwner(request);
+  if (!owner) {
     return NextResponse.json({ error: '僅支援站長重置設定' }, { status: 401 });
   }
 

@@ -48,7 +48,8 @@ export default function ChangePasswordCard() {
           <div className='min-w-0'>
             <h2 className='font-bold text-base'>修改密碼</h2>
             <p className='text-xs text-zinc-500 mt-0.5'>
-              站長帳號的密碼來自環境變數，請修改部署設定（USERNAME／PASSWORD）後重啟服務
+              站長密碼由部署環境變數 PASSWORD
+              控制，無法於線上修改。請改部署設定後重啟服務。
             </p>
           </div>
         </div>

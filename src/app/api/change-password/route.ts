@@ -70,11 +70,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '新密碼不得為空' }, { status: 400 });
     }
 
-    // 不允許站長修改密碼（站長使用者名稱等於 process.env.USERNAME）
+    // 站長密碼只存在部署環境變數，線上改密不會生效
     if (username === process.env.USERNAME) {
       return NextResponse.json(
-        { error: '站長不能透過此接口修改密碼' },
-        { status: 403 }
+        {
+          error: '站長密碼由部署環境變數 PASSWORD 控制，無法於線上修改',
+        },
+        { status: 400 }
       );
     }
 

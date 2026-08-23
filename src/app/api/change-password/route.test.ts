@@ -103,6 +103,19 @@ describe('change-password API', () => {
     expect(mockedConsume).toHaveBeenCalled();
   });
 
+  it('站長無法於線上改密', async () => {
+    mockedAuth.mockResolvedValue({ username: 'owner' } as never);
+    const response = await POST(
+      request({ currentPassword: 'old-pass', newPassword: 'new-pass-1' })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error: '站長密碼由部署環境變數 PASSWORD 控制，無法於線上修改',
+    });
+    expect(mockedChange).not.toHaveBeenCalled();
+  });
+
   it('成功改密後清除失敗計數', async () => {
     const response = await POST(
       request({ currentPassword: 'old-pass', newPassword: 'new-pass-1' })

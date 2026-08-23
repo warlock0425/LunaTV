@@ -117,3 +117,29 @@ export async function readJsonObject<
     return null;
   }
 }
+
+/** 一般使用者 API 不得讓客戶端指定要操作哪個帳號。 */
+const USER_OVERRIDE_KEYS = ['user', 'username', 'userName', 'user_name'];
+
+export function hasDisallowedUserOverride(
+  request: { url?: string },
+  body?: Record<string, unknown> | null
+): boolean {
+  let searchParams: URLSearchParams;
+  try {
+    searchParams = new URL(request.url || 'http://localhost/').searchParams;
+  } catch {
+    searchParams = new URLSearchParams();
+  }
+  for (const key of USER_OVERRIDE_KEYS) {
+    if (searchParams.has(key)) return true;
+    if (
+      body &&
+      Object.prototype.hasOwnProperty.call(body, key) &&
+      body[key] != null
+    ) {
+      return true;
+    }
+  }
+  return false;
+}

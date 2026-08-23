@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireActiveUser } from '@/lib/api-auth';
 import {
+  hasDisallowedUserOverride,
   isValidApiSearchQuery,
   readJsonObject,
 } from '@/lib/api-input-validation';
@@ -23,6 +24,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const username = activeUser.username;
+    if (hasDisallowedUserOverride(request)) {
+      return NextResponse.json(
+        { error: '不得指定其他使用者' },
+        { status: 400 }
+      );
+    }
 
     const history = await db.getSearchHistory(username);
     return NextResponse.json(history.slice(0, HISTORY_LIMIT), { status: 200 });
@@ -50,6 +57,12 @@ export async function POST(request: NextRequest) {
     const body = await readJsonObject<{ keyword?: unknown }>(request);
     if (!body) {
       return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+    if (hasDisallowedUserOverride(request, body)) {
+      return NextResponse.json(
+        { error: '不得指定其他使用者' },
+        { status: 400 }
+      );
     }
     if (typeof body.keyword !== 'string') {
       return NextResponse.json(
@@ -93,6 +106,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     const username = activeUser.username;
+    if (hasDisallowedUserOverride(request)) {
+      return NextResponse.json(
+        { error: '不得指定其他使用者' },
+        { status: 400 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const kw = searchParams.get('keyword')?.trim();

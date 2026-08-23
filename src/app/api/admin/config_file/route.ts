@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import {
   getFreshConfig,
@@ -29,21 +29,15 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const authInfo = await getVerifiedAuthInfo(request);
-  if (!authInfo || !authInfo.username) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const owner = await requireOwner(request);
+  if (!owner) {
+    return NextResponse.json(
+      { error: '權限不足，只有站長可以修改設定檔' },
+      { status: 401 }
+    );
   }
-  const username = authInfo.username;
 
   try {
-    // 僅站長可以修改設定檔（不必佔鎖）
-    if (username !== process.env.USERNAME) {
-      return NextResponse.json(
-        { error: '權限不足，只有站長可以修改設定檔' },
-        { status: 401 }
-      );
-    }
-
     // 取得請求體
     const body = await readJsonObject(request);
     if (!body) {

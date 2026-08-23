@@ -2,13 +2,13 @@
 
 import { NextRequest } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { resetConfig } from '@/lib/config';
 
 import { GET, POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({
-  getVerifiedAuthInfo: jest.fn(),
+  requireOwner: jest.fn(),
 }));
 jest.mock('@/lib/config', () => ({
   resetConfig: jest.fn(),
@@ -17,7 +17,7 @@ jest.mock('@/lib/storage-runtime', () => ({
   getServerStorageType: jest.fn(() => 'redis'),
 }));
 
-const mockedAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedAuth = jest.mocked(requireOwner);
 const mockedResetConfig = jest.mocked(resetConfig);
 
 function postRequest(
@@ -52,9 +52,8 @@ describe('/api/admin/reset', () => {
     process.env.USERNAME = 'owner';
     mockedAuth.mockResolvedValue({
       username: 'owner',
-      signature: 'signed',
-      timestamp: Date.now(),
-    });
+      auth: { username: 'owner', signature: 'signed', timestamp: Date.now() },
+    } as never);
     mockedResetConfig.mockResolvedValue(undefined as never);
   });
 
@@ -134,11 +133,7 @@ describe('/api/admin/reset', () => {
   });
 
   it('POST 非站長 → 401', async () => {
-    mockedAuth.mockResolvedValue({
-      username: 'alice',
-      signature: 'signed',
-      timestamp: Date.now(),
-    });
+    mockedAuth.mockResolvedValue(null);
     const response = await POST(
       postRequest('http://localhost', { host: 'localhost' })
     );

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promisify } from 'util';
 import { gzip } from 'zlib';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { SimpleCrypto } from '@/lib/crypto';
@@ -53,11 +53,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const authInfo = await getVerifiedAuthInfo(req);
-    if (!authInfo?.username) {
-      return NextResponse.json({ error: '未授權' }, { status: 401 });
-    }
-    if (authInfo.username !== process.env.USERNAME) {
+    const owner = await requireOwner(req);
+    if (!owner) {
       return NextResponse.json(
         { error: '只有站長可以匯出資料' },
         { status: 403 }

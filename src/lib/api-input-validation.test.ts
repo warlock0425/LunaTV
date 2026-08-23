@@ -1,4 +1,5 @@
 import {
+  hasDisallowedUserOverride,
   isValidApiMediaId,
   isValidApiNumericId,
   isValidApiRemoteUrl,
@@ -144,6 +145,28 @@ describe('api-input-validation helpers', () => {
       await expect(
         readJsonObject({ json: async () => [] })
       ).resolves.toBeNull();
+    });
+  });
+
+  describe('hasDisallowedUserOverride', () => {
+    it('rejects query or body that names another user', () => {
+      expect(
+        hasDisallowedUserOverride({
+          url: 'http://localhost/api/favorites?user=alice',
+        })
+      ).toBe(true);
+      expect(
+        hasDisallowedUserOverride(
+          { url: 'http://localhost/api/favorites' },
+          { username: 'alice' }
+        )
+      ).toBe(true);
+      expect(
+        hasDisallowedUserOverride(
+          { url: 'http://localhost/api/favorites' },
+          { key: 'a+1' }
+        )
+      ).toBe(false);
     });
   });
 });

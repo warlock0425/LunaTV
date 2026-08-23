@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { readJsonObject } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { rejectCrossSiteRequest } from '@/lib/same-site';
@@ -22,13 +22,8 @@ export async function POST(request: NextRequest) {
   if (crossSite) return crossSite;
 
   try {
-    // 權限檢查：僅站長可以取得設定訂閱
-    const authInfo = await getVerifiedAuthInfo(request);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    if (authInfo.username !== process.env.USERNAME) {
+    const owner = await requireOwner(request);
+    if (!owner) {
       return NextResponse.json(
         { error: '權限不足，只有站長可以取得設定訂閱' },
         { status: 401 }

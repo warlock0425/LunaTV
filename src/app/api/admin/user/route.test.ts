@@ -2,13 +2,13 @@
 
 import { NextRequest } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import { getFreshConfig } from '@/lib/config';
 import { db } from '@/lib/db';
 
 import { POST } from './route';
 
-jest.mock('@/lib/api-auth', () => ({ getVerifiedAuthInfo: jest.fn() }));
+jest.mock('@/lib/api-auth', () => ({ requireAdmin: jest.fn() }));
 jest.mock('@/lib/config', () => ({
   getFreshConfig: jest.fn(),
   setCachedConfig: jest.fn(),
@@ -27,7 +27,7 @@ jest.mock('@/lib/security-store', () => ({
   revokeUserSessions: jest.fn(),
 }));
 
-const mockedGetAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedGetAuth = jest.mocked(requireAdmin);
 const mockedGetConfig = jest.mocked(getFreshConfig);
 const mockedSaveConfig = jest.mocked(db.saveAdminConfig);
 
@@ -50,9 +50,9 @@ describe('/api/admin/user array validation', () => {
     process.env.USERNAME = 'owner';
     mockedGetAuth.mockResolvedValue({
       username: 'owner',
-      signature: 'signed',
-      timestamp: Date.now(),
-    });
+      role: 'owner',
+      auth: { username: 'owner', signature: 'signed', timestamp: Date.now() },
+    } as never);
     mockedGetConfig.mockResolvedValue({
       UserConfig: {
         Users: [{ username: 'alice', role: 'user' }],
@@ -99,9 +99,9 @@ describe('/api/admin/user 新增帳號的輸入驗證', () => {
     process.env.USERNAME = 'owner';
     mockedGetAuth.mockResolvedValue({
       username: 'owner',
-      signature: 'signed',
-      timestamp: Date.now(),
-    });
+      role: 'owner',
+      auth: { username: 'owner', signature: 'signed', timestamp: Date.now() },
+    } as never);
     mockedGetConfig.mockResolvedValue({
       UserConfig: { Users: [{ username: 'alice', role: 'user' }], Tags: [] },
     } as unknown as Awaited<ReturnType<typeof getFreshConfig>>);
@@ -165,5 +165,65 @@ describe('/api/admin/user 新增帳號的輸入驗證', () => {
 
     expect(response.status).toBe(400);
     expect(db.registerUser).not.toHaveBeenCalled();
+  });
+});
+
+describe('/api/admin/user 管理員不得越權', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.STORAGE_TYPE = 'redis';
+    process.env.USERNAME = 'owner';
+    mockedGetAuth.mockResolvedValue({
+      username: 'bob',
+      role: 'admin',
+      auth: { username: 'bob', signature: 'signed', timestamp: Date.now() },
+    } as never);
+    mockedGetConfig.mockResolvedValue({
+      UserConfig: {
+        Users: [
+          { username: 'bob', role: 'admin' },
+          { username: 'alice', role: 'user' },
+          { username: 'carol', role: 'admin' },
+        ],
+        Tags: [],
+      },
+    } as unknown as Awaited<ReturnType<typeof getFreshConfig>>);
+    jest.mocked(db.checkUserExist).mockResolvedValue(false);
+  });
+
+  afterAll(() => delete process.env.STORAGE_TYPE);
+
+  it('忽略 body.role，拒絕指定 admin', async () => {
+    const response = await POST(
+      request({
+        action: 'add',
+        targetUsername: 'dave',
+        targetPassword: 'pw',
+        role: 'admin',
+      })
+    );
+
+    expect(response.status).toBe(403);
+    expect(db.registerUser).not.toHaveBeenCalled();
+  });
+
+  it('拒絕操作其他管理員', async () => {
+    const response = await POST(
+      request({ action: 'ban', targetUsername: 'carol' })
+    );
+    expect(response.status).toBe(403);
+    expect(mockedSaveConfig).not.toHaveBeenCalled();
+  });
+
+  it('拒絕操作站長', async () => {
+    const response = await POST(
+      request({
+        action: 'updateUserApis',
+        targetUsername: 'owner',
+        enabledApis: ['src1'],
+      })
+    );
+    expect(response.status).toBe(403);
+    expect(mockedSaveConfig).not.toHaveBeenCalled();
   });
 });

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { gunzip } from 'zlib';
 
 import { AdminConfig } from '@/lib/admin.types';
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { configSelfCheck, getConfig, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
@@ -204,14 +204,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 驗證身份和權限
-    const authInfo = await getVerifiedAuthInfo(req);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: '未登錄' }, { status: 401 });
-    }
-
-    // 檢查使用者權限（只有站長可以匯入資料）
-    if (authInfo.username !== process.env.USERNAME) {
+    const owner = await requireOwner(req);
+    if (!owner) {
       return NextResponse.json(
         { error: '權限不足，只有站長可以導入數據' },
         { status: 401 }

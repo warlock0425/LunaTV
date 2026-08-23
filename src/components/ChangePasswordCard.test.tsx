@@ -8,7 +8,7 @@ import ChangePasswordCard from './ChangePasswordCard';
  *
  * 這張卡的重點不是「送出後 API 怎麼回」，而是「誰根本不該看到表單」：
  * - localstorage：全站共用 PASSWORD，沒有個人密碼
- * - 站長：帳密來自環境變數，API 一定 403
+ * - 站長：帳密來自環境變數，API 一定拒絕線上改密
  * 兩種情況給表單 = 按了必定失敗。那正是設計要避開的失效模式。
  */
 
@@ -62,7 +62,9 @@ describe('ChangePasswordCard 可見性閘門', () => {
     render(<ChangePasswordCard />);
 
     expect(screen.getByText('修改密碼')).toBeInTheDocument();
-    expect(screen.getByText(/站長帳號的密碼來自環境變數/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/站長密碼由部署環境變數 PASSWORD 控制/)
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText('目前密碼')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('新密碼')).not.toBeInTheDocument();
     expect(

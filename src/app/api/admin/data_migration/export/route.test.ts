@@ -2,7 +2,7 @@
 
 import { NextRequest } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { SimpleCrypto } from '@/lib/crypto';
 import { db } from '@/lib/db';
@@ -11,7 +11,7 @@ import { getServerStorageType } from '@/lib/storage-runtime';
 import { POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({
-  getVerifiedAuthInfo: jest.fn(),
+  requireOwner: jest.fn(),
 }));
 jest.mock('@/lib/api-rate-limit', () => ({
   enforceRateLimit: jest.fn().mockResolvedValue(null),
@@ -34,7 +34,7 @@ jest.mock('@/lib/storage-runtime', () => ({
   getServerStorageType: jest.fn(),
 }));
 
-const mockedAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedAuth = jest.mocked(requireOwner);
 const mockedRateLimit = jest.mocked(enforceRateLimit);
 const mockedEncrypt = jest.mocked(SimpleCrypto.encrypt);
 const mockedStorageType = jest.mocked(getServerStorageType);
@@ -54,7 +54,10 @@ describe('data migration export', () => {
     process.env.USERNAME = 'owner';
     mockedStorageType.mockReturnValue('redis');
     mockedRateLimit.mockResolvedValue(null);
-    mockedAuth.mockResolvedValue({ username: 'owner' });
+    mockedAuth.mockResolvedValue({
+      username: 'owner',
+      auth: { username: 'owner' },
+    } as never);
     mockedDb.getAdminConfig.mockResolvedValue({
       SiteConfig: {},
       UserConfig: {

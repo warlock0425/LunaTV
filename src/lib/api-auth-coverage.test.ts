@@ -21,7 +21,12 @@ import path from 'node:path';
 const API_ROOT = path.join(process.cwd(), 'src', 'app', 'api');
 const PROXY_FILE = path.join(process.cwd(), 'src', 'proxy.ts');
 
-const AUTH_HELPERS = ['getVerifiedAuthInfo', 'requireActiveUser'];
+const AUTH_HELPERS = [
+  'getVerifiedAuthInfo',
+  'requireActiveUser',
+  'requireAdmin',
+  'requireOwner',
+];
 const HTTP_METHODS = [
   'GET',
   'POST',
@@ -48,7 +53,7 @@ interface Exemption {
  */
 const HANDLER_EXEMPTIONS: Record<string, Record<string, string>> = {
   'admin/reset/route.ts': {
-    GET: '僅回 405，不變更狀態；重置在 POST，且 POST 有 getVerifiedAuthInfo + Origin 檢查',
+    GET: '僅回 405，不變更狀態；重置在 POST，且 POST 有 requireOwner + Origin 檢查',
   },
 };
 

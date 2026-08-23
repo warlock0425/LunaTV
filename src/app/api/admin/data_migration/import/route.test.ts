@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 import { gzipSync } from 'node:zlib';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireOwner } from '@/lib/api-auth';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { configSelfCheck, getConfig, setCachedConfig } from '@/lib/config';
 import { SimpleCrypto } from '@/lib/crypto';
@@ -14,7 +14,7 @@ import { getSessionVersion, revokeUserSessions } from '@/lib/security-store';
 import { POST } from './route';
 
 jest.mock('@/lib/api-auth', () => ({
-  getVerifiedAuthInfo: jest.fn(),
+  requireOwner: jest.fn(),
 }));
 jest.mock('@/lib/api-rate-limit', () => ({
   enforceRateLimit: jest.fn().mockResolvedValue(null),
@@ -70,7 +70,7 @@ jest.mock('@/lib/security-store', () => ({
   }),
 }));
 
-const mockedAuth = jest.mocked(getVerifiedAuthInfo);
+const mockedAuth = jest.mocked(requireOwner);
 const mockedRateLimit = jest.mocked(enforceRateLimit);
 const mockedConfigSelfCheck = jest.mocked(configSelfCheck);
 const mockedGetConfig = jest.mocked(getConfig);
@@ -143,7 +143,10 @@ describe('data migration import', () => {
     sessionVersions.clear();
     process.env.STORAGE_TYPE = 'redis';
     process.env.USERNAME = 'owner';
-    mockedAuth.mockResolvedValue({ username: 'owner' });
+    mockedAuth.mockResolvedValue({
+      username: 'owner',
+      auth: { username: 'owner' },
+    } as never);
     mockedConfigSelfCheck.mockImplementation((config) => config);
     mockedGetConfig.mockResolvedValue(existingConfig as never);
     mockedDb.getAllUsers.mockResolvedValue(['alice']);

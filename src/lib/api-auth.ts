@@ -91,3 +91,46 @@ export async function requireActiveUser(
 
   return { username: auth.username, auth };
 }
+
+export type AdminRole = 'owner' | 'admin';
+
+export interface AdminUserContext extends ActiveUserContext {
+  role: AdminRole;
+}
+
+/**
+ * 管理後台營運入口：站長或未被封禁的管理員。
+ * localstorage 模式沒有多使用者後台，一律拒絕。
+ */
+export async function requireAdmin(
+  request: Request
+): Promise<AdminUserContext | null> {
+  const active = await requireActiveUser(request);
+  if (!active) return null;
+  if (getServerStorageType() === 'localstorage') return null;
+
+  if (active.username === process.env.USERNAME) {
+    return { ...active, role: 'owner' };
+  }
+
+  const config = await getConfig();
+  const user = config.UserConfig.Users.find(
+    (entry) => entry.username === active.username
+  );
+  if (!user || user.banned || user.role !== 'admin') return null;
+
+  return { ...active, role: 'admin' };
+}
+
+/**
+ * 重型／全庫操作入口：嚴格等於環境變數 USERNAME。
+ */
+export async function requireOwner(
+  request: Request
+): Promise<ActiveUserContext | null> {
+  const active = await requireActiveUser(request);
+  if (!active) return null;
+  if (getServerStorageType() === 'localstorage') return null;
+  if (active.username !== process.env.USERNAME) return null;
+  return active;
+}

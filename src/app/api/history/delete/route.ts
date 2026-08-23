@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { requireActiveUser } from '@/lib/api-auth';
 import {
+  hasDisallowedUserOverride,
   isValidApiTextParam,
   readJsonObject,
 } from '@/lib/api-input-validation';
@@ -24,9 +25,14 @@ export async function POST(req: NextRequest) {
     if (!activeUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    // 身分一律以 cookie 為準。先前還接受一個客戶端傳來的 userId，但它從未被
-    // 使用（下方一律用 username），純粹是看起來像 IDOR 的死參數。
+    // 身分一律以 cookie 為準，拒絕客戶端指定 user/username。
     const username = activeUser.username;
+    if (hasDisallowedUserOverride(req, body)) {
+      return NextResponse.json(
+        { success: false, error: '不得指定其他使用者' },
+        { status: 400 }
+      );
+    }
 
     if (!vod_name || !isValidApiTextParam(vod_name)) {
       return NextResponse.json(

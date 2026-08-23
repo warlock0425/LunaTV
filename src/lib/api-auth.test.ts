@@ -1,8 +1,20 @@
 import { webcrypto } from 'node:crypto';
 import { TextEncoder } from 'node:util';
 
-import { getVerifiedAuthInfo, requireActiveUser } from './api-auth';
+import {
+  getVerifiedAuthInfo,
+  requireActiveUser,
+  requireAdmin,
+  requireOwner,
+} from './api-auth';
 import { getAuthSignaturePayload } from './auth';
+import { getConfig } from './config';
+
+jest.mock('./config', () => ({
+  getConfig: jest.fn(),
+}));
+
+const mockedGetConfig = jest.mocked(getConfig);
 
 Object.defineProperty(globalThis, 'crypto', {
   configurable: true,
@@ -172,6 +184,9 @@ describe('requireActiveUser', () => {
   beforeEach(() => {
     process.env = { ...originalEnv, PASSWORD: SECRET, USERNAME: 'owner' };
     delete process.env.NEXT_PUBLIC_STORAGE_TYPE;
+    mockedGetConfig.mockResolvedValue({
+      UserConfig: { Users: [] },
+    } as unknown as Awaited<ReturnType<typeof getConfig>>);
   });
 
   afterEach(() => {
@@ -199,5 +214,51 @@ describe('requireActiveUser', () => {
     const req = requestWithAuth(payload);
     const active = await requireActiveUser(req);
     expect(active?.username).toBe('localstorage');
+  });
+});
+
+describe('requireAdmin / requireOwner', () => {
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = {
+      ...originalEnv,
+      PASSWORD: SECRET,
+      USERNAME: 'owner',
+      STORAGE_TYPE: 'redis',
+    };
+    mockedGetConfig.mockResolvedValue({
+      UserConfig: {
+        Users: [
+          { username: 'bob', role: 'admin', banned: false },
+          { username: 'alice', role: 'user', banned: false },
+        ],
+      },
+    } as unknown as Awaited<ReturnType<typeof getConfig>>);
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('requireOwner 只接受環境變數 USERNAME', async () => {
+    await expect(
+      requireOwner(requestWithAuth(await signedAuth('owner')))
+    ).resolves.toEqual(expect.objectContaining({ username: 'owner' }));
+    await expect(
+      requireOwner(requestWithAuth(await signedAuth('bob')))
+    ).resolves.toBeNull();
+  });
+
+  it('requireAdmin 接受站長與管理員，拒絕一般使用者', async () => {
+    await expect(
+      requireAdmin(requestWithAuth(await signedAuth('owner')))
+    ).resolves.toEqual(expect.objectContaining({ role: 'owner' }));
+    await expect(
+      requireAdmin(requestWithAuth(await signedAuth('bob')))
+    ).resolves.toEqual(expect.objectContaining({ role: 'admin' }));
+    await expect(
+      requireAdmin(requestWithAuth(await signedAuth('alice')))
+    ).resolves.toBeNull();
   });
 });

@@ -2,7 +2,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
+import { requireAdmin } from '@/lib/api-auth';
 import {
   hasControlChars,
   isValidApiSource,
@@ -100,11 +100,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const authInfo = await getVerifiedAuthInfo(request);
-    if (!authInfo || !authInfo.username) {
+    const operator = await requireAdmin(request);
+    if (!operator) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const username = authInfo.username;
+    const username = operator.username;
 
     const {
       targetUsername, // 目標使用者名
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
         // 鎖內重讀設定
         const adminConfig = await getFreshConfig();
 
-        // 判定操作者角色
+        // 鎖內再確認角色，避免鎖外讀到的權限已被撤銷
         let operatorRole: 'owner' | 'admin';
         if (username === process.env.USERNAME) {
           operatorRole = 'owner';
@@ -175,20 +175,24 @@ export async function POST(request: NextRequest) {
           );
 
           if (
-            targetEntry &&
-            targetEntry.role === 'owner' &&
-            !['changePassword', 'updateUserApis', 'updateUserGroups'].includes(
-              action
-            )
+            targetUsername === process.env.USERNAME ||
+            targetEntry?.role === 'owner'
           ) {
             return NextResponse.json(
               { error: '無法操作站長' },
-              { status: 400 }
+              { status: 403 }
             );
           }
 
           // 權限校驗邏輯
           isTargetAdmin = targetEntry?.role === 'admin';
+
+          if (operatorRole === 'admin' && isTargetAdmin) {
+            return NextResponse.json(
+              { error: '管理員只能管理一般使用者' },
+              { status: 403 }
+            );
+          }
         }
 
         switch (action) {
@@ -217,6 +221,16 @@ export async function POST(request: NextRequest) {
             }
             // 設定與資料庫可能不同步（例如帳號從設定移除但密碼鍵仍在），
             // 直接 registerUser 會覆蓋掉既有帳號的密碼。
+            const requestedRole = (body as { role?: unknown }).role;
+            if (requestedRole !== undefined && requestedRole !== 'user') {
+              return NextResponse.json(
+                {
+                  error:
+                    '新增帳號只能是一般使用者，請由站長使用 setAdmin 提升權限',
+                },
+                { status: 403 }
+              );
+            }
             if (await db.checkUserExist(targetUsername)) {
               return NextResponse.json(
                 { error: '該使用者名已被使用' },
@@ -228,7 +242,7 @@ export async function POST(request: NextRequest) {
             // 取得使用者群組資訊
             const { userGroup } = body as { userGroup?: string };
 
-            // 更新設定
+            // 更新設定。忽略 body.role，一律寫入一般使用者。
             const newUser: any = {
               username: targetUsername!,
               role: 'user',
@@ -603,18 +617,20 @@ export async function POST(request: NextRequest) {
 
             // 權限檢查：站長可批量設定所有人的使用者群組，管理員只能批量設定普通使用者
             if (operatorRole !== 'owner') {
-              for (const targetUsername of usernames) {
-                const targetUser = adminConfig.UserConfig.Users.find(
-                  (u) => u.username === targetUsername
-                );
-                if (
-                  targetUser &&
-                  targetUser.role === 'admin' &&
-                  targetUsername !== username
-                ) {
+              for (const name of usernames) {
+                if (name === process.env.USERNAME) {
                   return NextResponse.json(
-                    { error: `管理員無法操作其他管理員 ${targetUsername}` },
-                    { status: 400 }
+                    { error: '無法操作站長' },
+                    { status: 403 }
+                  );
+                }
+                const targetUser = adminConfig.UserConfig.Users.find(
+                  (u) => u.username === name
+                );
+                if (targetUser && targetUser.role !== 'user') {
+                  return NextResponse.json(
+                    { error: '管理員只能管理一般使用者' },
+                    { status: 403 }
                   );
                 }
               }
