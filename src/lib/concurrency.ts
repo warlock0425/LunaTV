@@ -1,7 +1,11 @@
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
-  worker: (item: T, index: number) => Promise<R>
+  worker: (item: T, index: number) => Promise<R>,
+  options?: {
+    signal?: AbortSignal;
+    skipped?: (item: T, index: number) => R;
+  }
 ): Promise<R[]> {
   if (!Number.isInteger(concurrency) || concurrency < 1) {
     throw new Error('concurrency must be a positive integer');
@@ -13,6 +17,10 @@ export async function mapWithConcurrency<T, R>(
   const runWorker = async () => {
     while (nextIndex < items.length) {
       const index = nextIndex++;
+      if (options?.signal?.aborted && options.skipped) {
+        results[index] = options.skipped(items[index], index);
+        continue;
+      }
       results[index] = await worker(items[index], index);
     }
   };

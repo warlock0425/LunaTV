@@ -20,6 +20,7 @@ const API_ROOT = path.join(process.cwd(), 'src', 'app', 'api');
 const OUTBOUND_MARKERS = [
   'fetchSafeRemoteUrl(',
   'searchFromApi(',
+  'fanoutSearchSources(',
   'getDetailFromApi(',
   'validateSourceSite(',
   'getCachedLiveChannels(',

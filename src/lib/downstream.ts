@@ -1,7 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { mapWithConcurrency } from '@/lib/concurrency';
-import { API_CONFIG, ApiSite, getConfig } from '@/lib/config';
+import { API_CONFIG, ApiSite } from '@/lib/config';
+import { withOutboundSlot } from '@/lib/outbound-gate';
 import { getCachedSearchPage, setCachedSearchPage } from '@/lib/search-cache';
+import {
+  getSearchHotPathMaxVariants,
+  getSearchPageTimeoutMs,
+} from '@/lib/search-runtime';
 import { SearchResult } from '@/lib/types';
 import {
   fetchSafeRemoteUrl,
@@ -35,8 +39,6 @@ interface ApiSearchItem {
 
 const MAX_VOD_API_RESPONSE_BYTES = 10 * 1024 * 1024;
 const MAX_DETAIL_HTML_BYTES = 5 * 1024 * 1024;
-const MAX_SEARCH_PAGES = 20;
-const ADDITIONAL_PAGE_CONCURRENCY = 4;
 
 export class DownstreamNotFoundError extends Error {
   constructor(message = 'The requested media was not found upstream') {
@@ -142,7 +144,7 @@ async function searchWithCache(
   query: string,
   page: number,
   url: string,
-  timeoutMs = 4000,
+  timeoutMs = getSearchPageTimeoutMs(),
   parentSignal?: AbortSignal
 ): Promise<{ results: SearchResult[]; pageCount?: number }> {
   const cached = getCachedSearchPage(apiSite.key, query, page);
@@ -174,10 +176,14 @@ async function searchWithCache(
       controller.abort();
     }, timeoutMs);
     try {
-      const response = await fetchSafeRemoteUrl(url, {
-        headers: API_CONFIG.search.headers,
-        signal: controller.signal,
-      });
+      const response = await withOutboundSlot(
+        () =>
+          fetchSafeRemoteUrl(url, {
+            headers: API_CONFIG.search.headers,
+            signal: controller.signal,
+          }),
+        controller.signal
+      );
       // 有收到 HTTP 回應即代表來源存活，重置熔斷計數
       if (!response.ok) {
         if (response.status === 403)
@@ -205,7 +211,6 @@ async function searchWithCache(
           return [];
 
         const { episodes, titles } = parseVodPlayUrl(item.vod_play_url);
-        if (episodes.length === 0) return [];
 
         return [
           {
@@ -260,7 +265,7 @@ export async function searchFromApi(
         : getMainlandSearchQueries(query);
     const searchVariants = normalizeVariantsForUpstream(
       plannedVariants.length > 0 ? plannedVariants : [query]
-    );
+    ).slice(0, getSearchHotPathMaxVariants());
     const variantResults: Array<{
       variant: string;
       index: number;
@@ -285,7 +290,7 @@ export async function searchFromApi(
         variant,
         1,
         apiUrl,
-        4000,
+        getSearchPageTimeoutMs(),
         signal
       );
       if (result.results.length > 0) {
@@ -307,68 +312,12 @@ export async function searchFromApi(
     }
     const seenIds = new Set<string>();
     const results: SearchResult[] = [];
-    let pageCountToFetch = 0;
-    let successfulVariant = query;
-    for (const { results: variantData, pageCount, variant } of variantResults) {
-      if (variantData.length > 0) {
-        if (!pageCountToFetch && pageCount) {
-          pageCountToFetch = pageCount;
-          successfulVariant = variant;
-        }
-        variantData.forEach((result) => {
-          const uniqueKey = `${result.source}_${result.id}`;
-          if (!seenIds.has(uniqueKey)) {
-            seenIds.add(uniqueKey);
-            results.push(localizeSearchResult(result));
-          }
-        });
-      }
-    }
-    if (results.length === 0) return [];
-    const config = await getConfig();
-    const configuredMaxPages = Number(
-      config.SiteConfig.SearchDownstreamMaxPage
-    );
-    const maxSearchPages = Number.isFinite(configuredMaxPages)
-      ? Math.min(MAX_SEARCH_PAGES, Math.max(1, Math.trunc(configuredMaxPages)))
-      : 1;
-    const pageCount = pageCountToFetch || 1;
-    const pagesToFetch = Math.min(pageCount - 1, maxSearchPages - 1);
-    if (pagesToFetch > 0) {
-      const pages = Array.from(
-        { length: pagesToFetch },
-        (_, index) => index + 2
-      );
-      const additionalResults = await mapWithConcurrency(
-        pages,
-        ADDITIONAL_PAGE_CONCURRENCY,
-        async (page) => {
-          if (signal?.aborted) return [];
-          const pageUrl =
-            apiBaseUrl +
-            API_CONFIG.search.pagePath
-              .replace('{query}', encodeURIComponent(successfulVariant))
-              .replace('{page}', page.toString());
-          const pageResult = await searchWithCache(
-            apiSite,
-            successfulVariant,
-            page,
-            pageUrl,
-            4000,
-            signal
-          );
-          return pageResult.results;
-        }
-      );
-      additionalResults.forEach((pageResults) => {
-        if (pageResults.length > 0) {
-          pageResults.forEach((result) => {
-            const uniqueKey = `${result.source}_${result.id}`;
-            if (!seenIds.has(uniqueKey)) {
-              seenIds.add(uniqueKey);
-              results.push(localizeSearchResult(result));
-            }
-          });
+    for (const { results: variantData } of variantResults) {
+      variantData.forEach((result) => {
+        const uniqueKey = `${result.source}_${result.id}`;
+        if (!seenIds.has(uniqueKey)) {
+          seenIds.add(uniqueKey);
+          results.push(localizeSearchResult(result));
         }
       });
     }

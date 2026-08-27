@@ -21,7 +21,12 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 import { logger } from '@/lib/logger';
-import { formatPlayerTime, getStableTitle } from '@/lib/play-page-utils';
+import {
+  formatPlayerTime,
+  getStableTitle,
+  getVodHlsBufferConfig,
+  isMobileUserAgent,
+} from '@/lib/play-page-utils';
 import {
   buildPlaybackSearchPlan,
   deduplicateResults,
@@ -704,6 +709,22 @@ function PlayPageClient() {
           }
         }
 
+        const ensurePlayableEpisodes = async (
+          candidate: SearchResult
+        ): Promise<SearchResult | null> => {
+          if (candidate.episodes?.length) return candidate;
+          const fresh = await fetchSourceDetail(candidate.source, candidate.id);
+          if (fresh[0]?.episodes?.length) {
+            return {
+              ...candidate,
+              ...fresh[0],
+              source: candidate.source,
+              id: candidate.id,
+            };
+          }
+          return null;
+        };
+
         if (sourcesInfo.length === 0) {
           setError('未找到匹配結果');
           setLoading(false);
@@ -754,6 +775,27 @@ function PlayPageClient() {
             }
             if (!active) return;
           }
+        }
+
+        if (
+          detailData &&
+          (!detailData.episodes || detailData.episodes.length === 0)
+        ) {
+          setLoadingStage('fetching');
+          setLoadingMessage('🎬 正在取得可播放集數...');
+          const playable = await ensurePlayableEpisodes(detailData);
+          if (!active) return;
+          if (!playable) {
+            setError('無法取得可播放的集數');
+            setLoading(false);
+            return;
+          }
+          detailData = playable;
+          sourcesInfo = sourcesInfo.map((source) =>
+            source.source === playable.source && source.id === playable.id
+              ? playable
+              : source
+          );
         }
 
         setAvailableSources(sourcesInfo);
@@ -1418,10 +1460,13 @@ function PlayPageClient() {
       return;
     }
 
+    // 搜尋列可能尚未帶集數，等詳情回來再初始化，避免對空陣列開 HLS。
+    if (!detail || !detail.episodes || detail.episodes.length === 0) {
+      return;
+    }
+
     // 確保選集索引有效
     if (
-      !detail ||
-      !detail.episodes ||
       currentEpisodeIndex >= detail.episodes.length ||
       currentEpisodeIndex < 0
     ) {
@@ -1530,6 +1575,10 @@ function PlayPageClient() {
             if (video.hls) {
               video.hls.destroy();
             }
+            const hlsBuffer = getVodHlsBufferConfig(
+              typeof navigator !== 'undefined' &&
+                isMobileUserAgent(navigator.userAgent)
+            );
             const hls = new Hls({
               debug: false, // 關閉日誌
               enableWorker: true, // WebWorker 解碼，降低主線程壓力
@@ -1538,10 +1587,10 @@ function PlayPageClient() {
               // 允許小幅緩衝空洞由播放器填補，減少 seek/去廣告後的 A/V drift
               maxBufferHole: 0.5,
 
-              /* 緩衝/內存相關 */
-              maxBufferLength: 60,
-              backBufferLength: 30,
-              maxBufferSize: 80 * 1000 * 1000,
+              /* 緩衝/內存相關：手機更短，避免 80MB 把小機/手機 RAM 打滿 */
+              maxBufferLength: hlsBuffer.maxBufferLength,
+              backBufferLength: hlsBuffer.backBufferLength,
+              maxBufferSize: hlsBuffer.maxBufferSize,
 
               /* 自定義loader */
               loader: blockAdEnabledRef.current

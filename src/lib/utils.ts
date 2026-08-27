@@ -1,5 +1,4 @@
 import he from 'he';
-import type { ErrorData, Events, FragLoadedData } from 'hls.js';
 
 type DoubanImageProxyType =
   | 'server'
@@ -165,17 +164,60 @@ export function getQualityFromWidth(width: number): string {
 }
 
 export function getBestM3u8VariantQuality(m3u8Content: string): string {
-  const lines = m3u8Content.split(/\r?\n/);
+  return getQualityFromWidth(pickBestM3u8Variant(m3u8Content).width);
+}
+
+export function getBestM3u8VariantUri(m3u8Content: string): string {
+  return pickBestM3u8Variant(m3u8Content).uri;
+}
+
+export function resolvePlaylistUrl(baseUrl: string, ref: string): string {
+  const trimmed = ref.trim();
+  if (!trimmed) return trimmed;
+  try {
+    return new URL(trimmed, baseUrl).toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+function isM3u8Ref(value: string): boolean {
+  return /\.m3u8($|\?)/i.test(value);
+}
+
+export function getFirstM3u8MediaSegmentUrl(
+  m3u8Content: string,
+  playlistUrl: string
+): string | null {
+  const lines = m3u8Content.split(/\r?\n/).map((line) => line.trim());
+  for (const line of lines) {
+    if (!line || line.startsWith('#')) continue;
+    if (isM3u8Ref(line)) continue;
+    return resolvePlaylistUrl(playlistUrl, line);
+  }
+  return null;
+}
+
+function pickBestM3u8Variant(m3u8Content: string): {
+  width: number;
+  bandwidth: number;
+  uri: string;
+} {
+  const lines = m3u8Content.split(/\r?\n/).map((line) => line.trim());
   let bestWidth = 0;
   let bestBandwidth = 0;
+  let bestUri = '';
 
-  for (const line of lines) {
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
     if (!line.startsWith('#EXT-X-STREAM-INF:')) continue;
 
     const resolutionMatch = line.match(/RESOLUTION=(\d+)x(\d+)/i);
     const bandwidthMatch = line.match(/BANDWIDTH=(\d+)/i);
     const width = resolutionMatch ? Number(resolutionMatch[1]) : 0;
     const bandwidth = bandwidthMatch ? Number(bandwidthMatch[1]) : 0;
+    const nextLine = lines[index + 1];
+    const uri = nextLine && !nextLine.startsWith('#') ? nextLine : '';
 
     if (
       width > bestWidth ||
@@ -183,10 +225,50 @@ export function getBestM3u8VariantQuality(m3u8Content: string): string {
     ) {
       bestWidth = width;
       bestBandwidth = bandwidth;
+      bestUri = uri;
     }
   }
 
-  return getQualityFromWidth(bestWidth);
+  return { width: bestWidth, bandwidth: bestBandwidth, uri: bestUri };
+}
+
+function formatLoadSpeed(bytes: number, durationMs: number): string {
+  if (bytes <= 0 || durationMs <= 0) return '未知';
+  const kbps = bytes / 1024 / (durationMs / 1000);
+  if (kbps >= 1024) return `${(kbps / 1024).toFixed(1)} MB/s`;
+  return `${kbps.toFixed(1)} KB/s`;
+}
+
+const SPEED_TEST_TIMEOUT_MS = 2500;
+const SPEED_TEST_MAX_BYTES = 512 * 1024;
+
+async function readResponsePrefix(
+  response: Response,
+  maxBytes: number,
+  signal?: AbortSignal
+): Promise<number> {
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    return buffer.byteLength;
+  }
+
+  const reader = response.body.getReader();
+  let received = 0;
+  try {
+    while (received < maxBytes) {
+      if (signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value?.byteLength || 0;
+    }
+  } finally {
+    try {
+      await reader.cancel();
+    } catch {
+      // ignore
+    }
+  }
+  return received;
 }
 
 export async function getVideoResolutionFromM3u8(
@@ -197,197 +279,86 @@ export async function getVideoResolutionFromM3u8(
   loadSpeed: string; // 自動轉換為 KB/s 或 MB/s
   pingTime: number; // 網路延遲（毫秒）
 }> {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort();
+  const timeoutId = setTimeout(() => controller.abort(), SPEED_TEST_TIMEOUT_MS);
+
+  if (signal?.aborted) {
+    clearTimeout(timeoutId);
+    throw new DOMException('Aborted', 'AbortError');
+  }
+  signal?.addEventListener('abort', abortFromParent, { once: true });
+
   try {
-    // hls.js 體積大（gzip 後 ~150KB），動態載入以免經由 utils.ts 被打進
-    // 全站共用 bundle；只有實際執行測速時才需要它
-    // 型別斷言回靜態解析的 CJS 型別，避免 node16 模組解析下
-    // ESM/CJS 兩套名義型別（如 enum）互不相容
-    const { default: Hls } =
-      (await import('hls.js')) as unknown as typeof import('hls.js');
-
-    // 直接使用 m3u8 URL 作為影片源，避免 CORS 問題
-    return new Promise((resolve, reject) => {
-      const video = document.createElement('video');
-      video.muted = true;
-      video.preload = 'metadata';
-
-      // 測量網路延遲（ping 時間） - 使用 m3u8 URL 而不是 ts 檔案
-      const pingStart = performance.now();
-      let pingTime = 0;
-      let playlistQualityHint = '';
-      const requestController = new AbortController();
-
-      // 測量 ping 時間（使用 m3u8 URL）
-      fetch(m3u8Url, {
-        method: 'HEAD',
-        mode: 'no-cors',
-        signal: requestController.signal,
-      })
-        .then(() => {
-          pingTime = performance.now() - pingStart;
-        })
-        .catch(() => {
-          pingTime = performance.now() - pingStart; // 記錄到失敗為止的時間
-        });
-
-      // 固定使用 hls.js 載入
-      fetch(m3u8Url, { signal: requestController.signal })
-        .then((response) => (response.ok ? response.text() : ''))
-        .then((content) => {
-          playlistQualityHint = getBestM3u8VariantQuality(content);
-        })
-        .catch(() => {
-          // ignore
-        });
-
-      const hls = new Hls();
-      let settled = false;
-      let timeout: ReturnType<typeof setTimeout> | null = null;
-      const abortFromParent = () =>
-        rejectOnce(new DOMException('Aborted', 'AbortError'));
-
-      const cleanup = () => {
-        if (timeout) {
-          clearTimeout(timeout);
-          timeout = null;
-        }
-        signal?.removeEventListener('abort', abortFromParent);
-        requestController.abort();
-        hls.destroy();
-        video.remove();
-      };
-
-      function resolveOnce(value: {
-        quality: string;
-        loadSpeed: string;
-        pingTime: number;
-      }) {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(value);
-      }
-
-      function rejectOnce(error: Error) {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(error);
-      }
-
-      if (signal?.aborted) {
-        rejectOnce(new DOMException('Aborted', 'AbortError'));
-        return;
-      }
-      signal?.addEventListener('abort', abortFromParent, { once: true });
-
-      // 設定超時處理
-      timeout = setTimeout(() => {
-        rejectOnce(new Error('Timeout loading video metadata'));
-      }, 2500);
-
-      video.onerror = () => {
-        rejectOnce(new Error('Failed to load video metadata'));
-      };
-
-      let actualLoadSpeed = '未知';
-      let hasSpeedCalculated = false;
-      let hasMetadataLoaded = false;
-
-      let fragmentStartTime = 0;
-
-      // 檢查是否可以返回結果
-      const checkAndResolve = () => {
-        if (
-          hasMetadataLoaded &&
-          (hasSpeedCalculated || actualLoadSpeed !== '未知')
-        ) {
-          const width = video.videoWidth;
-          if (width && width > 0) {
-            // 根據影片寬度判斷影片質量等級，使用經典解析度的寬度作為分割點
-            const quality = getQualityFromWidth(width);
-
-            resolveOnce({
-              quality,
-              loadSpeed: actualLoadSpeed,
-              pingTime: Math.round(pingTime),
-            });
-          } else {
-            // webkit 無法取得尺寸，直接返回
-            resolveOnce({
-              quality: playlistQualityHint || '未知',
-              loadSpeed: actualLoadSpeed,
-              pingTime: Math.round(pingTime),
-            });
-          }
-        }
-      };
-
-      // 監聽片段載入開始
-      hls.on(Hls.Events.FRAG_LOADING, () => {
-        fragmentStartTime = performance.now();
-      });
-
-      // 監聽片段載入完成，只需首個分片即可計算速度
-      hls.on(
-        Hls.Events.FRAG_LOADED,
-        (event: Events.FRAG_LOADED, data: FragLoadedData) => {
-          if (data && data.payload && !hasSpeedCalculated) {
-            // 優先採用 hls.js 自己記錄的該分片載入時間。
-            // fragmentStartTime 是所有分片共用的變數，只要下一個分片的
-            // FRAG_LOADING 先於這個分片的 FRAG_LOADED 觸發（預抓、init
-            // segment、並行載入都會造成），算出來的耗時就會遠小於實際值，
-            // 速度因而被灌成好幾百 MB/s。stats 是逐分片的，不受事件順序影響。
-            const stats = data.frag?.stats;
-            const loadTime =
-              stats && stats.loading.end > stats.loading.start
-                ? stats.loading.end - stats.loading.start
-                : fragmentStartTime > 0
-                  ? performance.now() - fragmentStartTime
-                  : 0;
-            const size = stats?.loaded || data.payload.byteLength || 0;
-
-            if (loadTime > 0 && size > 0) {
-              const speedKBps = size / 1024 / (loadTime / 1000);
-
-              // 立即計算速度，無需等待更多分片
-              const avgSpeedKBps = speedKBps;
-
-              if (avgSpeedKBps >= 1024) {
-                actualLoadSpeed = `${(avgSpeedKBps / 1024).toFixed(1)} MB/s`;
-              } else {
-                actualLoadSpeed = `${avgSpeedKBps.toFixed(1)} KB/s`;
-              }
-              hasSpeedCalculated = true;
-              checkAndResolve(); // 嘗試返回結果
-            }
-          }
-        }
-      );
-
-      hls.loadSource(m3u8Url);
-      hls.attachMedia(video);
-
-      // 監聽 hls.js 錯誤
-      hls.on(Hls.Events.ERROR, (event: Events.ERROR, data: ErrorData) => {
-        console.error('HLS 錯誤:', data);
-        if (data.fatal) {
-          rejectOnce(new Error(`HLS 播放失敗: ${data.type}`));
-        }
-      });
-
-      // 監聽影片元數據載入完成
-      video.onloadedmetadata = () => {
-        hasMetadataLoaded = true;
-        checkAndResolve(); // 嘗試返回結果
-      };
+    const pingStart =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const playlistResponse = await fetch(m3u8Url, {
+      signal: controller.signal,
     });
+    const pingTime = Math.round(
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        pingStart
+    );
+    if (!playlistResponse.ok) {
+      throw new Error(`Failed to load playlist: ${playlistResponse.status}`);
+    }
+
+    const playlistText = await playlistResponse.text();
+    const quality = getBestM3u8VariantQuality(playlistText) || '未知';
+    let mediaPlaylistUrl = m3u8Url;
+    let mediaPlaylistText = playlistText;
+    const variantUri = getBestM3u8VariantUri(playlistText);
+    if (variantUri) {
+      mediaPlaylistUrl = resolvePlaylistUrl(m3u8Url, variantUri);
+      const mediaResponse = await fetch(mediaPlaylistUrl, {
+        signal: controller.signal,
+      });
+      if (mediaResponse.ok) {
+        mediaPlaylistText = await mediaResponse.text();
+      }
+    }
+
+    const segmentUrl = getFirstM3u8MediaSegmentUrl(
+      mediaPlaylistText,
+      mediaPlaylistUrl
+    );
+    let loadSpeed = '未知';
+    if (segmentUrl) {
+      const speedStart =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
+      const segmentResponse = await fetch(segmentUrl, {
+        signal: controller.signal,
+      });
+      if (segmentResponse.ok) {
+        const received = await readResponsePrefix(
+          segmentResponse,
+          SPEED_TEST_MAX_BYTES,
+          controller.signal
+        );
+        const speedEnd =
+          typeof performance !== 'undefined' ? performance.now() : Date.now();
+        loadSpeed = formatLoadSpeed(received, speedEnd - speedStart);
+      }
+    }
+
+    return {
+      quality: quality || '未知',
+      loadSpeed,
+      pingTime,
+    };
   } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      if (signal?.aborted) throw error;
+      throw new Error('Timeout loading video metadata');
+    }
     throw new Error(
       `Error getting video resolution: ${
         error instanceof Error ? error.message : String(error)
       }`
     );
+  } finally {
+    clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', abortFromParent);
   }
 }
 

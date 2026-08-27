@@ -5,6 +5,48 @@ export type VideoTestResult = {
   hasError?: boolean;
 };
 
+export function isMobileUserAgent(userAgent: string): boolean {
+  return /Mobi|Android|iPhone|iPod|iPad|webOS|BlackBerry|IEMobile/i.test(
+    userAgent
+  );
+}
+
+export function getVodHlsBufferConfig(isMobile: boolean): {
+  maxBufferLength: number;
+  backBufferLength: number;
+  maxBufferSize: number;
+} {
+  return isMobile
+    ? {
+        maxBufferLength: 15,
+        backBufferLength: 10,
+        maxBufferSize: 20 * 1000 * 1000,
+      }
+    : {
+        maxBufferLength: 30,
+        backBufferLength: 15,
+        maxBufferSize: 40 * 1000 * 1000,
+      };
+}
+
+export function getLiveHlsBufferConfig(isMobile: boolean): {
+  maxBufferLength: number;
+  backBufferLength: number;
+  maxBufferSize: number;
+} {
+  return isMobile
+    ? {
+        maxBufferLength: 12,
+        backBufferLength: 8,
+        maxBufferSize: 20 * 1000 * 1000,
+      }
+    : {
+        maxBufferLength: 20,
+        backBufferLength: 15,
+        maxBufferSize: 40 * 1000 * 1000,
+      };
+}
+
 /**
  * 畫質／速度測速要打哪一集的 URL。
  *

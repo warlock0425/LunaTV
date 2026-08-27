@@ -3,13 +3,36 @@ import {
   filterSourcesPreferHighQuality,
   filterTitleSafeCandidates,
   formatPlayerTime,
+  getLiveHlsBufferConfig,
   getStableTitle,
+  getVodHlsBufferConfig,
   isBelowPreferredDisplayQuality,
+  isMobileUserAgent,
   isPreferredDisplayQuality,
   parseLoadSpeedKBps,
   pickSpeedTestEpisodeUrl,
   selectSourceAfterSpeedTests,
 } from './play-page-utils';
+
+describe('mobile HLS buffers', () => {
+  it('detects mobile user agents', () => {
+    expect(isMobileUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)')).toBe(
+      true
+    );
+    expect(isMobileUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe(
+      false
+    );
+  });
+
+  it('uses a smaller VOD buffer on mobile', () => {
+    expect(getVodHlsBufferConfig(true).maxBufferLength).toBeLessThan(
+      getVodHlsBufferConfig(false).maxBufferLength
+    );
+    expect(getLiveHlsBufferConfig(true).maxBufferSize).toBeLessThan(
+      getLiveHlsBufferConfig(false).maxBufferSize
+    );
+  });
+});
 
 describe('pickSpeedTestEpisodeUrl（測速取集）', () => {
   it('多集時用第二集，避開 CMS 常塞在 [0] 的預告／花絮', () => {

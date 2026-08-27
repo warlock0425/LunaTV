@@ -1,4 +1,5 @@
 import { setBoundedMapValue } from './bounded-map';
+import { getRuntimeKv, withRuntimeKvBudget } from './runtime-kv';
 
 /**
  * 來源級熔斷器：
@@ -8,6 +9,8 @@ import { setBoundedMapValue } from './bounded-map';
  *   再失敗則立刻重新進入冷卻。
  * - 只計「逾時／連線失敗」，不計「查無結果」與 403
  *   （403 已由 search-cache 的負快取處理）。
+ * - skip 決策只走這裡；source-health 只做 EWMA 排序。
+ * - 有 Kvrocks／Redis 時整批 HGETALL + 本地 TTL，不在每源搜尋前多一趟。
  */
 
 const FAILURE_THRESHOLD = (() => {
@@ -25,6 +28,8 @@ const COOLDOWN_MS = (() => {
 })();
 
 const MAX_TRACKED_SOURCES = 500;
+const BREAKER_HASH_KEY = 'lunatv:source-breaker';
+const LOCAL_HYDRATE_TTL_MS = 5_000;
 
 interface BreakerState {
   consecutiveFailures: number;
@@ -34,7 +39,13 @@ interface BreakerState {
   probing: boolean;
 }
 
+type StoredBreaker = {
+  consecutiveFailures: number;
+  openUntil: number;
+};
+
 const breakerStates: Map<string, BreakerState> = new Map();
+let lastHydratedAt = 0;
 
 function getState(sourceKey: string): BreakerState {
   let state = breakerStates.get(sourceKey);
@@ -43,6 +54,82 @@ function getState(sourceKey: string): BreakerState {
     setBoundedMapValue(breakerStates, sourceKey, state, MAX_TRACKED_SOURCES);
   }
   return state;
+}
+
+function persistField(sourceKey: string, state: BreakerState): void {
+  const kv = getRuntimeKv();
+  if (!kv) return;
+  const ttlSeconds = Math.max(1, Math.ceil(COOLDOWN_MS / 1000));
+  void kv
+    .hSet(
+      BREAKER_HASH_KEY,
+      sourceKey,
+      JSON.stringify({
+        consecutiveFailures: state.consecutiveFailures,
+        openUntil: state.openUntil,
+      } satisfies StoredBreaker)
+    )
+    .then(() => kv.expire(BREAKER_HASH_KEY, ttlSeconds))
+    .catch(() => undefined);
+}
+
+function deletePersistedField(sourceKey: string): void {
+  const kv = getRuntimeKv();
+  if (!kv) return;
+  void kv.hDel(BREAKER_HASH_KEY, sourceKey).catch(() => undefined);
+}
+
+function deletePersistedHash(): void {
+  const kv = getRuntimeKv();
+  if (!kv) return;
+  void kv.del(BREAKER_HASH_KEY).catch(() => undefined);
+}
+
+/**
+ * 搜尋開始時整批灌入本地狀態。本地 5s 內不重複打 Redis。
+ */
+export async function hydrateBreakersFromStore(): Promise<void> {
+  const now = Date.now();
+  if (now - lastHydratedAt < LOCAL_HYDRATE_TTL_MS) return;
+
+  const stored = await withRuntimeKvBudget(
+    (kv) => kv.hGetAll(BREAKER_HASH_KEY),
+    {} as Record<string, string>
+  );
+  lastHydratedAt = Date.now();
+
+  for (const [sourceKey, raw] of Object.entries(stored)) {
+    if (!raw) continue;
+    let parsed: StoredBreaker | null = null;
+    try {
+      parsed = JSON.parse(raw) as StoredBreaker;
+    } catch {
+      continue;
+    }
+    if (
+      !parsed ||
+      typeof parsed.openUntil !== 'number' ||
+      typeof parsed.consecutiveFailures !== 'number'
+    ) {
+      continue;
+    }
+    const existing = breakerStates.get(sourceKey);
+    // 本行程正在探測、或本地冷卻更新，不要被舊快照蓋掉
+    if (existing?.probing) continue;
+    if (existing && existing.openUntil >= parsed.openUntil) continue;
+    if (parsed.openUntil <= now) continue;
+
+    setBoundedMapValue(
+      breakerStates,
+      sourceKey,
+      {
+        consecutiveFailures: parsed.consecutiveFailures,
+        openUntil: parsed.openUntil,
+        probing: false,
+      },
+      MAX_TRACKED_SOURCES
+    );
+  }
 }
 
 /**
@@ -89,6 +176,7 @@ export function recordSourceSuccess(sourceKey: string): void {
   state.consecutiveFailures = 0;
   state.openUntil = 0;
   state.probing = false;
+  deletePersistedField(sourceKey);
 }
 
 export function recordSourceFailure(sourceKey: string): void {
@@ -99,12 +187,14 @@ export function recordSourceFailure(sourceKey: string): void {
     // 探測失敗：立刻重新進入冷卻
     state.openUntil = Date.now() + COOLDOWN_MS;
     state.probing = false;
+    persistField(sourceKey, state);
     return;
   }
 
   if (state.consecutiveFailures >= FAILURE_THRESHOLD) {
     state.openUntil = Date.now() + COOLDOWN_MS;
     state.probing = false;
+    persistField(sourceKey, state);
   }
 }
 
@@ -135,9 +225,12 @@ export function getTrippedSources(): Array<{
 /** 重置單一來源熔斷狀態 */
 export function resetSourceBreaker(sourceKey: string): void {
   breakerStates.delete(sourceKey);
+  deletePersistedField(sourceKey);
 }
 
 /** 測試用：清空全部熔斷狀態 */
 export function resetAllBreakers(): void {
   breakerStates.clear();
+  lastHydratedAt = 0;
+  deletePersistedHash();
 }

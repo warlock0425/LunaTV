@@ -376,18 +376,22 @@ docker compose up -d
 
 ### 常用進階
 
-| 變數                                  | 預設                    | 說明                      |
-| ------------------------------------- | ----------------------- | ------------------------- |
-| `CONFIG_FILE_PATH`                    | `./config.json`         | 初始設定檔路徑            |
-| `NEXT_PUBLIC_SEARCH_MAX_PAGE`         | `5`                     | 每源最大搜尋頁數          |
-| `NEXT_PUBLIC_FLUID_SEARCH`            | `true`                  | 串流搜尋（邊搜邊顯示）    |
-| `NEXT_PUBLIC_DISABLE_YELLOW_FILTER`   | `false`                 | 停用成人分類過濾          |
-| `NEXT_PUBLIC_DOUBAN_PROXY_TYPE`       | `cmliussss-cdn-tencent` | 豆瓣資料代理策略          |
-| `NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE` | `cmliussss-cdn-tencent` | 豆瓣圖片代理策略          |
-| `BANGUMI_ACCESS_TOKEN`                | —                       | 提高 Bangumi 別名查詢額度 |
-| `SEARCH_CACHE_TTL_MINUTES`            | `120`                   | 伺服器搜尋快取            |
-| `SOURCE_BREAKER_THRESHOLD`            | `3`                     | 熔斷：連續失敗次數        |
-| `SOURCE_BREAKER_COOLDOWN_MINUTES`     | `10`                    | 熔斷冷卻分鐘              |
+| 變數                                  | 預設                    | 說明                                        |
+| ------------------------------------- | ----------------------- | ------------------------------------------- |
+| `CONFIG_FILE_PATH`                    | `./config.json`         | 初始設定檔路徑                              |
+| `NEXT_PUBLIC_SEARCH_MAX_PAGE`         | `5`                     | 舊設定：搜尋現已固定只打第 1 頁，此值不生效 |
+| `NEXT_PUBLIC_FLUID_SEARCH`            | `true`                  | 串流搜尋（邊搜邊顯示）                      |
+| `NEXT_PUBLIC_DISABLE_YELLOW_FILTER`   | `false`                 | 停用成人分類過濾                            |
+| `NEXT_PUBLIC_DOUBAN_PROXY_TYPE`       | `cmliussss-cdn-tencent` | 豆瓣資料代理策略                            |
+| `NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE` | `cmliussss-cdn-tencent` | 豆瓣圖片代理策略                            |
+| `BANGUMI_ACCESS_TOKEN`                | —                       | 提高 Bangumi 別名查詢額度                   |
+| `SEARCH_CACHE_TTL_MINUTES`            | `120`                   | 伺服器搜尋快取                              |
+| `SEARCH_SOURCE_CONCURRENCY`           | `8`                     | 同時搜幾條源（1–12）                        |
+| `SEARCH_OUTBOUND_CAP`                 | `16`                    | 搜尋同時打 CMS 上限                         |
+| `SEARCH_SUCCESS_SOURCE_CUTOFF`        | `8`                     | 前 K 個有結果源後截止                       |
+| `SEARCH_DEADLINE_MS`                  | `8000`                  | 單次搜尋總時限                              |
+| `SOURCE_BREAKER_THRESHOLD`            | `3`                     | 熔斷：連續失敗次數                          |
+| `SOURCE_BREAKER_COOLDOWN_MINUTES`     | `10`                    | 熔斷冷卻分鐘                                |
 
 ## 本機開發
 

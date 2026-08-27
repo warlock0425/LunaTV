@@ -35,16 +35,31 @@ describe('source health ordering', () => {
     ]);
   });
 
-  it('opens a circuit after repeated timeouts', () => {
-    for (let i = 0; i < 3; i++) recordSourceSearch('slow', 6000, true);
-    expect(orderSourcesByHealth(sites).map((site) => site.key)).toEqual([
+  it('ranks measured-fast ahead of unknown, then slow', () => {
+    const unknown = site('unknown');
+    const measuredFast = site('fast');
+    const measuredSlow = site('slow');
+    recordSourceSearch('fast', 400, false);
+    recordSourceSearch('slow', 4000, false);
+    expect(
+      orderSourcesByHealth([unknown, measuredSlow, measuredFast]).map(
+        (item) => item.key
+      )
+    ).toEqual(['fast', 'unknown', 'slow']);
+  });
+
+  it('does not skip sources based on health timeouts; EWMA only', () => {
+    for (let i = 0; i < 5; i++) recordSourceSearch('slow', 6000, true);
+    recordSourceSearch('fast', 200, false);
+    expect(orderSourcesByHealth(sites).map((item) => item.key)).toEqual([
       'fast',
+      'slow',
     ]);
   });
 
   it('keeps one half-open source when every circuit is open', () => {
-    for (const site of sites) {
-      for (let i = 0; i < 3; i++) recordSourceSearch(site.key, 6000, true);
+    for (const item of sites) {
+      for (let i = 0; i < 3; i++) recordSourceFailure(item.key);
     }
     expect(orderSourcesByHealth(sites)).toHaveLength(1);
   });

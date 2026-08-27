@@ -16,6 +16,28 @@ describe('mapWithConcurrency', () => {
     expect(results).toEqual([2, 4, 6, 8]);
     expect(maxActive).toBe(2);
   });
+
+  it('stops starting new work after the signal aborts', async () => {
+    const controller = new AbortController();
+    const seen: number[] = [];
+
+    const results = await mapWithConcurrency(
+      [1, 2, 3, 4, 5],
+      1,
+      async (value) => {
+        seen.push(value);
+        if (value === 2) controller.abort();
+        return value;
+      },
+      {
+        signal: controller.signal,
+        skipped: (value) => value * -1,
+      }
+    );
+
+    expect(seen).toEqual([1, 2]);
+    expect(results).toEqual([1, 2, -3, -4, -5]);
+  });
 });
 
 describe('createLinkedAbortController', () => {

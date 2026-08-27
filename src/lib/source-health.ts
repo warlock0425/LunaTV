@@ -1,5 +1,6 @@
 import { setBoundedMapValue } from './bounded-map';
 import type { ApiSite } from './config';
+import { SEARCH_HEALTH_FAST_MS } from './search-runtime';
 import {
   getSourceBreakerOpenUntil,
   isSourceInCooldown,
@@ -8,13 +9,9 @@ import {
 type HealthState = {
   averageMs: number;
   samples: number;
-  consecutiveTimeouts: number;
-  disabledUntil: number;
 };
 
 const states = new Map<string, HealthState>();
-const CIRCUIT_TIMEOUTS = 3;
-const CIRCUIT_OPEN_MS = 10 * 60 * 1000;
 const MAX_HEALTH_STATES = 1000;
 
 function stateFor(key: string): HealthState {
@@ -23,31 +20,32 @@ function stateFor(key: string): HealthState {
   const created = {
     averageMs: 1500,
     samples: 0,
-    consecutiveTimeouts: 0,
-    disabledUntil: 0,
   };
   setBoundedMapValue(states, key, created, MAX_HEALTH_STATES);
   return created;
 }
 
-/** 該源最早可再被選中的時間（health 熔斷與 breaker 冷卻取較晚者） */
+/** skip 決策只看 circuit-breaker。health 只做 EWMA 排序。 */
 function unavailableUntil(sourceKey: string, now: number): number {
-  const healthUntil = stateFor(sourceKey).disabledUntil;
   const breakerUntil = getSourceBreakerOpenUntil(sourceKey);
-  return Math.max(
-    healthUntil > now ? healthUntil : 0,
-    breakerUntil > now ? breakerUntil : 0
-  );
+  return breakerUntil > now ? breakerUntil : 0;
 }
 
 function isSourceUnavailableForOrdering(
   sourceKey: string,
   now: number
 ): boolean {
-  return (
-    stateFor(sourceKey).disabledUntil > now ||
-    isSourceInCooldown(sourceKey, now)
-  );
+  return isSourceInCooldown(sourceKey, now);
+}
+
+/**
+ * 0 = 已測且快，1 = 未知（尚無樣本），2 = 已測但慢。
+ * 未知源不可排最前，否則 cutoff 會先打一堆沒測過的死源。
+ */
+function healthBucket(state: HealthState): number {
+  if (state.samples === 0) return 1;
+  if (state.averageMs <= SEARCH_HEALTH_FAST_MS) return 0;
+  return 2;
 }
 
 export function orderSourcesByHealth(sites: ApiSite[]): ApiSite[] {
@@ -55,12 +53,14 @@ export function orderSourcesByHealth(sites: ApiSite[]): ApiSite[] {
   const sorted = [...sites].sort((a, b) => {
     const left = stateFor(a.key);
     const right = stateFor(b.key);
-    if (left.samples === 0 && right.samples > 0) return -1;
-    if (right.samples === 0 && left.samples > 0) return 1;
+    const leftBucket = healthBucket(left);
+    const rightBucket = healthBucket(right);
+    if (leftBucket !== rightBucket) return leftBucket - rightBucket;
+    if (leftBucket === 1) return a.key.localeCompare(b.key);
     return left.averageMs - right.averageMs;
   });
-  // health 自熔斷 或 breaker 冷卻中 → 不進排序結果（避免死源被假 ~1ms 推到第一）
-  // 注意：只用 isSourceInCooldown（純讀），禁止 isSourceTripped（會消耗半開探測名額）
+  // breaker 冷卻中不進排序結果。只用 isSourceInCooldown（純讀），
+  // 禁止 isSourceTripped（會消耗半開探測名額）。
   const available = sorted.filter(
     (site) => !isSourceUnavailableForOrdering(site.key, now)
   );
@@ -79,7 +79,7 @@ export function orderSourcesByHealth(sites: ApiSite[]): ApiSite[] {
 export function recordSourceSearch(
   sourceKey: string,
   durationMs: number,
-  timedOut: boolean
+  _timedOut: boolean
 ): void {
   const state = stateFor(sourceKey);
   state.averageMs =
@@ -87,16 +87,6 @@ export function recordSourceSearch(
       ? durationMs
       : Math.round(state.averageMs * 0.75 + durationMs * 0.25);
   state.samples++;
-
-  if (timedOut) {
-    state.consecutiveTimeouts++;
-    if (state.consecutiveTimeouts >= CIRCUIT_TIMEOUTS) {
-      state.disabledUntil = Date.now() + CIRCUIT_OPEN_MS;
-      state.consecutiveTimeouts = 0;
-    }
-  } else {
-    state.consecutiveTimeouts = 0;
-  }
 }
 
 export function clearSourceHealthForTests(): void {
@@ -116,14 +106,17 @@ export function getSourceHealthSnapshots(
   now = Date.now()
 ): SourceHealthSnapshot[] {
   return Array.from(states.entries())
-    .map(([key, state]) => ({
-      key,
-      averageMs: state.averageMs,
-      samples: state.samples,
-      consecutiveTimeouts: state.consecutiveTimeouts,
-      disabledUntil: state.disabledUntil,
-      disabled: state.disabledUntil > now,
-    }))
+    .map(([key, state]) => {
+      const disabledUntil = getSourceBreakerOpenUntil(key);
+      return {
+        key,
+        averageMs: state.averageMs,
+        samples: state.samples,
+        consecutiveTimeouts: 0,
+        disabledUntil,
+        disabled: disabledUntil > now,
+      };
+    })
     .sort((a, b) => b.samples - a.samples || a.averageMs - b.averageMs);
 }
 

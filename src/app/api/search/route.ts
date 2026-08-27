@@ -4,18 +4,14 @@ import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { cleanQueryForApi } from '@/lib/chinese';
-import {
-  createLinkedAbortController,
-  mapWithConcurrency,
-} from '@/lib/concurrency';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
-import { searchFromApi } from '@/lib/downstream';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
+import { fanoutSearchSources } from '@/lib/search-fanout';
 import {
   recordSearchZeroResult,
   shouldRecordSearchZeroResult,
 } from '@/lib/search-zero-results';
-import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
+import { orderSourcesByHealth } from '@/lib/source-health';
 import { orderSourcesByValidation } from '@/lib/source-validation';
 import { yellowWords } from '@/lib/yellow';
 
@@ -23,8 +19,7 @@ export const runtime = 'nodejs';
 const PRIVATE_NO_STORE_HEADERS = {
   'Cache-Control': 'private, no-store',
 };
-const SOURCE_SEARCH_CONCURRENCY = 6;
-/** 多源 × 變體 × 分頁，比 image-proxy 嚴，但比腳本刷量寬（使用者主動行為） */
+/** 多源 × 變體，比 image-proxy 嚴，但比腳本刷量寬（使用者主動行為） */
 const SEARCH_RATE_LIMIT = 90;
 const SEARCH_RATE_WINDOW_SECONDS = 60;
 
@@ -78,34 +73,13 @@ export async function GET(request: NextRequest) {
   const cleanedOriginal = searchVariants[0] || cleanQueryForApi(query);
 
   try {
-    const results = await mapWithConcurrency(
-      apiSites,
-      SOURCE_SEARCH_CONCURRENCY,
-      async (site) => {
-        const startedAt = Date.now();
-        const linked = createLinkedAbortController(request.signal, 6000);
-        try {
-          const found = await searchFromApi(
-            site,
-            cleanedOriginal,
-            searchVariants,
-            linked.controller.signal
-          );
-          recordSourceSearch(
-            site.key,
-            Date.now() - startedAt,
-            linked.controller.signal.aborted && !request.signal.aborted
-          );
-          return found;
-        } catch (error) {
-          console.warn(`搜尋失敗 ${site.name}:`, error);
-          return [];
-        } finally {
-          linked.cleanup();
-        }
-      }
-    );
-    let flattenedResults = results.flat();
+    const siteResults = await fanoutSearchSources({
+      sites: apiSites,
+      query: cleanedOriginal,
+      variants: searchVariants,
+      parentSignal: request.signal,
+    });
+    let flattenedResults = siteResults.flatMap((entry) => entry.results);
     if (!config.SiteConfig.DisableYellowFilter) {
       flattenedResults = flattenedResults.filter((result) => {
         const typeName = result.type_name || '';

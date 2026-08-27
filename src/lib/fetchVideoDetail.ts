@@ -146,7 +146,7 @@ export async function fetchVideoDetail({
         searchResults.push(...results);
 
         const exactMatch = findExactSourceIdMatch(results, source, id);
-        if (exactMatch) {
+        if (exactMatch && (exactMatch.episodes?.length || 0) > 0) {
           return exactMatch;
         }
       }

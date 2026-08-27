@@ -447,23 +447,23 @@ export const SiteConfigComponent = ({
         )}
       </div>
 
-      {/* 搜尋接口可取得最大頁數 */}
+      {/* 搜尋接口可取得最大頁數：熱路徑固定只打第 1 頁，此值不再生效 */}
       <div>
-        <label className='block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2'>
+        <label className='block text-sm font-medium text-zinc-500 dark:text-zinc-400 mb-2'>
           搜尋接口可取得最大頁數
         </label>
         <input
           type='number'
           min={1}
           value={siteSettings.SearchDownstreamMaxPage}
-          onChange={(e) =>
-            setSiteSettings((prev) => ({
-              ...prev,
-              SearchDownstreamMaxPage: Number(e.target.value),
-            }))
-          }
-          className='w-full px-3 py-2 border border-zinc-300 dark:border-zinc-600 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-green-500 focus:border-transparent'
+          disabled
+          readOnly
+          className='w-full px-3 py-2 border border-zinc-200 dark:border-zinc-700 rounded-lg bg-zinc-100 dark:bg-zinc-900 text-zinc-500 dark:text-zinc-400 cursor-not-allowed'
         />
+        <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
+          搜尋熱路徑固定只打每個源的第 1
+          頁，此設定目前不生效。存檔仍會保留原值，以免舊設定被清掉。
+        </p>
       </div>
 
       {/* 站點接口快取時間 */}

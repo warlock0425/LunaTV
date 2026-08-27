@@ -7,6 +7,8 @@ import {
   getDetailFromApi,
   searchFromApi,
 } from './downstream';
+import { resetOutboundGateForTests } from './outbound-gate';
+import { clearSearchCacheForTests } from './search-cache';
 import {
   recordSourceFailure,
   recordSourceSuccess,
@@ -73,6 +75,8 @@ describe('downstream query normalization', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    clearSearchCacheForTests();
+    resetOutboundGateForTests();
     mockedGetConfig.mockResolvedValue({
       SiteConfig: { SearchDownstreamMaxPage: 5 },
     } as Awaited<ReturnType<typeof getConfig>>);
@@ -189,7 +193,7 @@ describe('downstream query normalization', () => {
     expect(mockedRecordSourceFailure).toHaveBeenCalledWith('test');
   });
 
-  it('caps extra pages at 20 total and fetches at most four concurrently', async () => {
+  it('does not fetch extra pages on the search hot path', async () => {
     mockedGetConfig.mockResolvedValue({
       SiteConfig: { SearchDownstreamMaxPage: 1000 },
     } as Awaited<ReturnType<typeof getConfig>>);
@@ -197,37 +201,53 @@ describe('downstream query normalization', () => {
       ok: true,
       status: 200,
     } as Response);
-
-    let readCall = 0;
-    let activeReads = 0;
-    let maxActiveReads = 0;
-    mockedReadResponseJsonWithLimit.mockImplementation(async () => {
-      const currentCall = readCall++;
-      if (currentCall === 0) {
-        return {
-          list: [
-            {
-              vod_id: 'hit',
-              vod_name: 'fanout-query',
-              vod_pic: '',
-              vod_play_url: '1$https://example.test/1.m3u8',
-            },
-          ],
-          pagecount: 1000,
-        };
-      }
-
-      activeReads++;
-      maxActiveReads = Math.max(maxActiveReads, activeReads);
-      await new Promise((resolve) => setTimeout(resolve, 1));
-      activeReads--;
-      return { list: [], pagecount: 1000 };
+    mockedReadResponseJsonWithLimit.mockResolvedValue({
+      list: [
+        {
+          vod_id: 'hit',
+          vod_name: 'fanout-query',
+          vod_pic: '',
+          vod_play_url: '1$https://example.test/1.m3u8',
+        },
+      ],
+      pagecount: 1000,
     });
 
     await searchFromApi(site, 'fanout-query', ['fanout-query']);
 
-    expect(mockedFetchSafeRemoteUrl).toHaveBeenCalledTimes(20);
-    expect(maxActiveReads).toBeLessThanOrEqual(4);
+    expect(mockedFetchSafeRemoteUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('caps hot-path variants at two', async () => {
+    mockSearchResponse([]);
+
+    await searchFromApi(site, 'variant-cap', [
+      '第一變體',
+      '第二變體',
+      '不該打到',
+    ]);
+
+    expect(getCalledKeywords()).toEqual(['第一变体', '第二变体']);
+  });
+
+  it('keeps listings that have no playable episodes', async () => {
+    mockSearchResponse([
+      {
+        vod_id: 'bare',
+        vod_name: '只有標題',
+      },
+    ]);
+
+    const results = await searchFromApi(site, 'zero-episode-probe', [
+      'zero-episode-probe',
+    ]);
+
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      id: 'bare',
+      title: '只有標題',
+      episodes: [],
+    });
   });
 
   it('skips malformed rows instead of discarding the whole source', async () => {
@@ -255,8 +275,8 @@ describe('downstream query normalization', () => {
       'malformed-row-probe',
     ]);
 
-    expect(results).toHaveLength(1);
-    expect(results[0]).toMatchObject({
+    expect(results.map((item) => item.id)).toEqual(['4', '5']);
+    expect(results[1]).toMatchObject({
       id: '5',
       title: 'malformed-row-probe',
       episodes: ['https://x.test/good.m3u8'],
@@ -562,6 +582,8 @@ describe('downstream 標題空白正規化', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    clearSearchCacheForTests();
+    resetOutboundGateForTests();
     mockedGetConfig.mockResolvedValue({
       SiteConfig: { SearchDownstreamMaxPage: 1 },
     } as Awaited<ReturnType<typeof getConfig>>);
@@ -622,6 +644,8 @@ describe('上游解析 golden test', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    clearSearchCacheForTests();
+    resetOutboundGateForTests();
     mockedGetConfig.mockResolvedValue({
       SiteConfig: { SearchDownstreamMaxPage: 1 },
     } as Awaited<ReturnType<typeof getConfig>>);

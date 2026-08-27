@@ -2,9 +2,13 @@ import {
   cleanHtmlTags,
   formatYear,
   getBestM3u8VariantQuality,
+  getBestM3u8VariantUri,
+  getFirstM3u8MediaSegmentUrl,
   getProxiedImageUrl,
   getQualityFromWidth,
+  getVideoResolutionFromM3u8,
   processImageUrl,
+  resolvePlaylistUrl,
 } from './utils';
 
 describe('formatYear', () => {
@@ -61,6 +65,69 @@ low.m3u8
 high.m3u8`;
 
     expect(getBestM3u8VariantQuality(content)).toBe('720p');
+    expect(getBestM3u8VariantUri(content)).toBe('high.m3u8');
+  });
+
+  it('resolves the first media segment against the playlist URL', () => {
+    const media = `#EXTM3U
+#EXTINF:4,
+seg0.ts
+#EXTINF:4,
+seg1.ts`;
+    expect(
+      getFirstM3u8MediaSegmentUrl(
+        media,
+        'https://cdn.example.test/hls/index.m3u8'
+      )
+    ).toBe('https://cdn.example.test/hls/seg0.ts');
+    expect(
+      resolvePlaylistUrl('https://cdn.example.test/a/b.m3u8', '../x.ts')
+    ).toBe('https://cdn.example.test/x.ts');
+  });
+
+  it('measures quality and speed from playlists without creating Hls or video', async () => {
+    const textResponse = (body: string) =>
+      ({
+        ok: true,
+        text: async () => body,
+        body: null,
+        arrayBuffer: async () => new TextEncoder().encode(body).buffer,
+      }) as Response;
+    const bytesResponse = (bytes: number) =>
+      ({
+        ok: true,
+        text: async () => '',
+        body: null,
+        arrayBuffer: async () => new Uint8Array(bytes).buffer,
+      }) as Response;
+
+    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('master.m3u8')) {
+        return textResponse(`#EXTM3U
+#EXT-X-STREAM-INF:BANDWIDTH=3600000,RESOLUTION=1920x1080
+1080p.m3u8`);
+      }
+      if (url.endsWith('1080p.m3u8')) {
+        return textResponse(`#EXTM3U
+#EXTINF:4,
+seg0.ts`);
+      }
+      return bytesResponse(2048);
+    });
+    const originalFetch = global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
+      const result = await getVideoResolutionFromM3u8(
+        'https://cdn.example.test/master.m3u8'
+      );
+      expect(result.quality).toBe('1080p');
+      expect(result.loadSpeed).not.toBe('未知');
+      expect(fetchMock).toHaveBeenCalled();
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 });
 

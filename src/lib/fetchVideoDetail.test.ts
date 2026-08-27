@@ -63,6 +63,32 @@ describe('fetchVideoDetail', () => {
     ]);
   });
 
+  it('does not return an exact search match that has no episodes', async () => {
+    mockedSearchFromApi.mockResolvedValue([
+      result({
+        id: 'old-id',
+        title: '尖帽子的魔法工房',
+        episodes: [],
+      }),
+    ]);
+    mockedGetDetailFromApi.mockResolvedValue(
+      result({
+        id: 'old-id',
+        title: '尖帽子的魔法工房',
+        episodes: ['1.m3u8', '2.m3u8'],
+      })
+    );
+
+    const detail = await fetchVideoDetail({
+      source: 'test',
+      id: 'old-id',
+      fallbackTitle: '尖帽子的魔法工房',
+    });
+
+    expect(detail.episodes).toEqual(['1.m3u8', '2.m3u8']);
+    expect(mockedGetDetailFromApi).toHaveBeenCalled();
+  });
+
   it('returns exact source/id search match before detail fallback', async () => {
     mockedSearchFromApi.mockResolvedValue([
       result({

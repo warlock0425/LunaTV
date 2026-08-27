@@ -15,6 +15,10 @@ import {
   saveFavorite,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import {
+  getLiveHlsBufferConfig,
+  isMobileUserAgent,
+} from '@/lib/play-page-utils';
 import { useClientValue } from '@/hooks/useClientMount';
 
 import EpgScrollableRow from '@/components/EpgScrollableRow';
@@ -847,13 +851,16 @@ function LivePageClient() {
       }
     }
 
+    const hlsBuffer = getLiveHlsBufferConfig(
+      typeof navigator !== 'undefined' && isMobileUserAgent(navigator.userAgent)
+    );
     const hls = new Hls({
       debug: false,
       enableWorker: true,
       lowLatencyMode: true,
-      maxBufferLength: 30,
-      backBufferLength: 30,
-      maxBufferSize: 60 * 1000 * 1000,
+      maxBufferLength: hlsBuffer.maxBufferLength,
+      backBufferLength: hlsBuffer.backBufferLength,
+      maxBufferSize: hlsBuffer.maxBufferSize,
       loader: CustomHlsJsLoader,
     });
 

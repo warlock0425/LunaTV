@@ -1,5 +1,7 @@
+import { setRuntimeKvForTests } from './runtime-kv';
 import {
   getTrippedSources,
+  hydrateBreakersFromStore,
   isSourceInCooldown,
   isSourceTripped,
   recordSourceFailure,
@@ -18,6 +20,7 @@ describe('source circuit breaker', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+    setRuntimeKvForTests(undefined);
   });
 
   it('is closed by default', () => {
@@ -89,6 +92,33 @@ describe('source circuit breaker', () => {
     expect(tripped).toHaveLength(1);
     expect(tripped[0].sourceKey).toBe('src-a');
     expect(tripped[0].consecutiveFailures).toBe(3);
+  });
+
+  it('hydrates tripped sources from the shared Kvrocks hash once', async () => {
+    const openUntil = Date.now() + 60_000;
+    const kv = {
+      hGetAll: jest.fn(async () => ({
+        'src-redis': JSON.stringify({
+          consecutiveFailures: 3,
+          openUntil,
+        }),
+      })),
+      hSet: jest.fn(async () => undefined),
+      hDel: jest.fn(async () => undefined),
+      expire: jest.fn(async () => undefined),
+      mGet: jest.fn(async () => []),
+      set: jest.fn(async () => undefined),
+      del: jest.fn(async () => undefined),
+    };
+    setRuntimeKvForTests(kv);
+
+    await hydrateBreakersFromStore();
+    expect(isSourceInCooldown('src-redis')).toBe(true);
+
+    await hydrateBreakersFromStore();
+    expect(kv.hGetAll).toHaveBeenCalledTimes(1);
+
+    setRuntimeKvForTests(undefined);
   });
 
   it('isSourceInCooldown 純讀：冷卻中為 true，期滿後為 false 且不消耗探測名額', () => {

@@ -4,19 +4,15 @@ import { requireActiveUser } from '@/lib/api-auth';
 import { isValidApiSearchQuery } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
 import { cleanQueryForApi } from '@/lib/chinese';
-import {
-  createLinkedAbortController,
-  mapWithConcurrency,
-} from '@/lib/concurrency';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
-import { searchFromApi } from '@/lib/downstream';
 import { logger } from '@/lib/logger';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
+import { fanoutSearchSources } from '@/lib/search-fanout';
 import {
   recordSearchZeroResult,
   shouldRecordSearchZeroResult,
 } from '@/lib/search-zero-results';
-import { orderSourcesByHealth, recordSourceSearch } from '@/lib/source-health';
+import { orderSourcesByHealth } from '@/lib/source-health';
 import { orderSourcesByValidation } from '@/lib/source-validation';
 import { SearchResult } from '@/lib/types';
 import { yellowWords } from '@/lib/yellow';
@@ -26,7 +22,6 @@ export const runtime = 'nodejs';
 const PRIVATE_NO_STORE_HEADERS = {
   'Cache-Control': 'private, no-store',
 };
-const SOURCE_SEARCH_CONCURRENCY = 6;
 /** SSE 長連線：限「建立連線」次數，不是每個事件 */
 const SEARCH_WS_RATE_LIMIT = 45;
 const SEARCH_WS_RATE_WINDOW_SECONDS = 60;
@@ -103,17 +98,9 @@ export async function GET(request: NextRequest) {
         }
       };
 
-      const sendCompleteIfReady = () => {
-        if (
-          completeSent ||
-          streamClosed ||
-          completedSources !== apiSites.length
-        ) {
-          return;
-        }
-
+      const sendComplete = () => {
+        if (completeSent || streamClosed) return;
         completeSent = true;
-        // 與搜尋頁一致：無關 CMS 垃圾結果經 isFuzzyMatch 後也是「空」，要記
         if (shouldRecordSearchZeroResult(allResults, query)) {
           void recordSearchZeroResult(query);
         }
@@ -147,81 +134,66 @@ export async function GET(request: NextRequest) {
       }
 
       if (apiSites.length === 0) {
-        sendCompleteIfReady();
+        sendComplete();
         return;
       }
 
-      await mapWithConcurrency(
-        apiSites,
-        SOURCE_SEARCH_CONCURRENCY,
-        async (site) => {
-          const startedAt = Date.now();
-          const linked = createLinkedAbortController(
-            searchAbortController.signal,
-            6000
-          );
-          try {
-            const results = await searchFromApi(
-              site,
-              cleanedOriginal,
-              searchVariants,
-              linked.controller.signal
-            );
-            recordSourceSearch(
-              site.key,
-              Date.now() - startedAt,
-              linked.controller.signal.aborted &&
-                !searchAbortController.signal.aborted
-            );
+      await fanoutSearchSources({
+        sites: apiSites,
+        query: cleanedOriginal,
+        variants: searchVariants,
+        parentSignal: searchAbortController.signal,
+        onSiteResult: (entry) => {
+          if (entry.skipped) return;
+          completedSources++;
 
-            let filteredResults = results;
-            if (!config.SiteConfig.DisableYellowFilter) {
-              filteredResults = results.filter((result) => {
-                const typeName = result.type_name || '';
-                return !yellowWords.some((word: string) =>
-                  typeName.includes(word)
-                );
-              });
-            }
-
-            if (!streamClosed) {
-              const sourceEvent = `data: ${JSON.stringify({
-                type: 'source_result',
-                source: site.key,
-                sourceName: site.name,
-                results: filteredResults,
-                timestamp: Date.now(),
-              })}\n\n`;
-
-              safeEnqueue(encoder.encode(sourceEvent));
-            }
-
-            if (filteredResults.length > 0) {
-              allResults.push(...filteredResults);
-            }
-          } catch (error) {
-            logger.warn(`搜尋失敗 ${site.name}:`, error);
-
+          if (entry.error) {
+            logger.warn(`搜尋失敗 ${entry.site.name}:`, entry.error);
             if (!streamClosed) {
               const errorEvent = `data: ${JSON.stringify({
                 type: 'source_error',
-                source: site.key,
-                sourceName: site.name,
-                error: error instanceof Error ? error.message : '搜尋失敗',
+                source: entry.site.key,
+                sourceName: entry.site.name,
+                error:
+                  entry.error instanceof Error
+                    ? entry.error.message
+                    : '搜尋失敗',
                 timestamp: Date.now(),
               })}\n\n`;
-
               safeEnqueue(encoder.encode(errorEvent));
             }
-          } finally {
-            linked.cleanup();
-            completedSources++;
-            sendCompleteIfReady();
+            return;
           }
-        }
-      );
+
+          let filteredResults = entry.results;
+          if (!config.SiteConfig.DisableYellowFilter) {
+            filteredResults = entry.results.filter((result) => {
+              const typeName = result.type_name || '';
+              return !yellowWords.some((word: string) =>
+                typeName.includes(word)
+              );
+            });
+          }
+
+          if (!streamClosed) {
+            const sourceEvent = `data: ${JSON.stringify({
+              type: 'source_result',
+              source: entry.site.key,
+              sourceName: entry.site.name,
+              results: filteredResults,
+              timestamp: Date.now(),
+            })}\n\n`;
+            safeEnqueue(encoder.encode(sourceEvent));
+          }
+
+          if (filteredResults.length > 0) {
+            allResults.push(...filteredResults);
+          }
+        },
+      });
+
       request.signal.removeEventListener('abort', abortFromRequest);
-      sendCompleteIfReady();
+      sendComplete();
     },
 
     cancel() {
@@ -237,9 +209,6 @@ export async function GET(request: NextRequest) {
       'Content-Type': 'text/event-stream',
       ...PRIVATE_NO_STORE_HEADERS,
       Connection: 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Content-Type',
     },
   });
 }

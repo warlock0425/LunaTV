@@ -11,8 +11,8 @@ import {
 } from '@/lib/url-safety';
 
 export const runtime = 'nodejs';
-const IMAGE_PROXY_TIMEOUT_MS = 15_000;
-const IMAGE_PROXY_MAX_BYTES = 20 * 1024 * 1024;
+const IMAGE_PROXY_TIMEOUT_MS = 5_000;
+const IMAGE_PROXY_MAX_BYTES = 2 * 1024 * 1024;
 // 每個海報一次請求，虛擬清單快速捲動時短時間內就會累積上百次；600/分鐘
 // 遠高於任何人為瀏覽速度，只擋腳本式的無限抓取。
 const IMAGE_PROXY_RATE_LIMIT = 600;
@@ -98,7 +98,7 @@ export async function GET(request: Request) {
     ) {
       imageResponse.body?.cancel();
       return NextResponse.json(
-        { error: 'Image exceeds the 20 MB limit' },
+        { error: 'Image exceeds the 2 MB limit' },
         { status: 413 }
       );
     }
@@ -124,7 +124,7 @@ export async function GET(request: Request) {
     }
     if (error instanceof RemoteResponseTooLargeError) {
       return NextResponse.json(
-        { error: 'Image exceeds the 20 MB limit' },
+        { error: 'Image exceeds the 2 MB limit' },
         { status: 413 }
       );
     }
