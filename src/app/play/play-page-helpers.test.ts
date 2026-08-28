@@ -2,6 +2,7 @@ import type { SearchResult } from '@/lib/types';
 
 import {
   applyPlaybackUrlUpdates,
+  applyResumeToPlayer,
   clampEpisodeIndex,
   clampResumeTarget,
   DETAIL_CACHE_HARD_TTL,
@@ -13,11 +14,15 @@ import {
   getEpisodeCount,
   getEpisodeUrl,
   getPlayPageRemountKey,
+  getResumeSeekOutcome,
+  isResumeDurationReliable,
   mergeDetailPreservingPlayback,
   mergeFreshDetail,
+  parsePlayUrlEpisode,
   pruneOldestDetailCacheEntries,
   resolveCachedDetailEntry,
   resolveEpisodeIndexAfterRefresh,
+  resolvePlayResume,
   shouldApplyBackgroundDetail,
   shouldSeekLateResume,
 } from './play-page-helpers';
@@ -352,6 +357,67 @@ describe('play page URL / remount helpers', () => {
     expect(clampResumeTarget(95, 100)).toBe(95);
     expect(clampResumeTarget(99, 100)).toBe(95);
     expect(clampResumeTarget(10, 0)).toBe(10);
+  });
+
+  it('parses a 1-based episode query and ignores junk', () => {
+    expect(parsePlayUrlEpisode('5')).toBe(5);
+    expect(parsePlayUrlEpisode('0')).toBeNull();
+    expect(parsePlayUrlEpisode('nope')).toBeNull();
+    expect(parsePlayUrlEpisode(null)).toBeNull();
+  });
+
+  it('prefers the play record over a default episode=1 URL', () => {
+    expect(
+      resolvePlayResume({
+        urlEpisode: 1,
+        recordIndex: 5,
+        recordPlayTime: 1200,
+      })
+    ).toEqual({ episodeIndex: 4, resumeTime: 1200 });
+    expect(
+      resolvePlayResume({
+        urlEpisode: null,
+        recordIndex: 5,
+        recordPlayTime: 1200,
+      })
+    ).toEqual({ episodeIndex: 4, resumeTime: 1200 });
+    expect(
+      resolvePlayResume({
+        urlEpisode: 5,
+        recordIndex: 5,
+        recordPlayTime: 1200,
+      })
+    ).toEqual({ episodeIndex: 4, resumeTime: 1200 });
+  });
+
+  it('honors an explicit non-default episode in the URL', () => {
+    expect(
+      resolvePlayResume({
+        urlEpisode: 3,
+        recordIndex: 5,
+        recordPlayTime: 1200,
+      })
+    ).toEqual({ episodeIndex: 2, resumeTime: 0 });
+  });
+
+  it('waits to seek until HLS duration looks like a real VOD length', () => {
+    expect(isResumeDurationReliable(0, 1200)).toBe(false);
+    expect(isResumeDurationReliable(8, 1200)).toBe(false);
+    expect(isResumeDurationReliable(1400, 1200)).toBe(true);
+    expect(isResumeDurationReliable(40, 35)).toBe(true);
+    expect(getResumeSeekOutcome(1200, 0, 8)).toBe('wait');
+    expect(getResumeSeekOutcome(1200, 0, 1400)).toBe('seek');
+    expect(getResumeSeekOutcome(1200, 1198, 1400)).toBe('done');
+  });
+
+  it('does not clamp a late resume onto a tiny HLS duration', () => {
+    const player = { currentTime: 0, duration: 8 };
+    expect(applyResumeToPlayer(player, 1200)).toBe('wait');
+    expect(player.currentTime).toBe(0);
+
+    player.duration = 1400;
+    expect(applyResumeToPlayer(player, 1200)).toBe('seek');
+    expect(player.currentTime).toBe(1200);
   });
 
   it('keeps a single video source element and re-enables remote playback', () => {

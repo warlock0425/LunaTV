@@ -55,7 +55,7 @@ import { CustomHlsJsLoader } from './custom-hls-loader';
 import { nextHlsFatalAction } from './hls-fatal';
 import {
   applyPlaybackUrlUpdates,
-  clampResumeTarget,
+  applyResumeToPlayer,
   clearCachedDetail,
   DEFAULT_SKIP_CONFIG,
   ensureVideoSource,
@@ -67,6 +67,8 @@ import {
   mergeDetailPreservingPlayback,
   mergeFreshDetail,
   migrateDetailCache,
+  parsePlayUrlEpisode,
+  resolvePlayResume,
   setCachedDetail,
   shouldApplyBackgroundDetail,
   shouldSeekLateResume,
@@ -211,8 +213,17 @@ function PlayPageClient() {
   useEffect(() => {
     needPreferRef.current = needPrefer;
   }, [needPrefer]);
-  // 集數相關
-  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
+  // 集數相關：先吃網址，避免 detail 就緒時把 episode 寫成 1 蓋掉紀錄
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(() => {
+    const fromUrl = parsePlayUrlEpisode(searchParams.get('episode'));
+    return fromUrl ? fromUrl - 1 : 0;
+  });
+  const initialUrlEpisodeRef = useRef(
+    parsePlayUrlEpisode(searchParams.get('episode'))
+  );
+  const lastGoodResumeRef = useRef(0);
+  const hasAppliedResumeRef = useRef(false);
+  const [historyRestoreSettled, setHistoryRestoreSettled] = useState(false);
 
   const currentSourceRef = useRef(currentSource);
   const currentIdRef = useRef(currentId);
@@ -475,6 +486,7 @@ function PlayPageClient() {
 
   useEffect(() => {
     if (!detail || !currentSource || !currentId) return;
+    if (!historyRestoreSettled) return;
     replacePlaybackUrl({
       source: currentSource,
       id: currentId,
@@ -487,6 +499,7 @@ function PlayPageClient() {
     currentId,
     currentSource,
     detail,
+    historyRestoreSettled,
     videoTitle,
     videoYear,
   ]);
@@ -1054,46 +1067,35 @@ function PlayPageClient() {
     const applyResumeFromRecord = (record: PlayRecord | undefined) => {
       if (cancelled || skipHistory || !record) return;
 
-      const epParam = searchParams.get('episode');
-      let targetIndex = -1;
-      let targetTime = 0;
-
-      if (epParam) {
-        const epNum = parseInt(epParam, 10);
-        if (!isNaN(epNum) && epNum > 0) {
-          targetIndex = epNum - 1;
-          const recordIndex =
-            typeof record.index === 'number' ? record.index : 1;
-          const oneBasedRecordIndex = recordIndex <= 0 ? 1 : recordIndex;
-          if (oneBasedRecordIndex === epNum) {
-            targetTime = record.play_time || 0;
-          }
-        }
-      }
-
-      if (targetIndex === -1) {
-        const rawIndex = typeof record.index === 'number' ? record.index : 1;
-        const oneBasedIndex = rawIndex <= 0 ? 1 : rawIndex;
-        targetIndex = Math.max(0, oneBasedIndex - 1);
-        targetTime = record.play_time || 0;
-      }
+      const { episodeIndex: targetIndex, resumeTime: targetTime } =
+        resolvePlayResume({
+          urlEpisode: initialUrlEpisodeRef.current,
+          recordIndex: typeof record.index === 'number' ? record.index : 1,
+          recordPlayTime: record.play_time || 0,
+        });
 
       const player = artPlayerRef.current;
       const currentTime = player?.currentTime || 0;
-      if (currentTime >= 3) return;
+      const episodeChanged = currentEpisodeIndexRef.current !== targetIndex;
+
+      if (hasAppliedResumeRef.current && !episodeChanged && currentTime >= 3) {
+        return;
+      }
+      hasAppliedResumeRef.current = true;
 
       currentEpisodeIndexRef.current = targetIndex;
       setCurrentEpisodeIndex(targetIndex);
 
       if (targetTime > 3) {
         resumeTimeRef.current = targetTime;
-        if (player && shouldSeekLateResume(targetTime, currentTime)) {
+        lastGoodResumeRef.current = targetTime;
+        if (
+          !episodeChanged &&
+          player &&
+          shouldSeekLateResume(targetTime, currentTime)
+        ) {
           try {
-            player.currentTime = clampResumeTarget(
-              targetTime,
-              player.duration || 0
-            );
-            resumeTimeRef.current = null;
+            applyResumeToPlayer(player, targetTime);
           } catch (err) {
             logger.warn('恢復播放進度失敗:', err);
           }
@@ -1104,12 +1106,18 @@ function PlayPageClient() {
     };
 
     const initFromHistory = async () => {
-      if (skipHistory) return;
+      if (skipHistory) {
+        hasAppliedResumeRef.current = true;
+        setHistoryRestoreSettled(true);
+        return;
+      }
       try {
         const allRecords = await getAllPlayRecords();
         applyResumeFromRecord(pickRecord(allRecords));
       } catch (err) {
         logger.error('讀取播放記錄失敗:', err);
+      } finally {
+        if (!cancelled) setHistoryRestoreSettled(true);
       }
     };
 
@@ -1350,6 +1358,8 @@ function PlayPageClient() {
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
+      resumeTimeRef.current = 0;
+      lastGoodResumeRef.current = 0;
       setCurrentEpisodeIndex(episodeNumber);
       const currentDetail = detailRef.current;
       replacePlaybackUrl({
@@ -1370,6 +1380,8 @@ function PlayPageClient() {
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
+      resumeTimeRef.current = 0;
+      lastGoodResumeRef.current = 0;
       setCurrentEpisodeIndex(idx - 1);
     }
   };
@@ -1385,6 +1397,8 @@ function PlayPageClient() {
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
+      resumeTimeRef.current = 0;
+      lastGoodResumeRef.current = 0;
       setCurrentEpisodeIndex(idx + 1);
       return;
     }
@@ -1617,6 +1631,15 @@ function PlayPageClient() {
                 mediaRetries = nextMediaRetries;
                 if (action.type === 'startLoad') {
                   logger.debug('網路錯誤，嘗試恢復...');
+                  const now = video.currentTime || 0;
+                  const saved =
+                    now > 3
+                      ? now
+                      : resumeTimeRef.current || lastGoodResumeRef.current;
+                  if (typeof saved === 'number' && saved > 3) {
+                    resumeTimeRef.current = saved;
+                    lastGoodResumeRef.current = saved;
+                  }
                   hls.startLoad();
                   return;
                 }
@@ -1745,18 +1768,18 @@ function PlayPageClient() {
         pipVideoEl.addEventListener('leavepictureinpicture', onPiPChange);
       }
 
-      // 監聽影片可播放事件，這時恢復播放進度更可靠
-      artPlayerRef.current.on('video:canplay', () => {
+      const tryApplyResumeTime = () => {
         const player = artPlayerRef.current;
-        if (!player) return;
-        // 若存在需要恢復的播放進度，則跳轉
-        if (resumeTimeRef.current && resumeTimeRef.current > 0) {
-          try {
-            const duration = player.duration || 0;
-            const target = clampResumeTarget(resumeTimeRef.current, duration);
-            player.currentTime = target;
-            logger.debug('成功恢復播放進度到:', resumeTimeRef.current);
-            // seek 完成後手動恢復播放（autoplay 已關閉避免 0:00 閃爍）
+        const target = resumeTimeRef.current;
+        if (!player || !target || target <= 0) return;
+        try {
+          const outcome = applyResumeToPlayer(player, target);
+          if (outcome === 'done') {
+            resumeTimeRef.current = null;
+            return;
+          }
+          if (outcome === 'seek') {
+            logger.debug('成功恢復播放進度到:', target);
             setTimeout(() => {
               try {
                 artPlayerRef.current?.play();
@@ -1764,11 +1787,16 @@ function PlayPageClient() {
                 // 自動播放可能被瀏覽器擋，忽略
               }
             }, 100);
-          } catch (err) {
-            logger.warn('恢復播放進度失敗:', err);
           }
+        } catch (err) {
+          logger.warn('恢復播放進度失敗:', err);
         }
-        resumeTimeRef.current = null;
+      };
+
+      // 監聽影片可播放事件，這時恢復播放進度更可靠。
+      // duration 還沒穩定時不要清掉 resumeTimeRef，否則 HLS 重試後無法再 seek。
+      artPlayerRef.current.on('video:canplay', () => {
+        tryApplyResumeTime();
 
         setTimeout(() => {
           const currentPlayer = artPlayerRef.current;
@@ -1789,8 +1817,18 @@ function PlayPageClient() {
         setIsVideoLoading(false);
       });
 
+      artPlayerRef.current.on('video:loadedmetadata', () => {
+        tryApplyResumeTime();
+      });
+      artPlayerRef.current.on('video:durationchange', () => {
+        tryApplyResumeTime();
+      });
+
       // 監聽影片時間更新事件，實現跳過片頭片尾按鈕顯示
       artPlayerRef.current.on('video:timeupdate', () => {
+        if (resumeTimeRef.current && resumeTimeRef.current > 0) {
+          tryApplyResumeTime();
+        }
         if (!skipConfigRef.current.enable) {
           if (showSkipIntroRef.current) {
             showSkipIntroRef.current = false;

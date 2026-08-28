@@ -37,6 +37,10 @@ export const DEFAULT_SKIP_CONFIG = {
 
 /** 歷史進度晚於 canplay 抵達時，只在使用者還沒真正開始看才補 seek。 */
 export const LATE_RESUME_PLAYED_THRESHOLD_SECONDS = 3;
+/** HLS 尚未展開完整片長時，duration 常只有前幾個 fragment。 */
+const RESUME_DURATION_MIN_SECONDS = 60;
+/** 已落到目標附近，視為恢復成功。 */
+const RESUME_SEEK_DONE_EPSILON_SECONDS = 5;
 
 export function shouldSeekLateResume(
   resumeTime: number,
@@ -53,6 +57,78 @@ export function clampResumeTarget(target: number, duration: number): number {
     return Math.max(0, duration - 5);
   }
   return target;
+}
+
+export function parsePlayUrlEpisode(
+  raw: string | null | undefined
+): number | null {
+  if (!raw) return null;
+  const episode = Number.parseInt(raw, 10);
+  if (!Number.isFinite(episode) || episode < 1) return null;
+  return episode;
+}
+
+/**
+ * 恢復進度以播放紀錄為準。
+ * 網址上的 episode=1 多半是頁面預設寫入，不能蓋掉「第 5 集 20 分」。
+ * 明確的其他集數（分享連結／手動切集）才從頭播那一集。
+ */
+export function resolvePlayResume(options: {
+  urlEpisode: number | null;
+  recordIndex: number;
+  recordPlayTime: number;
+}): { episodeIndex: number; resumeTime: number } {
+  const recordIndex =
+    Number.isFinite(options.recordIndex) && options.recordIndex > 0
+      ? Math.trunc(options.recordIndex)
+      : 1;
+  const resumeTime = Math.max(0, options.recordPlayTime || 0);
+  const urlEpisode = options.urlEpisode;
+
+  if (urlEpisode == null || urlEpisode === recordIndex || urlEpisode === 1) {
+    return { episodeIndex: recordIndex - 1, resumeTime };
+  }
+
+  return { episodeIndex: urlEpisode - 1, resumeTime: 0 };
+}
+
+export function isResumeDurationReliable(
+  duration: number,
+  target: number
+): boolean {
+  if (!Number.isFinite(duration) || duration <= 0) return false;
+  if (target <= duration + 1) return true;
+  return duration >= RESUME_DURATION_MIN_SECONDS;
+}
+
+export type ResumeSeekOutcome = 'wait' | 'seek' | 'done';
+
+export function getResumeSeekOutcome(
+  resumeTime: number,
+  currentTime: number,
+  duration: number
+): ResumeSeekOutcome {
+  if (!resumeTime || resumeTime <= 0) return 'done';
+  if (Math.abs(currentTime - resumeTime) <= RESUME_SEEK_DONE_EPSILON_SECONDS) {
+    return 'done';
+  }
+  if (!isResumeDurationReliable(duration, resumeTime)) return 'wait';
+  return 'seek';
+}
+
+export function applyResumeToPlayer(
+  player: { currentTime?: number; duration?: number },
+  resumeTime: number
+): ResumeSeekOutcome {
+  const outcome = getResumeSeekOutcome(
+    resumeTime,
+    player.currentTime || 0,
+    player.duration || 0
+  );
+  if (outcome === 'seek') {
+    player.currentTime = clampResumeTarget(resumeTime, player.duration || 0);
+  }
+  return outcome;
 }
 
 // ---------------------------------------------------------------------------
