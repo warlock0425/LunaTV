@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.11',
+    date: '2026-08-27',
+    content: `
+- 修正：接著看／觀看紀錄不再被網址上的第 1 集蓋掉，會回到上次的集數與秒數。
+- 修正：HLS 片長還沒穩定時不把進度夾到片頭；網路重試後會再 seek 一次。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.10',
     date: '2026-08-27',
     content: `
