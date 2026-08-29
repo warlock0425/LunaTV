@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.13',
+    date: '2026-08-29',
+    content: `
+- 修正：搜尋快取會留下集數，卡片不再一律顯示 0 集。
+- 修正：換源列表若搜尋結果沒有播放網址，會先打詳情再測速，不再一直停在「測速中」。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.12',
     date: '2026-08-27',
     content: `
