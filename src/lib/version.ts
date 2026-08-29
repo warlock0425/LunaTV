@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.14',
+    date: '2026-08-30',
+    content: `
+- 修正：換源沒有播放網址時不再為了測速去打詳情，失敗也不再標成「無法連線」。點進去才抓詳情播放。
+- 修正：搜尋卡片集數改從片源備註補上，沒有集數時不顯示 0。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.13',
     date: '2026-08-29',
     content: `
