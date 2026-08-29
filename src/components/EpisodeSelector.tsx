@@ -12,7 +12,9 @@ import React, {
 import {
   filterSourcesPreferHighQuality,
   getResultEpisodeCount,
-  isPreferredDisplayQuality,
+  hydrateSearchResultEpisodes,
+  pickFirstPlayableEpisodeUrl,
+  pickRecommendedSourceKey,
   pickSpeedTestEpisodeUrl,
 } from '@/lib/play-page-utils';
 import { SearchResult } from '@/lib/types';
@@ -46,6 +48,8 @@ export interface EpisodeSelectorProps {
   precomputedVideoInfo?: Map<string, VideoInfo>;
   /** 為 true 時切到換源 tab（例如播放失敗後引導換源） */
   preferSourcesTab?: boolean;
+  /** 背景補到播放網址時回寫，換源點擊就不必再等詳情 */
+  onSourceHydrated?: (source: SearchResult) => void;
 }
 
 const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
@@ -63,6 +67,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   sourceSearchError = null,
   precomputedVideoInfo,
   preferSourcesTab = false,
+  onSourceHydrated,
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
@@ -78,11 +83,17 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const [showLowerQuality, setShowLowerQuality] = useState(false);
 
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
+  const speedTestInFlightRef = useRef<Set<string>>(new Set());
   const videoInfoMapRef = useRef<Map<string, VideoInfo>>(new Map());
+  const onSourceHydratedRef = useRef(onSourceHydrated);
 
   useEffect(() => {
     attemptedSourcesRef.current = attemptedSources;
   }, [attemptedSources]);
+
+  useEffect(() => {
+    onSourceHydratedRef.current = onSourceHydrated;
+  }, [onSourceHydrated]);
 
   useEffect(() => {
     videoInfoMapRef.current = videoInfoMap;
@@ -144,22 +155,15 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     ? sortedAvailableSources
     : preferredOnlySources;
 
-  const recommendedSourceKey = useMemo(() => {
-    const candidates = displayAvailableSources.filter(
-      (candidate) =>
-        !(
-          candidate.source?.toString() === currentSource?.toString() &&
-          candidate.id?.toString() === currentId?.toString()
-        ) && !videoInfoMap.get(`${candidate.source}-${candidate.id}`)?.hasError
-    );
-    // 推薦優先挑 1080p+（測過的），否則退回列表第一個可用源
-    const hd = candidates.find((candidate) => {
-      const info = videoInfoMap.get(`${candidate.source}-${candidate.id}`);
-      return info && isPreferredDisplayQuality(info.quality);
-    });
-    const source = hd || candidates[0];
-    return source ? `${source.source}-${source.id}` : null;
-  }, [currentId, currentSource, displayAvailableSources, videoInfoMap]);
+  const recommendedSourceKey = useMemo(
+    () =>
+      pickRecommendedSourceKey(displayAvailableSources, {
+        currentSource,
+        currentId,
+        getInfo: (key) => videoInfoMap.get(key),
+      }),
+    [currentId, currentSource, displayAvailableSources, videoInfoMap]
+  );
 
   useEffect(() => {
     if (!hasUserSelectedTabRef.current && totalEpisodes > 1) {
@@ -202,30 +206,46 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const getVideoInfo = useCallback(async (source: SearchResult) => {
     const sourceKey = `${source.source}-${source.id}`;
 
-    if (attemptedSourcesRef.current.has(sourceKey)) {
+    if (
+      attemptedSourcesRef.current.has(sourceKey) ||
+      speedTestInFlightRef.current.has(sourceKey)
+    ) {
       return;
     }
-
-    const episodeUrl = pickSpeedTestEpisodeUrl(source.episodes);
-    if (!episodeUrl) {
-      setAttemptedSources((prev) => new Set(prev).add(sourceKey));
-      return;
-    }
-
-    setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+    speedTestInFlightRef.current.add(sourceKey);
 
     try {
-      const info = await getVideoResolutionFromM3u8(episodeUrl);
-      setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
-    } catch {
-      setVideoInfoMap((prev) =>
-        new Map(prev).set(sourceKey, {
-          quality: '錯誤',
-          loadSpeed: '未知',
-          pingTime: 0,
-          hasError: true,
-        })
-      );
+      let working = source;
+      let episodeUrl = pickSpeedTestEpisodeUrl(working.episodes);
+      if (
+        !episodeUrl &&
+        !pickFirstPlayableEpisodeUrl(working.episodes) &&
+        working.source &&
+        working.id
+      ) {
+        try {
+          working = await hydrateSearchResultEpisodes(working);
+          if (pickFirstPlayableEpisodeUrl(working.episodes)) {
+            onSourceHydratedRef.current?.(working);
+          }
+          episodeUrl = pickSpeedTestEpisodeUrl(working.episodes);
+        } catch {
+          episodeUrl = null;
+        }
+      }
+
+      if (episodeUrl) {
+        try {
+          const info = await getVideoResolutionFromM3u8(episodeUrl);
+          setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
+        } catch {
+          // 瀏覽器測速失敗（跨域／逾時）不代表片源不能播，不要標「無法連線」
+        }
+      }
+    } finally {
+      attemptedSourcesRef.current.add(sourceKey);
+      setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+      speedTestInFlightRef.current.delete(sourceKey);
     }
   }, []);
 
@@ -281,21 +301,19 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   useEffect(() => {
     const fetchVideoInfosInBatches = async () => {
-      if (
-        !optimizationEnabled ||
-        activeTab !== 'sources' ||
-        availableSources.length === 0
-      )
-        return;
+      if (!optimizationEnabled || availableSources.length === 0) return;
 
       const pendingSources = availableSources.filter((source) => {
         const sourceKey = `${source.source}-${source.id}`;
-        return !attemptedSourcesRef.current.has(sourceKey);
+        return (
+          !attemptedSourcesRef.current.has(sourceKey) &&
+          !speedTestInFlightRef.current.has(sourceKey)
+        );
       });
 
       if (pendingSources.length === 0) return;
 
-      const batchSize = Math.ceil(pendingSources.length / 2);
+      const batchSize = 2;
 
       for (let start = 0; start < pendingSources.length; start += batchSize) {
         const batch = pendingSources.slice(start, start + batchSize);
@@ -304,7 +322,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     };
 
     fetchVideoInfosInBatches();
-  }, [activeTab, availableSources, getVideoInfo, optimizationEnabled]);
+  }, [availableSources, getVideoInfo, optimizationEnabled]);
 
   const categoriesAsc = useMemo(() => {
     return Array.from({ length: pageCount }, (_, i) => {
@@ -759,13 +777,11 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                             無法連線
                           </span>
                         )}
-                        {!videoInfo &&
-                          !attemptedSources.has(sourceKey) &&
-                          pickSpeedTestEpisodeUrl(displaySource.episodes) && (
-                            <span className='text-[11px] text-zinc-500'>
-                              測速中…
-                            </span>
-                          )}
+                        {!videoInfo && !attemptedSources.has(sourceKey) && (
+                          <span className='text-[11px] text-zinc-500'>
+                            測速中…
+                          </span>
+                        )}
                         {videoInfo &&
                           !videoInfo.hasError &&
                           videoInfo.pingTime <= 1500 && (

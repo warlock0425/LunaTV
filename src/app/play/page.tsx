@@ -2251,6 +2251,16 @@ function PlayPageClient() {
                 sourceSearchError={sourceSearchError}
                 precomputedVideoInfo={precomputedVideoInfo}
                 preferSourcesTab={Boolean(playbackSoftError)}
+                onSourceHydrated={(hydrated) => {
+                  setAvailableSources((prev) =>
+                    prev.map((item) =>
+                      item.source === hydrated.source && item.id === hydrated.id
+                        ? hydrated
+                        : item
+                    )
+                  );
+                  setCachedDetail(hydrated.source, hydrated.id, hydrated);
+                }}
               />
               {/* 自動連播 + 快捷鍵幫助 */}
               <div className='flex items-center gap-3 px-3 py-2.5 mt-2 bg-black/40 dark:bg-white/5 rounded-lg border border-white/5'>

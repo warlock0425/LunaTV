@@ -153,6 +153,37 @@ export type SourceQualityInfo = {
 };
 
 /**
+ * 換源「推薦」只給測過且成功的源。沒測過的不能當推薦，
+ * 否則觀看紀錄那條有速度、旁邊空白源卻掛著推薦。
+ */
+export function pickRecommendedSourceKey<
+  T extends { source?: string | number; id?: string | number },
+>(
+  sources: T[],
+  options: {
+    currentSource?: string | number | null;
+    currentId?: string | number | null;
+    getInfo: (sourceKey: string) => SourceQualityInfo | undefined;
+  }
+): string | null {
+  const keyOf = (s: T) => `${s.source}-${s.id}`;
+  const isCurrent = (s: T) =>
+    s.source?.toString() === options.currentSource?.toString() &&
+    s.id?.toString() === options.currentId?.toString();
+
+  const tested = sources.filter((s) => {
+    if (isCurrent(s)) return false;
+    const info = options.getInfo(keyOf(s));
+    return !!info && !info.hasError;
+  });
+  const hd = tested.find((s) =>
+    isPreferredDisplayQuality(options.getInfo(keyOf(s))?.quality)
+  );
+  const source = hd || tested[0];
+  return source ? keyOf(source) : null;
+}
+
+/**
  * 換源列表畫質過濾：
  * - 若存在至少一個「測過且為 1080p+」的源 → 隱藏 720p／480p／SD 等
  * - 目前正在播的源永遠保留

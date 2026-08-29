@@ -13,6 +13,7 @@ import {
   isPreferredDisplayQuality,
   parseLoadSpeedKBps,
   pickFirstPlayableEpisodeUrl,
+  pickRecommendedSourceKey,
   pickSpeedTestEpisodeUrl,
   selectSourceAfterSpeedTests,
 } from './play-page-utils';
@@ -204,6 +205,34 @@ describe('畫質優先過濾（換源列表）', () => {
       'e-5',
       'f-6',
     ]);
+  });
+
+  it('推薦只給測過成功的源，空白源不能搶推薦', () => {
+    const sources = [
+      { source: 'ffzy', id: '88' },
+      { source: 'yz', id: '1' },
+      { source: 'lz', id: '2' },
+    ];
+    const info: Record<string, { quality: string; hasError?: boolean }> = {
+      'ffzy-88': { quality: '1080p' },
+    };
+    expect(
+      pickRecommendedSourceKey(sources, {
+        currentSource: 'ffzy',
+        currentId: '88',
+        getInfo: (k) => info[k],
+      })
+    ).toBeNull();
+
+    info['lz-2'] = { quality: '720p' };
+    info['yz-1'] = { quality: '1080p' };
+    expect(
+      pickRecommendedSourceKey(sources, {
+        currentSource: 'ffzy',
+        currentId: '88',
+        getInfo: (k) => info[k],
+      })
+    ).toBe('yz-1');
   });
 
   it('尚未測速時不過濾，繼續觀看的源與其他源都會留下', () => {

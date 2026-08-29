@@ -49,10 +49,6 @@ const SPEED_TEST_EPISODE_EXEMPTIONS: Record<string, SpeedTestEpisodeExemption> =
       reason:
         'pickSpeedTestEpisodeUrl 定義檔，內部必須出現 episodes[0]/[1] 實作規則',
     },
-    'components/EpisodeSelector.tsx': {
-      reason:
-        '已是 [1]??[0] 語意，本輪不動；待第三套測速快取合併時一併收編 pickSpeedTestEpisodeUrl',
-    },
     'lib/source-validation.ts': {
       reason:
         '片源驗證問「能不能播」不是量品質；[0] 最快且預告能播也算能播。' +
