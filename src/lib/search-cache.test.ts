@@ -32,6 +32,7 @@ describe('search cache', () => {
     expect(cached?.pageCount).toBe(3);
     expect(cached?.data[0]?.episodes).toEqual([]);
     expect(cached?.data[0]?.episodes_titles).toEqual([]);
+    expect(cached?.data[0]?.episode_count).toBe(1);
     expect(cached?.data[0]?.title).toBe('測試');
   });
 
@@ -48,6 +49,7 @@ describe('search cache', () => {
       title: '測試',
       episodes: [],
       episodes_titles: [],
+      episode_count: 1,
     });
   });
 });

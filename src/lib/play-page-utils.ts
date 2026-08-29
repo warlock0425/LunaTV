@@ -1,3 +1,5 @@
+import type { SearchResult } from '@/lib/types';
+
 export type VideoTestResult = {
   quality: string;
   loadSpeed: string;
@@ -65,6 +67,44 @@ export function pickSpeedTestEpisodeUrl(
   const preferred = episodes.length > 1 ? episodes[1] : episodes[0];
   const url = typeof preferred === 'string' ? preferred.trim() : '';
   return url || null;
+}
+
+export function getResultEpisodeCount(
+  item: Pick<SearchResult, 'episodes' | 'episode_count'>
+): number {
+  if (typeof item.episode_count === 'number' && item.episode_count > 0) {
+    return item.episode_count;
+  }
+  return item.episodes?.length || 0;
+}
+
+/** 搜尋結果常沒有播放網址；測速／換源前打詳情補上。 */
+export async function hydrateSearchResultEpisodes(
+  source: SearchResult,
+  signal?: AbortSignal
+): Promise<SearchResult> {
+  if (pickSpeedTestEpisodeUrl(source.episodes)) return source;
+  if (!source.source || !source.id) return source;
+
+  const params = new URLSearchParams({
+    source: String(source.source),
+    id: String(source.id),
+  });
+  const response = await fetch(`/api/detail?${params.toString()}`, {
+    cache: 'no-store',
+    signal,
+  });
+  if (!response.ok) return source;
+  const detail = (await response.json()) as SearchResult;
+  if (!detail?.episodes?.length) return source;
+
+  return {
+    ...source,
+    episodes: detail.episodes,
+    episodes_titles: detail.episodes_titles || [],
+    poster: source.poster || detail.poster,
+    episode_count: detail.episodes.length,
+  };
 }
 
 /** 1080p 及以上：換源列表優先顯示的畫質 */

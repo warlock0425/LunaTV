@@ -25,7 +25,9 @@ import {
   formatPlayerTime,
   getStableTitle,
   getVodHlsBufferConfig,
+  hydrateSearchResultEpisodes,
   isMobileUserAgent,
+  pickSpeedTestEpisodeUrl,
 } from '@/lib/play-page-utils';
 import {
   buildPlaybackSearchPlan,
@@ -1224,7 +1226,23 @@ function PlayPageClient() {
 
       if (!isLatestRequest()) return;
 
-      const newDetail = targetDetail;
+      let newDetail = targetDetail;
+      if (!pickSpeedTestEpisodeUrl(newDetail.episodes)) {
+        newDetail = await hydrateSearchResultEpisodes(newDetail);
+        if (!isLatestRequest()) return;
+        if (!pickSpeedTestEpisodeUrl(newDetail.episodes)) {
+          setIsVideoLoading(false);
+          toast('此來源沒有可播放的集數', 'error');
+          return;
+        }
+        setAvailableSources((prev) =>
+          prev.map((item) =>
+            item.source === newDetail.source && item.id === newDetail.id
+              ? newDetail
+              : item
+          )
+        );
+      }
 
       setCachedDetail(newSource, newId, newDetail);
 

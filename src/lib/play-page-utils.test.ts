@@ -4,8 +4,10 @@ import {
   filterTitleSafeCandidates,
   formatPlayerTime,
   getLiveHlsBufferConfig,
+  getResultEpisodeCount,
   getStableTitle,
   getVodHlsBufferConfig,
+  hydrateSearchResultEpisodes,
   isBelowPreferredDisplayQuality,
   isMobileUserAgent,
   isPreferredDisplayQuality,
@@ -30,6 +32,72 @@ describe('mobile HLS buffers', () => {
     );
     expect(getLiveHlsBufferConfig(true).maxBufferSize).toBeLessThan(
       getLiveHlsBufferConfig(false).maxBufferSize
+    );
+  });
+});
+
+describe('getResultEpisodeCount', () => {
+  it('prefers stored episode_count when play URLs were stripped', () => {
+    expect(
+      getResultEpisodeCount({
+        episodes: [],
+        episode_count: 24,
+      })
+    ).toBe(24);
+    expect(getResultEpisodeCount({ episodes: ['a', 'b'] })).toBe(2);
+    expect(getResultEpisodeCount({ episodes: [] })).toBe(0);
+  });
+});
+
+describe('hydrateSearchResultEpisodes', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('keeps sources that already have a playable URL', async () => {
+    const source = {
+      id: '1',
+      title: 'A',
+      poster: '',
+      episodes: ['https://cdn.example/1.m3u8', 'https://cdn.example/2.m3u8'],
+      episodes_titles: ['1', '2'],
+      source: 'src',
+      source_name: '源',
+      year: '2024',
+    };
+    await expect(hydrateSearchResultEpisodes(source)).resolves.toBe(source);
+  });
+
+  it('fills episodes from /api/detail when search returned none', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        episodes: [
+          'https://cdn.example/d1.m3u8',
+          'https://cdn.example/d2.m3u8',
+        ],
+        episodes_titles: ['1', '2'],
+        poster: 'https://cdn.example/p.jpg',
+      }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const source = {
+      id: '9',
+      title: 'A',
+      poster: '',
+      episodes: [],
+      episodes_titles: [],
+      source: 'src',
+      source_name: '源',
+      year: '2024',
+    };
+    const hydrated = await hydrateSearchResultEpisodes(source);
+    expect(hydrated.episodes).toHaveLength(2);
+    expect(hydrated.episode_count).toBe(2);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/detail?source=src&id=9',
+      expect.objectContaining({ cache: 'no-store' })
     );
   });
 });

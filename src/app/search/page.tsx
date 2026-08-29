@@ -14,6 +14,7 @@ import React, {
 
 import { cleanQueryForApi } from '@/lib/chinese';
 import { addSearchHistory } from '@/lib/db.client';
+import { getResultEpisodeCount } from '@/lib/play-page-utils';
 import { getTriedMainlandLabel } from '@/lib/search-tried-mainland';
 import { isFuzzyMatch } from '@/lib/searchEngine';
 import { readStreamingSearchPreference } from '@/lib/streaming-search-preference';
@@ -150,7 +151,7 @@ function SearchPageClient() {
     const episodes = (() => {
       const countMap = new Map<number, number>();
       group.forEach((g) => {
-        const len = g.episodes?.length || 0;
+        const len = getResultEpisodeCount(g);
         if (len > 0) countMap.set(len, (countMap.get(len) || 0) + 1);
       });
       let max = 0;
@@ -1035,7 +1036,7 @@ function SearchPageClient() {
                             id={item.id}
                             title={item.title}
                             poster={item.poster}
-                            episodes={item.episodes.length}
+                            episodes={getResultEpisodeCount(item) || undefined}
                             source={item.source}
                             source_name={item.source_name}
                             douban_id={item.douban_id}
@@ -1046,7 +1047,9 @@ function SearchPageClient() {
                             }
                             year={item.year}
                             from='search'
-                            type={item.episodes.length > 1 ? 'tv' : 'movie'}
+                            type={
+                              getResultEpisodeCount(item) > 1 ? 'tv' : 'movie'
+                            }
                             type_name={item.type_name}
                           />
                         </div>

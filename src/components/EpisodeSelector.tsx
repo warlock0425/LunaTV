@@ -11,7 +11,10 @@ import React, {
 
 import {
   filterSourcesPreferHighQuality,
+  getResultEpisodeCount,
+  hydrateSearchResultEpisodes,
   isPreferredDisplayQuality,
+  pickSpeedTestEpisodeUrl,
 } from '@/lib/play-page-utils';
 import { SearchResult } from '@/lib/types';
 import {
@@ -77,6 +80,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
   const videoInfoMapRef = useRef<Map<string, VideoInfo>>(new Map());
+  const [hydratedSources, setHydratedSources] = useState<
+    Map<string, SearchResult>
+  >(new Map());
 
   useEffect(() => {
     attemptedSourcesRef.current = attemptedSources;
@@ -204,15 +210,29 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       return;
     }
 
-    if (!source.episodes || source.episodes.length === 0) {
-      return;
-    }
-    const episodeUrl =
-      source.episodes.length > 1 ? source.episodes[1] : source.episodes[0];
-
     setAttemptedSources((prev) => new Set(prev).add(sourceKey));
 
     try {
+      const playable = await hydrateSearchResultEpisodes(source);
+      if (playable.episodes?.length) {
+        setHydratedSources((prev) => {
+          const next = new Map(prev);
+          next.set(sourceKey, playable);
+          return next;
+        });
+      }
+      const episodeUrl = pickSpeedTestEpisodeUrl(playable.episodes);
+      if (!episodeUrl) {
+        setVideoInfoMap((prev) =>
+          new Map(prev).set(sourceKey, {
+            quality: '錯誤',
+            loadSpeed: '未知',
+            pingTime: 0,
+            hasError: true,
+          })
+        );
+        return;
+      }
       const info = await getVideoResolutionFromM3u8(episodeUrl);
       setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
     } catch {
@@ -635,16 +655,18 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                 </div>
               )}
               {displayAvailableSources.map((source) => {
-                const isCurrentSource =
-                  source.source?.toString() === currentSource?.toString() &&
-                  source.id?.toString() === currentId?.toString();
                 const sourceKey = `${source.source}-${source.id}`;
+                const displaySource = hydratedSources.get(sourceKey) || source;
+                const isCurrentSource =
+                  displaySource.source?.toString() ===
+                    currentSource?.toString() &&
+                  displaySource.id?.toString() === currentId?.toString();
                 const videoInfo = videoInfoMap.get(sourceKey);
                 return (
                   <div
                     key={sourceKey}
                     onClick={() =>
-                      !isCurrentSource && handleSourceClick(source)
+                      !isCurrentSource && handleSourceClick(displaySource)
                     }
                     className={`group relative flex items-center gap-3 p-3 rounded-xl transition-all duration-300 cursor-pointer ${
                       isCurrentSource
@@ -656,17 +678,15 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                   >
                     {/* 封面（縮小：換源時重點是片源名與測速，不是再讀一遍片名） */}
                     <div className='w-12 h-[4.5rem] sm:w-14 sm:h-20 bg-zinc-800 rounded-lg overflow-hidden flex-shrink-0 ring-1 ring-white/5'>
-                      {source.episodes &&
-                      source.episodes.length > 0 &&
-                      !failedImages.has(sourceKey) ? (
+                      {displaySource.poster && !failedImages.has(sourceKey) ? (
                         <img
-                          src={processImageUrl(source.poster)}
+                          src={processImageUrl(displaySource.poster)}
                           alt=''
                           className='w-full h-full object-cover'
                           referrerPolicy='no-referrer'
                           onError={(e) => {
                             const img = e.currentTarget;
-                            if (!img.dataset.retried && source.poster) {
+                            if (!img.dataset.retried && displaySource.poster) {
                               // 直連失敗，改走伺服器代理
                               img.dataset.retried = 'true';
                               img.src = getProxiedImageUrl(source.poster);
@@ -713,9 +733,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                       </div>
 
                       <div className='flex items-center gap-2 mb-1.5 min-w-0'>
-                        {source.episodes.length > 1 && (
+                        {getResultEpisodeCount(displaySource) > 1 && (
                           <span className='text-[12px] text-zinc-400 font-medium shrink-0 tabular-nums'>
-                            {source.episodes.length} 集
+                            {getResultEpisodeCount(displaySource)} 集
                           </span>
                         )}
                         <span

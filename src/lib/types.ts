@@ -111,6 +111,8 @@ export interface SearchResult {
   poster: string;
   episodes: string[];
   episodes_titles: string[];
+  /** 搜尋快取不存播放網址時仍保留集數，給卡片／換源列表顯示。 */
+  episode_count?: number;
   source: string;
   source_name: string;
   class?: string;

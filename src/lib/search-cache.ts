@@ -50,10 +50,14 @@ function ttlFor(status: CachedPageStatus): number {
   return SEARCH_CACHE_TTL_MS;
 }
 
-/** 快取不存播放位址：搜尋列只要卡片，進播放再打 detail。 */
+/** 快取不存播放位址：搜尋列只要卡片，進播放再打 detail。集數要留下。 */
 export function stripCachedEpisodes(results: SearchResult[]): SearchResult[] {
   return results.map((item) => ({
     ...item,
+    episode_count:
+      typeof item.episode_count === 'number' && item.episode_count > 0
+        ? item.episode_count
+        : item.episodes?.length || 0,
     episodes: [],
     episodes_titles: [],
   }));

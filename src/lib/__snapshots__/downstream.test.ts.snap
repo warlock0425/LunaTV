@@ -8,6 +8,7 @@ exports[`上游解析 golden test 搜尋結果的完整解析輸出 1`] = `
 HTML
  標籤",
     "douban_id": 12345,
+    "episode_count": 3,
     "episodes": [
       "https://b.example.test/1.m3u8",
       "https://b.example.test/2.m3u8",
@@ -30,6 +31,7 @@ HTML
     "class": undefined,
     "desc": "",
     "douban_id": undefined,
+    "episode_count": 1,
     "episodes": [
       "https://a.example.test/x.m3u8",
     ],
@@ -48,6 +50,7 @@ HTML
     "class": undefined,
     "desc": "",
     "douban_id": undefined,
+    "episode_count": 1,
     "episodes": [
       "https://a.example.test/y.m3u8?sign=abc",
     ],
@@ -66,6 +69,7 @@ HTML
     "class": undefined,
     "desc": "",
     "douban_id": undefined,
+    "episode_count": 0,
     "episodes": [],
     "episodes_titles": [],
     "id": "4806",
@@ -80,6 +84,7 @@ HTML
     "class": undefined,
     "desc": "",
     "douban_id": undefined,
+    "episode_count": 0,
     "episodes": [],
     "episodes_titles": [],
     "id": "4807",
@@ -98,6 +103,7 @@ exports[`上游解析 golden test 詳情在無播放欄位時退回從簡介掃 
   "class": undefined,
   "desc": "看這裡 https://a.example.test/c1.m3u8 或 https://a.example.test/c2.m3u8",
   "douban_id": undefined,
+  "episode_count": 2,
   "episodes": [
     "https://a.example.test/c1.m3u8",
     "https://a.example.test/c2.m3u8",
@@ -118,6 +124,7 @@ exports[`上游解析 golden test 詳情的完整解析輸出 1`] = `
   "class": "劇情",
   "desc": "詳情簡介 & 實體編碼",
   "douban_id": 999,
+  "episode_count": 2,
   "episodes": [
     "https://a.example.test/d1.m3u8",
     "https://a.example.test/d2.m3u8?token=zz",
