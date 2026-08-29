@@ -12,7 +12,9 @@ import {
   deduplicateResults,
   getMatchQueries,
   getStrictCardMatchQueries,
+  isAnimeTypeText,
   isBangumiTranslationFallbackMatch,
+  isPlaybackSourceTypeMatch,
   isStrictCardTitleMatch,
   sortByTitleMatch,
 } from '@/lib/play-search';
@@ -27,13 +29,6 @@ export type PreferBestSourceResult = {
   /** 全部測完後標題安全組內仍無 1080p+，已退回現行評分 */
   noHighQualityNotice?: boolean;
 };
-
-/** 類型文字是否為動漫／番劇（避免單字「漫」誤判浪漫等） */
-function isAnimeTypeText(typeText: string): boolean {
-  return /動漫|动漫|動畫|动画|番劇|番剧|漫畫|漫画|新番|日番|OVA|OAD/i.test(
-    typeText
-  );
-}
 
 type UsePlaybackSourceSearchOptions = {
   initialVideoTitleRef: MutableRefObject<string>;
@@ -380,54 +375,7 @@ export function usePlaybackSourceSearch({
           }
         }
 
-        // 類型匹配
-        let typeMatch = true;
-        if (searchType) {
-          const typeName = (result.type_name || '').toLowerCase();
-          const className = (result.class || '').toLowerCase();
-          const typeText = `${typeName} ${className}`;
-          if (searchType === 'tv') {
-            const isMovieKeyword =
-              typeText.includes('電影') ||
-              typeText.includes('\u7535\u5f71') || // 电影
-              typeText.includes('影院') ||
-              typeText.includes('片庫') ||
-              typeText.includes('\u7247\u5e93'); // 片库
-            const isTvKeyword =
-              typeText.includes('劇') ||
-              typeText.includes('\u5267') || // 剧
-              typeText.includes('季') ||
-              typeText.includes('綜藝') ||
-              typeText.includes('\u7efc\u827a') || // 综艺
-              isAnimeTypeText(typeText) ||
-              typeText.includes('番');
-            typeMatch =
-              result.episodes.length > 1 || (isTvKeyword && !isMovieKeyword);
-          } else if (searchType === 'movie') {
-            const isMovieKeyword =
-              typeText.includes('電影') ||
-              typeText.includes('\u7535\u5f71') || // 电影
-              typeText.includes('劇場版') ||
-              typeText.includes('\u5267\u573a\u7248') || // 剧场版
-              typeText.includes('影院版');
-            const isTvKeyword =
-              typeText.includes('劇') ||
-              typeText.includes('\u5267') || // 剧
-              typeText.includes('季');
-            const isTheaterVersion =
-              typeText.includes('劇場') ||
-              typeText.includes('\u5267\u573a') || // 剧场
-              typeText.includes('影院');
-            const realIsTv = isTvKeyword && !isTheaterVersion;
-            if (isMovieKeyword && !realIsTv) {
-              typeMatch = true;
-            } else if (realIsTv) {
-              typeMatch = false;
-            } else {
-              typeMatch = result.episodes.length === 1;
-            }
-          }
-        }
+        const typeMatch = isPlaybackSourceTypeMatch(result, searchType);
 
         return titlesMatch && yearsMatch && typeMatch;
       });

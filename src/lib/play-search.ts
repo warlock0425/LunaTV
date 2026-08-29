@@ -2,6 +2,7 @@ import { normalizeAliasList } from '@/lib/bangumi-aliases';
 import { cleanQueryForApi, toSearchSimplified } from '@/lib/chinese';
 import { logger } from '@/lib/logger';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
+import { getResultEpisodeCount } from '@/lib/play-page-utils';
 import { convertT2S } from '@/lib/s2t';
 import { getBestTitleMatchScore, isFuzzyMatch } from '@/lib/searchEngine';
 import { SearchResult } from '@/lib/types';
@@ -76,6 +77,109 @@ export function deduplicateResults(list: SearchResult[]): SearchResult[] {
     seen.add(key);
     return true;
   });
+}
+
+function sourceIdentityKey(item: Pick<SearchResult, 'source' | 'id'>): string {
+  return `${item.source}_${item.id}`;
+}
+
+/**
+ * 背景搜尋結束時合併換源清單：正在播的源永遠放最前，
+ * 不得被搜尋截止或標題過濾整份蓋掉。
+ */
+export function mergePlayingSourceIntoAvailableSources(
+  searchResults: SearchResult[],
+  playing: SearchResult | null | undefined,
+  previous: SearchResult[] = []
+): SearchResult[] {
+  if (
+    !playing ||
+    !playing.source ||
+    playing.id === undefined ||
+    playing.id === null ||
+    playing.id === ''
+  ) {
+    return deduplicateResults([...searchResults, ...previous]);
+  }
+  const playingKey = sourceIdentityKey(playing);
+  const rest = deduplicateResults([...searchResults, ...previous]).filter(
+    (item) => sourceIdentityKey(item) !== playingKey
+  );
+  return [playing, ...rest];
+}
+
+/** 類型文字是否為動漫／番劇（避免單字「漫」誤判浪漫等） */
+export function isAnimeTypeText(typeText: string): boolean {
+  return /動漫|动漫|動畫|动画|番劇|番剧|漫畫|漫画|新番|日番|OVA|OAD/i.test(
+    typeText
+  );
+}
+
+function typeTextOf(result: Pick<SearchResult, 'type_name' | 'class'>): string {
+  return `${result.type_name || ''} ${result.class || ''}`.toLowerCase();
+}
+
+/**
+ * 播放頁換源搜尋的類型過濾。搜尋快取會清掉播放網址，
+ * 必須看 episode_count；沒有集數資訊時不要當電影丟掉。
+ */
+export function isPlaybackSourceTypeMatch(
+  result: Pick<
+    SearchResult,
+    'episodes' | 'episode_count' | 'type_name' | 'class'
+  >,
+  searchType: string
+): boolean {
+  if (!searchType) return true;
+
+  const episodeCount = getResultEpisodeCount(result);
+  const typeText = typeTextOf(result);
+
+  if (searchType === 'tv') {
+    const isMovieKeyword =
+      typeText.includes('電影') ||
+      typeText.includes('电影') ||
+      typeText.includes('影院') ||
+      typeText.includes('片庫') ||
+      typeText.includes('片库');
+    const isTvKeyword =
+      typeText.includes('劇') ||
+      typeText.includes('剧') ||
+      typeText.includes('季') ||
+      typeText.includes('綜藝') ||
+      typeText.includes('综艺') ||
+      isAnimeTypeText(typeText) ||
+      typeText.includes('番');
+    if (isMovieKeyword && !isTvKeyword) return false;
+    if (episodeCount > 1) return true;
+    if (isTvKeyword && !isMovieKeyword) return true;
+    if (episodeCount === 0) return true;
+    return false;
+  }
+
+  if (searchType === 'movie') {
+    const isMovieKeyword =
+      typeText.includes('電影') ||
+      typeText.includes('电影') ||
+      typeText.includes('劇場版') ||
+      typeText.includes('剧场版') ||
+      typeText.includes('影院版');
+    const isTvKeyword =
+      typeText.includes('劇') ||
+      typeText.includes('剧') ||
+      typeText.includes('季');
+    const isTheaterVersion =
+      typeText.includes('劇場') ||
+      typeText.includes('剧场') ||
+      typeText.includes('影院');
+    const realIsTv = isTvKeyword && !isTheaterVersion;
+    if (isMovieKeyword && !realIsTv) return true;
+    if (realIsTv) return false;
+    if (episodeCount === 0) return true;
+    return episodeCount === 1;
+  }
+
+  return true;
 }
 
 export function normalizeSearchTitleForSource(title: string): string {

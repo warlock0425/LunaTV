@@ -12,6 +12,7 @@ import {
   isMobileUserAgent,
   isPreferredDisplayQuality,
   parseLoadSpeedKBps,
+  pickFirstPlayableEpisodeUrl,
   pickSpeedTestEpisodeUrl,
   selectSourceAfterSpeedTests,
 } from './play-page-utils';
@@ -66,6 +67,23 @@ describe('hydrateSearchResultEpisodes', () => {
       year: '2024',
     };
     await expect(hydrateSearchResultEpisodes(source)).resolves.toBe(source);
+  });
+
+  it('does not refetch when only the first episode URL is playable', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const source = {
+      id: '1',
+      title: 'A',
+      poster: '',
+      episodes: ['https://cdn.example/1.m3u8', ''],
+      episodes_titles: ['1', '2'],
+      source: 'src',
+      source_name: '源',
+      year: '2024',
+    };
+    await expect(hydrateSearchResultEpisodes(source)).resolves.toBe(source);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('fills episodes from /api/detail when search returned none', async () => {
@@ -132,6 +150,23 @@ describe('pickSpeedTestEpisodeUrl（測速取集）', () => {
   });
 });
 
+describe('pickFirstPlayableEpisodeUrl（換源可播）', () => {
+  it('uses the first non-empty URL even if the speed-test slot is blank', () => {
+    expect(pickFirstPlayableEpisodeUrl(['http://a.m3u8', '  '])).toBe(
+      'http://a.m3u8'
+    );
+    expect(
+      pickFirstPlayableEpisodeUrl(['', 'http://b.m3u8', 'http://c.m3u8'])
+    ).toBe('http://b.m3u8');
+  });
+
+  it('returns null when no episode has a URL', () => {
+    expect(pickFirstPlayableEpisodeUrl([])).toBeNull();
+    expect(pickFirstPlayableEpisodeUrl(['', '  '])).toBeNull();
+    expect(pickFirstPlayableEpisodeUrl(undefined)).toBeNull();
+  });
+});
+
 describe('畫質優先過濾（換源列表）', () => {
   it('識別 1080p+ 與低畫質', () => {
     expect(isPreferredDisplayQuality('1080p')).toBe(true);
@@ -168,6 +203,24 @@ describe('畫質優先過濾（換源列表）', () => {
       'd-4',
       'e-5',
       'f-6',
+    ]);
+  });
+
+  it('尚未測速時不過濾，繼續觀看的源與其他源都會留下', () => {
+    const sources = [
+      { source: 'ffzy', id: '88' },
+      { source: 'lz', id: '1' },
+      { source: 'ikun', id: '2' },
+    ];
+    const result = filterSourcesPreferHighQuality(sources, {
+      currentSource: 'ffzy',
+      currentId: '88',
+      getInfo: () => undefined,
+    });
+    expect(result.map((s) => `${s.source}-${s.id}`)).toEqual([
+      'ffzy-88',
+      'lz-1',
+      'ikun-2',
     ]);
   });
 

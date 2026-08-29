@@ -27,15 +27,15 @@ import {
   getVodHlsBufferConfig,
   hydrateSearchResultEpisodes,
   isMobileUserAgent,
-  pickSpeedTestEpisodeUrl,
+  pickFirstPlayableEpisodeUrl,
 } from '@/lib/play-page-utils';
 import {
   buildPlaybackSearchPlan,
   deduplicateResults,
   fetchBangumiSearchAliases,
+  mergePlayingSourceIntoAvailableSources,
   PlaybackSearchPlanStage,
 } from '@/lib/play-search';
-import { isFuzzyMatch } from '@/lib/searchEngine';
 import { SearchResult, SkipConfig } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
 import { useAutoNextCountdown } from '@/hooks/useAutoNextCountdown';
@@ -721,13 +721,11 @@ function PlayPageClient() {
             );
             if (!active) return;
             if (currentDetailList.length > 0) {
-              const detail = currentDetailList[0];
-              if (
-                isFuzzyMatch(detail.title, initialVideoTitleRef.current) ||
-                (searchTitle ? isFuzzyMatch(detail.title, searchTitle) : false)
-              ) {
-                sourcesInfo = [...currentDetailList, ...sourcesInfo];
-              }
+              // 網址上的 source/id 來自觀看紀錄；片名季數對不上也要留在換源清單
+              sourcesInfo = mergePlayingSourceIntoAvailableSources(
+                sourcesInfo,
+                currentDetailList[0]
+              );
             }
           }
         }
@@ -984,35 +982,13 @@ function PlayPageClient() {
                 }
               }
 
-              if (
-                !bgSourcesInfo.some(
-                  (source) =>
-                    source.source === currentDetail.source &&
-                    source.id === currentDetail.id
+              setAvailableSources((prev) =>
+                mergePlayingSourceIntoAvailableSources(
+                  bgSourcesInfo,
+                  currentDetail,
+                  prev
                 )
-              ) {
-                if (
-                  isFuzzyMatch(
-                    currentDetail.title,
-                    initialVideoTitleRef.current
-                  ) ||
-                  (searchTitle
-                    ? isFuzzyMatch(currentDetail.title, searchTitle)
-                    : false)
-                ) {
-                  bgSourcesInfo = [currentDetail, ...bgSourcesInfo];
-                }
-              } else {
-                const idx = bgSourcesInfo.findIndex(
-                  (source) =>
-                    source.source === currentDetail.source &&
-                    source.id === currentDetail.id
-                );
-                if (idx !== -1) {
-                  bgSourcesInfo[idx] = currentDetail;
-                }
-              }
-              setAvailableSources(bgSourcesInfo);
+              );
             } catch (bgErr) {
               logger.error('背景搜尋其他播放源失敗:', bgErr);
             } finally {
@@ -1227,10 +1203,10 @@ function PlayPageClient() {
       if (!isLatestRequest()) return;
 
       let newDetail = targetDetail;
-      if (!pickSpeedTestEpisodeUrl(newDetail.episodes)) {
+      if (!pickFirstPlayableEpisodeUrl(newDetail.episodes)) {
         newDetail = await hydrateSearchResultEpisodes(newDetail);
         if (!isLatestRequest()) return;
-        if (!pickSpeedTestEpisodeUrl(newDetail.episodes)) {
+        if (!pickFirstPlayableEpisodeUrl(newDetail.episodes)) {
           setIsVideoLoading(false);
           toast('此來源沒有可播放的集數', 'error');
           return;

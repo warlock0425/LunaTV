@@ -69,6 +69,18 @@ export function pickSpeedTestEpisodeUrl(
   return url || null;
 }
 
+/** 換源／補詳情：有任一集播放網址即可，不套測速「避開 [0] 預告」規則。 */
+export function pickFirstPlayableEpisodeUrl(
+  episodes: string[] | undefined | null
+): string | null {
+  if (!episodes || episodes.length === 0) return null;
+  for (const episode of episodes) {
+    const url = typeof episode === 'string' ? episode.trim() : '';
+    if (url) return url;
+  }
+  return null;
+}
+
 export function getResultEpisodeCount(
   item: Pick<SearchResult, 'episodes' | 'episode_count'>
 ): number {
@@ -83,7 +95,7 @@ export async function hydrateSearchResultEpisodes(
   source: SearchResult,
   signal?: AbortSignal
 ): Promise<SearchResult> {
-  if (pickSpeedTestEpisodeUrl(source.episodes)) return source;
+  if (pickFirstPlayableEpisodeUrl(source.episodes)) return source;
   if (!source.source || !source.id) return source;
 
   const params = new URLSearchParams({

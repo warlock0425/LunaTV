@@ -123,6 +123,7 @@ const EXCLUDED_FILES = [
   'douban/recommends/route.ts',
   // CMS 類型文字為簡體，類型比對需要簡體字面量
   'usePlaybackSourceSearch.ts',
+  'play-search.ts',
   // 內容過濾關鍵字需比對 CMS 簡體分類名
   'yellow.ts',
   // 豆瓣 API 參數值（标签/类型/地区選項值）必須為簡體

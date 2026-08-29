@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import { extractBangumiAliases, normalizeAliasList } from './bangumi-aliases';
 import {
   deduplicatePlayRecordList,
@@ -14,8 +17,11 @@ import {
   getMatchQueries,
   getSourceSearchQueries,
   getStrictCardMatchQueries,
+  isAnimeTypeText,
   isBangumiTranslationFallbackMatch,
+  isPlaybackSourceTypeMatch,
   isStrictCardTitleMatch,
+  mergePlayingSourceIntoAvailableSources,
   normalizeSearchTitleForSource,
   sortByTitleMatch,
 } from './play-search';
@@ -90,6 +96,167 @@ describe('play-search helpers', () => {
       'A1',
       'A2',
     ]);
+  });
+
+  it('keeps the playing source first even if search omitted it', () => {
+    const playing = result({
+      source: 'ffzy',
+      id: '88',
+      title: '乡下大叔成为剑圣第二季',
+      source_name: '非凡资源',
+      episodes: ['https://cdn.example/1.m3u8'],
+    });
+    const others = [
+      result({ source: 'lz', id: '1', title: '乡下大叔成为剑圣第二季' }),
+    ];
+
+    expect(
+      mergePlayingSourceIntoAvailableSources(others, playing, []).map(
+        (item) => item.source_name || item.source
+      )
+    ).toEqual(['非凡资源', '片源']);
+  });
+
+  it('continue-watch 非凡 stays with the other sources after background search omits it', () => {
+    const playing = result({
+      source: 'ffzy',
+      id: '88',
+      source_name: '非凡资源',
+      episodes: ['https://cdn.example/ep5.m3u8'],
+    });
+    const previous = [
+      playing,
+      result({
+        source: 'lz',
+        id: '1',
+        source_name: '量子资源',
+        episodes: [],
+        episode_count: 8,
+      }),
+      result({
+        source: 'ikun',
+        id: '2',
+        source_name: 'iKun资源',
+        episodes: [],
+      }),
+    ];
+    const bgSearch = [
+      result({
+        source: 'lz',
+        id: '1',
+        source_name: '量子资源',
+        episodes: [],
+        episode_count: 8,
+      }),
+      result({
+        source: 'ikun',
+        id: '2',
+        source_name: 'iKun资源',
+        episodes: [],
+      }),
+      result({ source: 'js', id: '3', source_name: '极速资源', episodes: [] }),
+      result({ source: 'yz', id: '4', source_name: '优资资源', episodes: [] }),
+      result({ source: 'gs', id: '5', source_name: '光速资源', episodes: [] }),
+    ];
+
+    const merged = mergePlayingSourceIntoAvailableSources(
+      bgSearch,
+      playing,
+      previous
+    );
+    const names = merged.map((item) => item.source_name);
+
+    expect(names[0]).toBe('非凡资源');
+    expect(names).toEqual([
+      '非凡资源',
+      '量子资源',
+      'iKun资源',
+      '极速资源',
+      '优资资源',
+      '光速资源',
+    ]);
+  });
+
+  it('replaces the stripped search row with the playing detail that has URLs', () => {
+    const playing = result({
+      source: 'ffzy',
+      id: '88',
+      episodes: ['https://cdn.example/1.m3u8', 'https://cdn.example/2.m3u8'],
+    });
+    const stripped = result({
+      source: 'ffzy',
+      id: '88',
+      episodes: [],
+      episode_count: 8,
+    });
+
+    const merged = mergePlayingSourceIntoAvailableSources(
+      [stripped, result({ source: 'lz', id: '1' })],
+      playing,
+      [playing]
+    );
+    expect(merged[0]).toBe(playing);
+    expect(merged[0].episodes).toHaveLength(2);
+    expect(merged.filter((item) => item.source === 'ffzy')).toHaveLength(1);
+  });
+
+  it('does not wipe the current list when search returns nothing', () => {
+    const playing = result({ source: 'ffzy', id: '88' });
+    expect(
+      mergePlayingSourceIntoAvailableSources([], playing, [playing]).map(
+        (item) => `${item.source}-${item.id}`
+      )
+    ).toEqual(['ffzy-88']);
+  });
+
+  it('keeps search results when there is no playing source', () => {
+    const others = [result({ source: 'lz', id: '1' })];
+    expect(mergePlayingSourceIntoAvailableSources(others, null, [])).toEqual(
+      others
+    );
+  });
+
+  it('treats cached TV rows with episode_count as TV even without play URLs', () => {
+    expect(
+      isPlaybackSourceTypeMatch(
+        {
+          episodes: [],
+          episode_count: 8,
+          type_name: '',
+          class: '',
+        },
+        'tv'
+      )
+    ).toBe(true);
+  });
+
+  it('does not drop unknown-type rows after search cache stripped URLs', () => {
+    expect(
+      isPlaybackSourceTypeMatch(
+        { episodes: [], type_name: '', class: '' },
+        'tv'
+      )
+    ).toBe(true);
+    expect(
+      isPlaybackSourceTypeMatch(
+        { episodes: [], type_name: '', class: '' },
+        'movie'
+      )
+    ).toBe(true);
+  });
+
+  it('still rejects clear movies when searching TV', () => {
+    expect(
+      isPlaybackSourceTypeMatch(
+        { episodes: ['https://a'], type_name: '电影', class: '' },
+        'tv'
+      )
+    ).toBe(false);
+  });
+
+  it('recognizes anime type text without the single 漫 character', () => {
+    expect(isAnimeTypeText('国产动漫')).toBe(true);
+    expect(isAnimeTypeText('浪漫爱情')).toBe(false);
   });
 
   it('filters weak aliases and keeps insertion order', () => {
@@ -451,5 +618,20 @@ describe('play-search helpers', () => {
         records[0]
       )
     ).toEqual(['legacy-a', 'legacy-b']);
+  });
+});
+
+describe('playback page keeps the playing source after background search', () => {
+  it('merges search results instead of replacing the whole list', () => {
+    const page = fs.readFileSync(
+      path.join(process.cwd(), 'src/app/play/page.tsx'),
+      'utf8'
+    );
+    expect(page).toContain('mergePlayingSourceIntoAvailableSources');
+    expect(page).not.toMatch(/setAvailableSources\(\s*bgSourcesInfo\s*\)/);
+    expect(page).toContain('pickFirstPlayableEpisodeUrl');
+    expect(page).not.toMatch(
+      /isFuzzyMatch\(\s*detail\.title,\s*initialVideoTitleRef/
+    );
   });
 });
