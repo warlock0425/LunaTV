@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.12',
+    date: '2026-08-27',
+    content: `
+- 修正：看完一集再點下一集時，不會被剛寫入的舊集數觀看紀錄拉回去。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.11',
     date: '2026-08-27',
     content: `
