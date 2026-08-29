@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.15',
+    date: '2026-08-30',
+    content: `
+- 修正：從觀看紀錄接著看時，正在播的片源一定會留在換源清單（不會被背景搜尋整份蓋掉）。
+- 修正：換源改看有沒有可播放網址，不再誤用測速規則把能播的源當成不能點。
+- 修正：搜尋快取清掉播放網址後，換源比對改看集數欄位，不再把劇集當電影濾掉。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.14',
     date: '2026-08-30',
     content: `
