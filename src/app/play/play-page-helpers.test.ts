@@ -24,6 +24,7 @@ import {
   resolveEpisodeIndexAfterRefresh,
   resolvePlayResume,
   shouldApplyBackgroundDetail,
+  shouldApplyPlayResume,
   shouldSeekLateResume,
 } from './play-page-helpers';
 
@@ -388,6 +389,30 @@ describe('play page URL / remount helpers', () => {
         recordPlayTime: 1200,
       })
     ).toEqual({ episodeIndex: 4, resumeTime: 1200 });
+  });
+
+  it('does not let a later play-record save pull the user back to the previous episode', () => {
+    expect(
+      shouldApplyPlayResume({
+        alreadyApplied: true,
+        episodeChanged: true,
+        currentTime: 0,
+      })
+    ).toBe(false);
+    expect(
+      shouldApplyPlayResume({
+        alreadyApplied: true,
+        episodeChanged: false,
+        currentTime: 1400,
+      })
+    ).toBe(false);
+    expect(
+      shouldApplyPlayResume({
+        alreadyApplied: false,
+        episodeChanged: true,
+        currentTime: 0,
+      })
+    ).toBe(true);
   });
 
   it('honors an explicit non-default episode in the URL', () => {

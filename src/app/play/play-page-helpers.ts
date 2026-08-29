@@ -92,6 +92,20 @@ export function resolvePlayResume(options: {
   return { episodeIndex: urlEpisode - 1, resumeTime: 0 };
 }
 
+/**
+ * 第一次套用紀錄後，後續 playRecordsUpdated 不得再改集數。
+ * 切到第 5 集時會先把第 4 集進度存回去，若不擋就會被拉回第 4 集。
+ */
+export function shouldApplyPlayResume(options: {
+  alreadyApplied: boolean;
+  episodeChanged: boolean;
+  currentTime: number;
+}): boolean {
+  if (!options.alreadyApplied) return true;
+  if (options.episodeChanged) return false;
+  return options.currentTime < LATE_RESUME_PLAYED_THRESHOLD_SECONDS;
+}
+
 export function isResumeDurationReliable(
   duration: number,
   target: number

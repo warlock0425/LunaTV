@@ -71,6 +71,7 @@ import {
   resolvePlayResume,
   setCachedDetail,
   shouldApplyBackgroundDetail,
+  shouldApplyPlayResume,
   shouldSeekLateResume,
 } from './play-page-helpers';
 import { PlayErrorView, PlayLoadingView } from './play-views';
@@ -223,7 +224,15 @@ function PlayPageClient() {
   );
   const lastGoodResumeRef = useRef(0);
   const hasAppliedResumeRef = useRef(false);
+  const resumeTimeRef = useRef<number | null>(null);
   const [historyRestoreSettled, setHistoryRestoreSettled] = useState(false);
+
+  const lockResumeAndSetEpisode = (index: number) => {
+    resumeTimeRef.current = 0;
+    lastGoodResumeRef.current = 0;
+    hasAppliedResumeRef.current = true;
+    setCurrentEpisodeIndex(index);
+  };
 
   const currentSourceRef = useRef(currentSource);
   const currentIdRef = useRef(currentId);
@@ -254,7 +263,7 @@ function PlayPageClient() {
   } = useAutoNextCountdown({
     detailRef,
     currentEpisodeIndexRef,
-    setCurrentEpisodeIndex,
+    setCurrentEpisodeIndex: lockResumeAndSetEpisode,
   });
   const skipHistoryRestoreRef = useRef(false);
   const episodeRefreshInFlightRef = useRef(false);
@@ -299,7 +308,6 @@ function PlayPageClient() {
   // 觸發多餘重算；字串相同則播放器 effect 不會重建 HLS。
   const videoUrl = detail?.episodes?.[currentEpisodeIndex] || '';
   const totalEpisodes = detail?.episodes?.length || 0;
-  const resumeTimeRef = useRef<number | null>(null);
   const lastVolumeRef = useRef<number>(0.7);
   const lastPlaybackRateRef = useRef<number>(
     typeof window !== 'undefined'
@@ -1078,7 +1086,13 @@ function PlayPageClient() {
       const currentTime = player?.currentTime || 0;
       const episodeChanged = currentEpisodeIndexRef.current !== targetIndex;
 
-      if (hasAppliedResumeRef.current && !episodeChanged && currentTime >= 3) {
+      if (
+        !shouldApplyPlayResume({
+          alreadyApplied: hasAppliedResumeRef.current,
+          episodeChanged,
+          currentTime,
+        })
+      ) {
         return;
       }
       hasAppliedResumeRef.current = true;
@@ -1358,9 +1372,7 @@ function PlayPageClient() {
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
-      resumeTimeRef.current = 0;
-      lastGoodResumeRef.current = 0;
-      setCurrentEpisodeIndex(episodeNumber);
+      lockResumeAndSetEpisode(episodeNumber);
       const currentDetail = detailRef.current;
       replacePlaybackUrl({
         source: currentSourceRef.current,
@@ -1380,9 +1392,7 @@ function PlayPageClient() {
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
-      resumeTimeRef.current = 0;
-      lastGoodResumeRef.current = 0;
-      setCurrentEpisodeIndex(idx - 1);
+      lockResumeAndSetEpisode(idx - 1);
     }
   };
 
@@ -1397,9 +1407,7 @@ function PlayPageClient() {
       if (artPlayerRef.current) {
         saveCurrentPlayProgress();
       }
-      resumeTimeRef.current = 0;
-      lastGoodResumeRef.current = 0;
-      setCurrentEpisodeIndex(idx + 1);
+      lockResumeAndSetEpisode(idx + 1);
       return;
     }
 
