@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.16',
+    date: '2026-08-30',
+    content: `
+- 修正：換源列表其他片源不再因為搜尋快取沒有播放網址而一直空白。會在背景補詳情再測速，瀏覽器測不到也不標成無法連線。
+- 修正：推薦只給實際測過的源，不會把還沒測速的源標成推薦。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.15',
     date: '2026-08-30',
     content: `
