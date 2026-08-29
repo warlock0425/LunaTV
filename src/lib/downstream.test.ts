@@ -5,6 +5,7 @@ import {
   DownstreamTimeoutError,
   DownstreamUpstreamError,
   getDetailFromApi,
+  parseEpisodeCountFromRemarks,
   searchFromApi,
 } from './downstream';
 import { resetOutboundGateForTests } from './outbound-gate';
@@ -65,6 +66,17 @@ function getCalledKeywords(): string[] {
     return new URL(url).searchParams.get('wd') || '';
   });
 }
+
+describe('parseEpisodeCountFromRemarks', () => {
+  it('parses common CMS remark formats', () => {
+    expect(parseEpisodeCountFromRemarks('更新至24集')).toBe(24);
+    expect(parseEpisodeCountFromRemarks('更新至第12集')).toBe(12);
+    expect(parseEpisodeCountFromRemarks('全36集')).toBe(36);
+    expect(parseEpisodeCountFromRemarks('第8集')).toBe(8);
+    expect(parseEpisodeCountFromRemarks('HD')).toBe(0);
+    expect(parseEpisodeCountFromRemarks('')).toBe(0);
+  });
+});
 
 describe('downstream query normalization', () => {
   const site = {
@@ -247,7 +259,25 @@ describe('downstream query normalization', () => {
       id: 'bare',
       title: '只有標題',
       episodes: [],
+      episode_count: 0,
     });
+  });
+
+  it('reads episode_count from vod_remarks when search JSON has no play URL', async () => {
+    mockSearchResponse([
+      {
+        vod_id: 'remark-24',
+        vod_name: '備註集數劇',
+        vod_remarks: '更新至24集',
+      },
+    ]);
+
+    const results = await searchFromApi(site, 'remarks-episode-probe', [
+      'remarks-episode-probe',
+    ]);
+
+    expect(results[0]?.episode_count).toBe(24);
+    expect(results[0]?.episodes).toEqual([]);
   });
 
   it('skips malformed rows instead of discarding the whole source', async () => {

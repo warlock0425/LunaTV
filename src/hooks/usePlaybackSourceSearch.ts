@@ -3,7 +3,6 @@ import { MutableRefObject, useCallback, useRef, useState } from 'react';
 import { logger } from '@/lib/logger';
 import {
   filterTitleSafeCandidates,
-  hydrateSearchResultEpisodes,
   isPreferredDisplayQuality,
   pickSpeedTestEpisodeUrl,
   selectSourceAfterSpeedTests,
@@ -66,16 +65,6 @@ export function usePlaybackSourceSearch({
     Map<string, { expiresAt: number; result: VideoTestResult }>
   >(new Map());
   const speedTestAbortControllerRef = useRef<AbortController | null>(null);
-
-  const mergeHydratedSource = (playable: SearchResult) => {
-    setAvailableSources((prev) =>
-      prev.map((item) =>
-        item.source === playable.source && item.id === playable.id
-          ? playable
-          : item
-      )
-    );
-  };
 
   const abortActiveSpeedTests = useCallback(() => {
     if (speedTestAbortControllerRef.current) {
@@ -190,14 +179,7 @@ export function usePlaybackSourceSearch({
       try {
         if (signal.aborted) return null;
 
-        const playable = await hydrateSearchResultEpisodes(item.source, signal);
-        if (
-          playable.episodes?.length &&
-          playable.episodes !== item.source.episodes
-        ) {
-          mergeHydratedSource(playable);
-        }
-        const episodeUrl = pickSpeedTestEpisodeUrl(playable.episodes);
+        const episodeUrl = pickSpeedTestEpisodeUrl(item.source.episodes);
         if (!episodeUrl) {
           logger.warn(`播放源 ${item.source.source_name} 沒有可用的播放地址`);
           return null;
@@ -206,7 +188,7 @@ export function usePlaybackSourceSearch({
         testedKeys.add(sourceKey);
         mergeInfo(sourceKey, testResult);
         return {
-          source: playable,
+          source: item.source,
           testResult,
           titleScore: item.titleScore,
         };
@@ -303,11 +285,7 @@ export function usePlaybackSourceSearch({
 
     try {
       // 與首播測速同一規則：episodes[1] ?? [0]，見 pickSpeedTestEpisodeUrl
-      const playable = await hydrateSearchResultEpisodes(res, signal);
-      if (playable.episodes?.length && playable.episodes !== res.episodes) {
-        mergeHydratedSource(playable);
-      }
-      const episodeUrl = pickSpeedTestEpisodeUrl(playable.episodes);
+      const episodeUrl = pickSpeedTestEpisodeUrl(res.episodes);
       if (!episodeUrl) {
         speedTestedKeys.current.delete(key);
         return;

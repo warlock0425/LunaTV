@@ -1006,7 +1006,7 @@ function SearchPageClient() {
                               title={title}
                               poster={poster}
                               year={year}
-                              episodes={episodes}
+                              episodes={episodes || undefined}
                               source_names={source_names}
                               douban_id={douban_id}
                               query={

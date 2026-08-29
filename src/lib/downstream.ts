@@ -100,6 +100,26 @@ function isM3u8Link(url: string): boolean {
  * 解析 vod_play_url（格式為 `播放組$$$播放組`，每組為 `標題$網址#標題$網址`）。
  * 取集數最多的那一組。欄位缺失或型別不符時回傳空結果，不拋錯。
  */
+/** CMS 搜尋列常沒有 vod_play_url，但 remarks 會寫「更新至24集」。 */
+export function parseEpisodeCountFromRemarks(remarks: unknown): number {
+  if (typeof remarks !== 'string') return 0;
+  const text = remarks.trim();
+  if (!text) return 0;
+  const patterns = [
+    /(?:更新至|更至|\u8fde\u8f7d\u81f3|連載至)\s*第?\s*(\d+)/i,
+    /全\s*(\d+)\s*集/,
+    /(\d+)\s*集(?:全|完)?/,
+    /第\s*(\d+)\s*集/,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const count = Number(match[1]);
+    if (Number.isFinite(count) && count > 0 && count < 10000) return count;
+  }
+  return 0;
+}
+
 function parseVodPlayUrl(vodPlayUrl: unknown): {
   episodes: string[];
   titles: string[];
@@ -211,6 +231,10 @@ async function searchWithCache(
           return [];
 
         const { episodes, titles } = parseVodPlayUrl(item.vod_play_url);
+        const episodeCount = Math.max(
+          episodes.length,
+          parseEpisodeCountFromRemarks(item.vod_remarks)
+        );
 
         return [
           {
@@ -219,7 +243,7 @@ async function searchWithCache(
             poster: item.vod_pic,
             episodes,
             episodes_titles: titles,
-            episode_count: episodes.length,
+            episode_count: episodeCount,
             source: apiSite.key,
             source_name: apiSite.name,
             class: item.vod_class,

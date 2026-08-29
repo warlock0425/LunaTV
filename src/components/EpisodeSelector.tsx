@@ -12,7 +12,6 @@ import React, {
 import {
   filterSourcesPreferHighQuality,
   getResultEpisodeCount,
-  hydrateSearchResultEpisodes,
   isPreferredDisplayQuality,
   pickSpeedTestEpisodeUrl,
 } from '@/lib/play-page-utils';
@@ -80,9 +79,6 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
   const videoInfoMapRef = useRef<Map<string, VideoInfo>>(new Map());
-  const [hydratedSources, setHydratedSources] = useState<
-    Map<string, SearchResult>
-  >(new Map());
 
   useEffect(() => {
     attemptedSourcesRef.current = attemptedSources;
@@ -210,29 +206,15 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       return;
     }
 
+    const episodeUrl = pickSpeedTestEpisodeUrl(source.episodes);
+    if (!episodeUrl) {
+      setAttemptedSources((prev) => new Set(prev).add(sourceKey));
+      return;
+    }
+
     setAttemptedSources((prev) => new Set(prev).add(sourceKey));
 
     try {
-      const playable = await hydrateSearchResultEpisodes(source);
-      if (playable.episodes?.length) {
-        setHydratedSources((prev) => {
-          const next = new Map(prev);
-          next.set(sourceKey, playable);
-          return next;
-        });
-      }
-      const episodeUrl = pickSpeedTestEpisodeUrl(playable.episodes);
-      if (!episodeUrl) {
-        setVideoInfoMap((prev) =>
-          new Map(prev).set(sourceKey, {
-            quality: '錯誤',
-            loadSpeed: '未知',
-            pingTime: 0,
-            hasError: true,
-          })
-        );
-        return;
-      }
       const info = await getVideoResolutionFromM3u8(episodeUrl);
       setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
     } catch {
@@ -656,7 +638,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               )}
               {displayAvailableSources.map((source) => {
                 const sourceKey = `${source.source}-${source.id}`;
-                const displaySource = hydratedSources.get(sourceKey) || source;
+                const displaySource = source;
                 const isCurrentSource =
                   displaySource.source?.toString() ===
                     currentSource?.toString() &&
@@ -777,11 +759,13 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                             無法連線
                           </span>
                         )}
-                        {!videoInfo && (
-                          <span className='text-[11px] text-zinc-500'>
-                            測速中…
-                          </span>
-                        )}
+                        {!videoInfo &&
+                          !attemptedSources.has(sourceKey) &&
+                          pickSpeedTestEpisodeUrl(displaySource.episodes) && (
+                            <span className='text-[11px] text-zinc-500'>
+                              測速中…
+                            </span>
+                          )}
                         {videoInfo &&
                           !videoInfo.hasError &&
                           videoInfo.pingTime <= 1500 && (
