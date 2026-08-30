@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { needsEpisodeHydration } from '@/lib/play-page-utils';
 import { SearchResult } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -242,6 +243,11 @@ export function getCachedDetail(
       }
       return null;
     }
+    if (resolved && typeof resolved === 'object' && 'detail' in resolved) {
+      if (needsEpisodeHydration(resolved.detail)) {
+        return null;
+      }
+    }
     return resolved;
   } catch (e) {
     logger.error('Failed to get cached detail:', e);
@@ -264,6 +270,8 @@ export function setCachedDetail(
   detail: SearchResult
 ): void {
   if (typeof window === 'undefined' || !source || !id || !detail) return;
+  // 快取只存完整的詳情，若是探針網址（未水合）則不寫入 localStorage
+  if (needsEpisodeHydration(detail)) return;
   try {
     const raw = localStorage.getItem(DETAIL_CACHE_KEY);
     let cache: DetailCacheStore = raw ? JSON.parse(raw) : {};
@@ -535,11 +543,19 @@ export function formatEpisodeUpdateMessage(
  * 規則與 page.tsx 原判斷一致：兩邊都有 URL 且不相等 → 不套用。
  */
 export function shouldApplyBackgroundDetail(
-  prevDetail: Pick<SearchResult, 'episodes'> | null | undefined,
-  nextDetail: Pick<SearchResult, 'episodes'> | null | undefined,
+  prevDetail:
+    | Pick<SearchResult, 'episodes' | 'episode_count' | 'source' | 'id'>
+    | null
+    | undefined,
+  nextDetail:
+    | Pick<SearchResult, 'episodes' | 'episode_count' | 'source' | 'id'>
+    | null
+    | undefined,
   episodeIndex: number
 ): boolean {
   if (!nextDetail?.episodes?.length) return false;
+  // 若 prev 只是單集探針（未完整水合），而 next 是完整集數清單，必須套用
+  if (prevDetail && needsEpisodeHydration(prevDetail)) return true;
   const prevUrl = prevDetail?.episodes?.[episodeIndex] || '';
   const nextUrl = nextDetail.episodes[episodeIndex] || '';
   if (prevUrl && nextUrl && prevUrl !== nextUrl) return false;
@@ -558,9 +574,9 @@ export function mergeDetailPreservingPlayback(
   currentEpisodeIndex: number
 ): MergeFreshDetailResult {
   const previousEpisodeCount = getEpisodeCount(prev);
-  if (!prev?.episodes?.length) {
+  if (!prev?.episodes?.length || needsEpisodeHydration(prev)) {
     return mergeFreshDetail(prev, fresh, currentEpisodeIndex, {
-      preserveCurrentEpisodeUrl: true,
+      preserveCurrentEpisodeUrl: false,
     });
   }
   if (!fresh?.episodes?.length) {

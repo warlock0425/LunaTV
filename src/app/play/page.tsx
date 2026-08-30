@@ -589,7 +589,7 @@ function PlayPageClient() {
             `Direct load path for source: ${currentSource}, id: ${currentId}`
           );
           const cachedLookup = getCachedDetail(currentSource, currentId);
-          if (cachedLookup) {
+          if (cachedLookup && !needsEpisodeHydration(cachedLookup.detail)) {
             // soft 過期也算命中：先 stale 起播，背景 refreshDetailInBackground
             // 會走 mergeDetailPreservingPlayback（不得直接 setDetail 換 URL）
             logger.debug(
@@ -1358,8 +1358,19 @@ function PlayPageClient() {
   // 集數切換
   // ---------------------------------------------------------------------------
   // 處理集數切換
-  const handleEpisodeChange = (episodeNumber: number) => {
-    if (episodeNumber >= 0 && episodeNumber < totalEpisodes) {
+  const handleEpisodeChange = async (episodeNumber: number) => {
+    let currentDetail = detailRef.current;
+    if (currentDetail && needsEpisodeHydration(currentDetail)) {
+      currentDetail = await hydrateSearchResultEpisodes(currentDetail);
+      if (currentDetail.episodes?.length) {
+        setDetail(currentDetail);
+      }
+    }
+    const currentTotal = currentDetail?.episodes?.length || totalEpisodes;
+    if (
+      episodeNumber >= 0 &&
+      (episodeNumber < currentTotal || currentTotal === 0)
+    ) {
       // 手動切集要先取消倒數，否則倒數結束會把使用者拉回自動連播的目標集
       cancelAutoNextCountdown();
       // 在更換集數前儲存當前播放進度
@@ -1367,7 +1378,6 @@ function PlayPageClient() {
         saveCurrentPlayProgress();
       }
       lockResumeAndSetEpisode(episodeNumber);
-      const currentDetail = detailRef.current;
       replacePlaybackUrl({
         source: currentSourceRef.current,
         id: currentIdRef.current,

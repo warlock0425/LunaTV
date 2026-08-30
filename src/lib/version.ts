@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.2',
+    date: '2026-08-30',
+    content: `
+- 修正：EpisodeSelector 改依據 availableSources 當前源的真實集數計算 effectiveTotalEpisodes，徹底避免因探針快取或水合延遲而隱藏「選集」分頁。
+- 修正：localStorage 詳情快取不再寫入未水合的探針資料；背景水合時允許替換單集探針以載入完整集數。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.1',
     date: '2026-08-30',
     content: `

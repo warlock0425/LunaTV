@@ -70,7 +70,23 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   onSourceHydrated,
 }) => {
   const router = useRouter();
-  const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
+  const currentSourceInfo = useMemo(() => {
+    return availableSources.find(
+      (source) =>
+        source.source?.toString() === currentSource?.toString() &&
+        source.id?.toString() === currentId?.toString()
+    );
+  }, [availableSources, currentSource, currentId]);
+
+  const effectiveTotalEpisodes = Math.max(
+    totalEpisodes,
+    currentSourceInfo?.episode_count || 0,
+    currentSourceInfo?.episodes?.length || 0
+  );
+  const pageCount = Math.max(
+    1,
+    Math.ceil(effectiveTotalEpisodes / episodesPerPage)
+  );
 
   const [videoInfoMap, setVideoInfoMap] = useState<Map<string, VideoInfo>>(
     new Map()
@@ -106,7 +122,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   }, [videoInfoMap]);
 
   const [activeTab, setActiveTab] = useState<'episodes' | 'sources'>(
-    totalEpisodes > 1 ? 'episodes' : 'sources'
+    effectiveTotalEpisodes > 1 ? 'episodes' : 'sources'
   );
   const hasUserSelectedTabRef = useRef(false);
 
@@ -172,10 +188,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   );
 
   useEffect(() => {
-    if (!hasUserSelectedTabRef.current && totalEpisodes > 1) {
+    if (!hasUserSelectedTabRef.current && effectiveTotalEpisodes > 1) {
       setActiveTab('episodes');
     }
-  }, [totalEpisodes]);
+  }, [effectiveTotalEpisodes]);
 
   // 播放失敗引導換源：render 期同步 tab，避免 effect 內 setState  cascading
   const [prevPreferSourcesTab, setPrevPreferSourcesTab] =
@@ -341,10 +357,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const categoriesAsc = useMemo(() => {
     return Array.from({ length: pageCount }, (_, i) => {
       const start = i * episodesPerPage + 1;
-      const end = Math.min(start + episodesPerPage - 1, totalEpisodes);
+      const end = Math.min(start + episodesPerPage - 1, effectiveTotalEpisodes);
       return { start, end };
     });
-  }, [pageCount, episodesPerPage, totalEpisodes]);
+  }, [pageCount, episodesPerPage, effectiveTotalEpisodes]);
 
   const categories = useMemo(() => {
     if (descending) {
@@ -454,14 +470,14 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const currentStart = currentPage * episodesPerPage + 1;
   const currentEnd = Math.min(
     currentStart + episodesPerPage - 1,
-    totalEpisodes
+    effectiveTotalEpisodes
   );
 
   return (
     <div className='h-full flex flex-col glass-panel rounded-2xl overflow-hidden shadow-2xl'>
       {/* Tab 切換 */}
       <div className='flex flex-shrink-0 bg-black/40'>
-        {totalEpisodes > 1 && (
+        {effectiveTotalEpisodes > 1 && (
           <button
             onClick={handleEpisodeTabClick}
             className={`relative flex-1 py-4 px-6 text-sm font-bold tracking-wider transition-all duration-300 ${
