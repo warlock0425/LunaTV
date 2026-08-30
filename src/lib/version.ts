@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.0',
+    date: '2026-08-30',
+    content: `
+- 改善：搜尋快取改留 1 個測速探針網址（第 2 集，沒有再退第一個可播），換源多數情況不必先打詳情。完整集數仍在點進去時補齊，避免只拿探針就播錯集。
+- 改善：測速先解析播放清單；瀏覽器跨域失敗時改走與播放器相同的 hls.js 探針，能播的源盡量能量到。
+- 修正：換源測正在看的那一集；推薦只掛 1080p 以上；背景一次測 4 個，沒測完顯示測速中。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.17',
     date: '2026-08-30',
     content: `
