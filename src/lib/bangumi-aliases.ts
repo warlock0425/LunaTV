@@ -1,3 +1,4 @@
+import { isCjkSearchQuery } from '@/lib/chinese';
 import { logger } from '@/lib/logger';
 import { readResponseJsonWithLimit } from '@/lib/response-limit';
 import { CURRENT_VERSION } from '@/lib/version';
@@ -60,26 +61,11 @@ export function normalizeAliasList(
   );
 
   const result: string[] = [];
-  let hasEnglishBackup = false;
 
   for (const val of rawList) {
-    // 1. 過濾包含日文假名（平假名/片假名）的別名，避免中文採集站誤配
-    if (/[\u3040-\u30ff]/.test(val)) {
-      continue;
-    }
-
-    // 2. 若為純英文別名（可能為備援）
-    const isPureEnglish = /^[a-zA-Z0-9\s\-:’'’]+$/.test(val);
-    if (isPureEnglish) {
-      // 只保留第一個英文別名作為備援，避免別名過雜
-      if (!hasEnglishBackup) {
-        result.push(val);
-        hasEnglishBackup = true;
-      }
-    } else {
-      // 3. 中文名稱或中文別名（含漢字）予以保留
-      result.push(val);
-    }
+    // 只留中文別名。英文／日文原文對陸源搜尋用不上。
+    if (!isCjkSearchQuery(val)) continue;
+    result.push(val);
   }
 
   return result;

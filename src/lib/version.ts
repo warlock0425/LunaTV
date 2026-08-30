@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.7',
+    date: '2026-08-30',
+    content: `
+- 修正：搜尋不再附加英文原文、日文原文變體，只走繁體轉簡體與中文陸名（例如海賊王→海贼王／航海王）。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.6',
     date: '2026-08-30',
     content: `

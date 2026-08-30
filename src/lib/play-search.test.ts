@@ -271,6 +271,17 @@ describe('play-search helpers', () => {
     ).toEqual(['尖帽子的魔法工房', '尖帽子的魔法工坊']);
   });
 
+  it('drops English and Japanese original aliases', () => {
+    expect(
+      normalizeAliasList([
+        '尖帽子的魔法工房',
+        'Witch Hat Atelier',
+        'とんがり帽子のアトリエ',
+        '尖帽子的魔法工坊',
+      ])
+    ).toEqual(['尖帽子的魔法工房', '尖帽子的魔法工坊']);
+  });
+
   it('sorts better title matches first', () => {
     const sorted = sortByTitleMatch(
       [
@@ -306,7 +317,7 @@ describe('play-search helpers', () => {
           { key: '官方網站', value: 'https://example.com' },
         ],
       })
-    ).toEqual(['尖帽子的魔法工房', 'Witch Hat Atelier', '尖帽子的魔法工坊']);
+    ).toEqual(['尖帽子的魔法工房', '尖帽子的魔法工坊']);
   });
 
   it('keeps play records from different direct source identities separate', () => {
@@ -451,10 +462,10 @@ describe('play-search helpers', () => {
     });
 
     // includeFastStage:false 仍保留 mainland（與站內搜尋共用陸名計畫），再跑 Bangumi 階段
+    // 英文原文 searchTitle 不再單獨成階段
     expect(withAliases.map((stage) => stage.reason)).toEqual([
       'mainland',
       'bangumi-alias',
-      'search-title',
       'full',
       'translation-core',
     ]);
@@ -555,9 +566,7 @@ describe('play-search helpers', () => {
   });
 
   it('keeps popular anime aliases data-driven through Bangumi aliases', () => {
-    expect(getFastSourceSearchQueries('SAKAMOTO DAYS')).toContain(
-      'SAKAMOTODAYS'
-    );
+    expect(getFastSourceSearchQueries('SAKAMOTO DAYS')).toEqual([]);
 
     const plan = buildPlaybackSearchPlan({
       title: 'SAKAMOTO DAYS',

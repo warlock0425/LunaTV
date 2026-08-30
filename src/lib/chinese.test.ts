@@ -2,6 +2,7 @@ import {
   cleanQueryForApi,
   generateNumberVariant,
   generateSearchVariants,
+  isCjkSearchQuery,
   shouldPreserveSourceDisplayName,
   toDisplayLanguage,
   toSearchSimplified,
@@ -53,6 +54,33 @@ describe('generateSearchVariants golden test', () => {
     for (const [, query] of CASES) {
       expect(generateSearchVariants(query)[0]).toBe(query.trim());
     }
+  });
+
+  it('不把英文／日文原文加進搜尋變體，只留繁轉簡與中文陸名', () => {
+    expect(generateSearchVariants('海賊王')).toContain('航海王');
+    expect(generateSearchVariants('海賊王')).toContain('海贼王');
+    expect(generateSearchVariants('海賊王')).not.toContain('One Piece');
+    expect(generateSearchVariants('進擊的巨人')).toContain('进击的巨人');
+    expect(generateSearchVariants('進擊的巨人')).not.toContain(
+      'Attack on Titan'
+    );
+    expect(generateSearchVariants('ほっかいどうぶつ')).toContain('北海道动物');
+    expect(generateSearchVariants('ほっかいどうぶつ')).not.toContain(
+      'Hokkaido Animals'
+    );
+    expect(generateSearchVariants('ほっかいどうぶつ')).not.toContain(
+      'ほっかいどうぶつ学園'
+    );
+  });
+});
+
+describe('isCjkSearchQuery', () => {
+  it('accepts Chinese and rejects English or kana originals', () => {
+    expect(isCjkSearchQuery('海賊王')).toBe(true);
+    expect(isCjkSearchQuery('海贼王')).toBe(true);
+    expect(isCjkSearchQuery('One Piece')).toBe(false);
+    expect(isCjkSearchQuery('進撃の巨人')).toBe(false);
+    expect(isCjkSearchQuery('Attack on Titan')).toBe(false);
   });
 });
 

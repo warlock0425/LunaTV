@@ -36,7 +36,6 @@ const MAINLAND_CHAR_FIXES: Record<string, string> = {
   '\u50de': '\u4f2a',
   '\u507d': '\u4f2a',
 };
-const ENGLISH_ONLY_PATTERN = /^[a-zA-Z0-9\s\-:’'’!.]+$/;
 const TRANSLATION_FALLBACK_MAX_QUERIES = 4;
 const TRANSLATION_SEASON_MARKER_PATTERN =
   /第[一二三四五六七八九十\d]+[季期部]|\b(?:season|part|s)\s*\d+\b/gi;
@@ -300,16 +299,15 @@ function getMainlandCoreTitleQueries(title?: string): string[] {
 function isUsefulAliasForMatch(alias: string): boolean {
   const normalized = normalizeSearchTitleForSource(alias);
   if (!normalized) return false;
-  if (KANA_PATTERN.test(alias)) return false;
-  if (CJK_PATTERN.test(normalized)) return normalized.length >= 4;
-  return ENGLISH_ONLY_PATTERN.test(alias) && normalized.length >= 6;
+  if (KANA_PATTERN.test(alias) || KANA_PATTERN.test(normalized)) return false;
+  return CJK_PATTERN.test(normalized) && normalized.length >= 4;
 }
 
 function isUsefulQuery(query: string): boolean {
   const normalized = normalizeSearchTitleForSource(query);
   if (!normalized) return false;
-  if (CJK_PATTERN.test(normalized)) return normalized.length >= 3;
-  return normalized.length >= 4;
+  if (KANA_PATTERN.test(query) || KANA_PATTERN.test(normalized)) return false;
+  return CJK_PATTERN.test(normalized) && normalized.length >= 3;
 }
 
 /**
@@ -320,8 +318,8 @@ function isUsefulQuery(query: string): boolean {
 function isUsefulSharedMainlandQuery(query: string): boolean {
   const normalized = normalizeSearchTitleForSource(query);
   if (!normalized) return false;
-  if (CJK_PATTERN.test(normalized)) return normalized.length >= 2;
-  return normalized.length >= 4;
+  if (KANA_PATTERN.test(query) || KANA_PATTERN.test(normalized)) return false;
+  return CJK_PATTERN.test(normalized) && normalized.length >= 2;
 }
 
 function buildSearchQueryList(

@@ -259,6 +259,16 @@ function romanizeKana(text: string): string | null {
 
 const SEARCH_SEPARATOR_PATTERN =
   /[\s~～\-－—–・·,，.。:：!！?？《》「」『』【】（）()_、/\\|]+/g;
+const SEARCH_CJK_PATTERN = /[\u3400-\u9fff]/;
+const SEARCH_KANA_PATTERN = /[\u3040-\u30ff]/;
+
+/** 陸源搜尋只走中文（含繁轉簡）。英文／日文原文不當額外查詢。 */
+export function isCjkSearchQuery(text: string): boolean {
+  const value = text.trim();
+  if (!value) return false;
+  if (SEARCH_KANA_PATTERN.test(value)) return false;
+  return SEARCH_CJK_PATTERN.test(value);
+}
 
 function getPunctuationInsensitiveVariants(query: string): string[] {
   const simplified = toSearchSimplified(query.trim());
@@ -517,7 +527,9 @@ export function generateSearchVariants(originalQuery: string): string[] {
         candidate.includes(key)
       )
     ) {
-      aliases.forEach((alias) => variants.add(alias));
+      aliases.forEach((alias) => {
+        if (isCjkSearchQuery(alias)) variants.add(alias);
+      });
     }
   }
 
@@ -530,7 +542,9 @@ export function generateSearchVariants(originalQuery: string): string[] {
     variants.add('风纪委员');
   }
 
-  return Array.from(variants);
+  return Array.from(variants).filter(
+    (variant) => variant === trimmed || isCjkSearchQuery(variant)
+  );
 }
 function buildConversionMap(): Record<string, string> {
   return {
