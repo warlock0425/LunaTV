@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.1',
+    date: '2026-08-30',
+    content: `
+- 修正：起播時若快取只有 1 顆探針網址，多集番劇與連續劇會自動水合完整集數清單，恢復「選集」Tab 與分頁切換。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.0',
     date: '2026-08-30',
     content: `
