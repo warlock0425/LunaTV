@@ -32,6 +32,23 @@ const EMPTY_CUSTOM_CATEGORIES: Array<{
   query: string;
 }> = [];
 
+function doubanScrollStorageKey(parts: {
+  type: string;
+  primarySelection: string;
+  secondarySelection: string;
+  selectedWeekday: string;
+  multiLevelValues: Record<string, string>;
+}): string {
+  const raw = [
+    parts.type,
+    parts.primarySelection,
+    parts.secondarySelection,
+    parts.selectedWeekday,
+    JSON.stringify(parts.multiLevelValues),
+  ].join('|');
+  return `luna_douban_scroll_${encodeURIComponent(raw)}`;
+}
+
 function DoubanPageClient() {
   const searchParams = useSearchParams();
   const [doubanData, setDoubanData] = useState<DoubanItem[]>([]);
@@ -114,6 +131,41 @@ function DoubanPageClient() {
     selectedWeekday,
     currentPage,
   ]);
+
+  const doubanScrollKey = doubanScrollStorageKey({
+    type,
+    primarySelection,
+    secondarySelection,
+    selectedWeekday,
+    multiLevelValues,
+  });
+  const restoredDoubanScrollKeyRef = useRef('');
+
+  useEffect(() => {
+    const handleScroll = () => {
+      try {
+        sessionStorage.setItem(doubanScrollKey, String(window.scrollY));
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [doubanScrollKey]);
+
+  useEffect(() => {
+    if (loading || !selectorsReady || doubanData.length === 0) return;
+    if (restoredDoubanScrollKeyRef.current === doubanScrollKey) return;
+    restoredDoubanScrollKeyRef.current = doubanScrollKey;
+    try {
+      const savedScroll = sessionStorage.getItem(doubanScrollKey);
+      if (savedScroll && Number(savedScroll) > 0) {
+        window.scrollTo({ top: Number(savedScroll), behavior: 'instant' });
+      }
+    } catch {
+      // ignore
+    }
+  }, [loading, selectorsReady, doubanData.length, doubanScrollKey]);
 
   // 初始化時標記選擇器為準備好狀態
   useEffect(() => {

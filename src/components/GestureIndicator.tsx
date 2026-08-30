@@ -12,7 +12,7 @@ import {
 import React from 'react';
 
 export interface GestureIndicatorProps {
-  type: 'seek' | 'volume' | 'brightness' | 'play' | 'pause' | null;
+  type: 'seek' | 'volume' | 'brightness' | 'play' | 'pause' | 'speed' | null;
   value: string; // e.g. '+15s', '80%'
   position?: 'left' | 'center' | 'right';
 }
@@ -35,6 +35,8 @@ export default function GestureIndicator({
     Icon = Play;
   } else if (type === 'pause') {
     Icon = Pause;
+  } else if (type === 'speed') {
+    Icon = FastForward;
   }
 
   let posClass = 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2';

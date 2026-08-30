@@ -7,7 +7,14 @@ export const metadata: Metadata = {
   description: '站點安全設定警告',
 };
 
-export default function WarningPage() {
+export default async function WarningPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reason?: string }>;
+}) {
+  const { reason } = await searchParams;
+  const isWeak = reason === 'weak';
+
   return (
     <div className='min-h-screen bg-surface-page flex flex-col'>
       <div className='flex-1 flex items-center justify-center p-4'>
@@ -43,7 +50,9 @@ export default function WarningPage() {
                 ⚠️ 安全風險提示
               </p>
               <p className='text-sm sm:text-base text-zinc-300'>
-                檢測到您的站點未設定存取控制，存在潛在的安全風險和法律合規問題。
+                {isWeak
+                  ? '檢測到您的站點使用常見弱密碼，幾乎等於沒有存取控制。'
+                  : '檢測到您的站點未設定存取控制，存在潛在的安全風險和法律合規問題。'}
               </p>
             </div>
 
@@ -76,11 +85,24 @@ export default function WarningPage() {
                 🔒 安全設定建議
               </h3>
               <p className='text-sm sm:text-base text-zinc-300'>
-                請立即設定{' '}
-                <code className='bg-surface-panel px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono text-accent border border-accent/20'>
-                  PASSWORD
-                </code>{' '}
-                環境變數以啟用存取控制。
+                {isWeak ? (
+                  <>
+                    請把環境變數{' '}
+                    <code className='bg-surface-panel px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono text-accent border border-accent/20'>
+                      PASSWORD
+                    </code>{' '}
+                    改成足夠長、且不是 admin／123456
+                    這類常見口令，然後重啟容器。
+                  </>
+                ) : (
+                  <>
+                    請立即設定{' '}
+                    <code className='bg-surface-panel px-1.5 py-0.5 rounded text-xs sm:text-sm font-mono text-accent border border-accent/20'>
+                      PASSWORD
+                    </code>{' '}
+                    環境變數以啟用存取控制。
+                  </>
+                )}
               </p>
             </div>
           </div>

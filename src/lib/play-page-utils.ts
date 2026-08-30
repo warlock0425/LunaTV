@@ -13,6 +13,11 @@ export function isMobileUserAgent(userAgent: string): boolean {
   );
 }
 
+/** SourceBuffer append 逾時（毫秒）。預設 Infinity 會讓壞源靜默掛住。 */
+export const HLS_APPEND_TIMEOUT_MS = 20_000;
+/** 直播 playlist 連續未更新幾次後觸發 PLAYLIST_UNCHANGED_ERROR */
+export const HLS_LIVE_MAX_UNCHANGED_PLAYLIST_REFRESH = 5;
+
 export function getVodHlsBufferConfig(isMobile: boolean): {
   maxBufferLength: number;
   backBufferLength: number;

@@ -8,6 +8,7 @@ import {
 import { getFreshAdminUser } from '@/lib/config';
 import { getSessionVersion } from '@/lib/security-store';
 import { getServerStorageType } from '@/lib/storage-runtime';
+import { isWeakSitePassword } from '@/lib/weak-password';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -22,6 +23,11 @@ export async function proxy(request: NextRequest) {
   if (!process.env.PASSWORD) {
     // 如果沒有設定密碼，重新導向到警告頁面
     const warningUrl = new URL('/warning', request.url);
+    return NextResponse.redirect(warningUrl);
+  }
+  if (isWeakSitePassword(process.env.PASSWORD)) {
+    const warningUrl = new URL('/warning', request.url);
+    warningUrl.searchParams.set('reason', 'weak');
     return NextResponse.redirect(warningUrl);
   }
 

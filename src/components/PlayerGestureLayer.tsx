@@ -15,22 +15,30 @@ export default function PlayerGestureLayer({
   containerRef,
 }: PlayerGestureLayerProps) {
   const [indicator, setIndicator] = useState<{
-    type: 'seek' | 'volume' | 'brightness' | 'play' | 'pause' | null;
+    type: 'seek' | 'volume' | 'brightness' | 'play' | 'pause' | 'speed' | null;
     value: string;
     position?: 'left' | 'center' | 'right';
   }>({ type: null, value: '' });
 
-  const indicatorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const indicatorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPressingRef = useRef(false);
+  const startPlaybackRateRef = useRef(1);
 
   const showIndicator = (
-    type: 'seek' | 'volume' | 'brightness' | 'play' | 'pause',
+    type: 'seek' | 'volume' | 'brightness' | 'play' | 'pause' | 'speed',
     value: string,
-    position: 'left' | 'center' | 'right' = 'center'
+    position: 'left' | 'center' | 'right' = 'center',
+    persist = false
   ) => {
     setIndicator({ type, value, position });
     if (indicatorTimeoutRef.current) {
       clearTimeout(indicatorTimeoutRef.current);
+      indicatorTimeoutRef.current = null;
     }
+    if (persist) return;
     indicatorTimeoutRef.current = setTimeout(() => {
       setIndicator({ type: null, value: '' });
     }, 800);
@@ -68,6 +76,23 @@ export default function PlayerGestureLayer({
       }
     }
 
+    const clearLongPressTimer = () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+
+    const restorePlaybackRate = () => {
+      if (!isLongPressingRef.current) return;
+      isLongPressingRef.current = false;
+      if (artRef.current) {
+        artRef.current.holdSpeed = false;
+        artRef.current.playbackRate = startPlaybackRateRef.current;
+      }
+      setIndicator({ type: null, value: '' });
+    };
+
     const handleTouchStart = (e: TouchEvent) => {
       // 忽略控制列的觸控
       if (
@@ -83,17 +108,33 @@ export default function PlayerGestureLayer({
       touchDirection.current = null;
       accumulatedDelta.current = 0;
       isGestureActive.current = false;
+      isLongPressingRef.current = false;
+      clearLongPressTimer();
 
       if (artRef.current) {
         startVolume.current = artRef.current.volume || 0;
         startCurrentTime.current = artRef.current.currentTime || 0;
+        startPlaybackRateRef.current = artRef.current.playbackRate || 1;
       }
       startBrightness.current = brightnessRef.current;
+
+      longPressTimerRef.current = setTimeout(() => {
+        if (touchDirection.current || !artRef.current) return;
+        isLongPressingRef.current = true;
+        isGestureActive.current = true;
+        artRef.current.holdSpeed = true;
+        artRef.current.playbackRate = 2;
+        showIndicator('speed', '2x', 'center', true);
+      }, 400);
     };
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!touchStartPos.current || !artRef.current) return;
       if (e.touches.length > 1) return;
+      if (isLongPressingRef.current) {
+        if (e.cancelable) e.preventDefault();
+        return;
+      }
 
       const touch = e.touches[0];
       const dx = touch.clientX - touchStartPos.current.x;
@@ -101,6 +142,7 @@ export default function PlayerGestureLayer({
 
       if (!touchDirection.current) {
         if (Math.abs(dx) > 15 || Math.abs(dy) > 15) {
+          clearLongPressTimer();
           touchDirection.current =
             Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
           isGestureActive.current = true;
@@ -151,6 +193,15 @@ export default function PlayerGestureLayer({
 
     const handleTouchEnd = (e: TouchEvent) => {
       if (!touchStartPos.current) return;
+      clearLongPressTimer();
+      if (isLongPressingRef.current) {
+        restorePlaybackRate();
+        touchStartPos.current = null;
+        touchDirection.current = null;
+        accumulatedDelta.current = 0;
+        isGestureActive.current = false;
+        return;
+      }
       const changedTouch = e.changedTouches[0];
       const now = Date.now();
 
@@ -217,11 +268,17 @@ export default function PlayerGestureLayer({
       passive: false,
     });
     container.addEventListener('touchend', handleTouchEnd, { passive: false });
+    container.addEventListener('touchcancel', handleTouchEnd, {
+      passive: false,
+    });
 
     return () => {
+      clearLongPressTimer();
+      restorePlaybackRate();
       container.removeEventListener('touchstart', handleTouchStart);
       container.removeEventListener('touchmove', handleTouchMove);
       container.removeEventListener('touchend', handleTouchEnd);
+      container.removeEventListener('touchcancel', handleTouchEnd);
     };
   }, [artRef, containerRef]);
 

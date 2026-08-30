@@ -26,6 +26,7 @@ import {
   getResultEpisodeCount,
   getStableTitle,
   getVodHlsBufferConfig,
+  HLS_APPEND_TIMEOUT_MS,
   hydrateSearchResultEpisodesWithRetry,
   isMobileUserAgent,
   isPreferredDisplayQuality,
@@ -65,7 +66,7 @@ import PlayerGestureLayer from '@/components/PlayerGestureLayer';
 import { useToast } from '@/components/ToastProvider';
 
 import { CustomHlsJsLoader } from './custom-hls-loader';
-import { nextHlsFatalAction } from './hls-fatal';
+import { nextHlsFatalAction, tallySoftNetworkError } from './hls-fatal';
 import {
   applyPlaybackUrlUpdates,
   applyResumeToPlayer,
@@ -1747,7 +1748,8 @@ function PlayPageClient() {
         theme: '#00B4D8',
         lang: 'zh-tw',
         hotkey: false,
-        fastForward: true,
+        // 長按 2x 改由 PlayerGestureLayer 處理，避免與 Artplayer 內建 3x 打架
+        fastForward: false,
         autoOrientation: true,
         lock: true,
         moreVideoAttr: {
@@ -1780,6 +1782,7 @@ function PlayPageClient() {
               maxBufferLength: hlsBuffer.maxBufferLength,
               backBufferLength: hlsBuffer.backBufferLength,
               maxBufferSize: hlsBuffer.maxBufferSize,
+              appendTimeout: HLS_APPEND_TIMEOUT_MS,
 
               /* 自定義loader */
               loader: blockAdEnabledRef.current
@@ -1795,9 +1798,36 @@ function PlayPageClient() {
 
             let networkRetries = 0;
             let mediaRetries = 0;
+            let softNetworkFails = 0;
             hls.on(
               Hls.Events.ERROR,
               function (event: Events.ERROR, data: ErrorData) {
+                const soft = tallySoftNetworkError(
+                  data.fatal,
+                  data.type,
+                  data.details,
+                  softNetworkFails
+                );
+                softNetworkFails = soft.count;
+                if (
+                  soft.escalate &&
+                  shouldFallbackToVodProxy(
+                    'networkError',
+                    isVodHlsProxyUrl(videoUrl)
+                  )
+                ) {
+                  const now = video.currentTime || 0;
+                  const saved =
+                    now > 3
+                      ? now
+                      : resumeTimeRef.current || lastGoodResumeRef.current;
+                  if (typeof saved === 'number' && saved > 3) {
+                    resumeTimeRef.current = saved;
+                    lastGoodResumeRef.current = saved;
+                  }
+                  setVodProxySlot(playbackSlotKey);
+                  return;
+                }
                 if (!data.fatal) {
                   logger.debug('HLS Error:', event, data);
                   return;
@@ -2206,6 +2236,9 @@ function PlayPageClient() {
         lastVolumeRef.current = artPlayerRef.current.volume;
       });
       artPlayerRef.current.on('video:ratechange', () => {
+        if ((artPlayerRef.current as { holdSpeed?: boolean }).holdSpeed) {
+          return;
+        }
         const currentRate = artPlayerRef.current.playbackRate;
         lastPlaybackRateRef.current = currentRate;
         try {

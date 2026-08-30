@@ -15,8 +15,11 @@ import {
   saveFavorite,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { logger } from '@/lib/logger';
 import {
   getLiveHlsBufferConfig,
+  HLS_APPEND_TIMEOUT_MS,
+  HLS_LIVE_MAX_UNCHANGED_PLAYLIST_REFRESH,
   isMobileUserAgent,
 } from '@/lib/play-page-utils';
 import { useClientValue } from '@/hooks/useClientMount';
@@ -26,7 +29,11 @@ import PageLayout from '@/components/PageLayout';
 import PageLoading from '@/components/PageLoading';
 import { useToast } from '@/components/ToastProvider';
 
-import { nextHlsFatalAction } from '@/app/play/hls-fatal';
+import {
+  HLS_LIVE_STALE_PLAYLIST_MESSAGE,
+  isPlaylistUnchangedError,
+  nextHlsFatalAction,
+} from '@/app/play/hls-fatal';
 
 import { cleanEpgData } from './live-epg-utils';
 import { LiveChannel, LiveSource } from './live-types';
@@ -837,7 +844,7 @@ function LivePageClient() {
 
   function m3u8Loader(video: HTMLVideoElement, url: string) {
     if (!Hls) {
-      console.error('HLS.js 未載入');
+      logger.error('HLS.js 未載入');
       return;
     }
 
@@ -861,6 +868,8 @@ function LivePageClient() {
       maxBufferLength: hlsBuffer.maxBufferLength,
       backBufferLength: hlsBuffer.backBufferLength,
       maxBufferSize: hlsBuffer.maxBufferSize,
+      appendTimeout: HLS_APPEND_TIMEOUT_MS,
+      liveMaxUnchangedPlaylistRefresh: HLS_LIVE_MAX_UNCHANGED_PLAYLIST_REFRESH,
       loader: CustomHlsJsLoader,
     });
 
@@ -872,8 +881,17 @@ function LivePageClient() {
     let mediaRetries = 0;
     hls.on(Hls.Events.ERROR, function (event: Events.ERROR, data: ErrorData) {
       if (video.hls !== hls) return;
-      console.error('HLS Error:', event, data);
-      if (!data.fatal) return;
+      if (!data.fatal) {
+        logger.debug('HLS Error:', event, data);
+        return;
+      }
+      if (isPlaylistUnchangedError(data.details)) {
+        logger.warn('直播頻道播放清單停止更新');
+        hls.destroy();
+        setIsVideoLoading(false);
+        setPlaybackError(HLS_LIVE_STALE_PLAYLIST_MESSAGE);
+        return;
+      }
 
       const { action, nextNetworkRetries, nextMediaRetries } =
         nextHlsFatalAction(
@@ -889,7 +907,7 @@ function LivePageClient() {
         try {
           hls.startLoad();
         } catch (err) {
-          console.error('HLS 網路錯誤恢復失敗:', err);
+          logger.error('HLS 網路錯誤恢復失敗:', err);
           setIsVideoLoading(false);
           setPlaybackError('直播串流網路錯誤，請嘗試其他頻道');
         }
@@ -899,7 +917,7 @@ function LivePageClient() {
         try {
           hls.recoverMediaError();
         } catch (err) {
-          console.error('HLS 媒體錯誤恢復失敗:', err);
+          logger.error('HLS 媒體錯誤恢復失敗:', err);
           setIsVideoLoading(false);
           setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
         }
@@ -910,7 +928,7 @@ function LivePageClient() {
           hls.swapAudioCodec();
           hls.recoverMediaError();
         } catch (err) {
-          console.error('HLS 音訊編碼切換失敗:', err);
+          logger.error('HLS 音訊編碼切換失敗:', err);
           setIsVideoLoading(false);
           setPlaybackError('直播串流播放失敗，請嘗試其他頻道');
         }

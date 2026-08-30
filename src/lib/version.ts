@@ -6,6 +6,18 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.5.1',
+    date: '2026-08-31',
+    content: `
+- 播放：直連 HLS 分片／層級連續載入失敗時也會改走站內代理，不必等 fatal。
+- 播放：hls.js 升到 1.7；點播與直播加上 append 逾時，直播死台不再無限輪詢。
+- 播放：長按畫面 2 倍速，鬆開還原原本倍速。
+- 探索：豆瓣列表捲動位置依分類記住並還原。
+- 維運：常見弱密碼會進警告頁；Docker 健康檢查改打 /api/health。
+    `.trim(),
+  },
+
+  {
     version: 'v3.5.0',
     date: '2026-08-30',
     content: `

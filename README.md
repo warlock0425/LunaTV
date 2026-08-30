@@ -5,7 +5,7 @@
   <p><strong>為繁體中文使用者優化的自架影音聚合平台</strong></p>
   <p>多源搜尋・陸源譯名橋接・集數追更・無廣告 HLS・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-3.5.0-blue)
+![Version](https://img.shields.io/badge/Version-3.5.1-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -88,7 +88,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
   - 已在最後一集時按「下一集」，或開啟自動連播播完最後一集，會再向詳情 API 確認是否有新集
   - 有新集提示「已更新至第 N 集」；沒有則提示「目前仍是最新一集」
   - 刷新時可保留目前這一集的播放 URL，降低簽章 URL 輪替造成的中斷
-- **追劇輔助**：跳過片頭片尾（可記憶）、選集正序／倒序（可記憶）、自動連播倒數、斷點續播、快捷鍵與行動手勢
+- **追劇輔助**：跳過片頭片尾（可記憶）、選集正序／倒序（可記憶）、長按 2 倍速、自動連播倒數、斷點續播、快捷鍵與行動手勢
 - **畫面比例與頂欄**：21:9／滿版裁切、全螢幕顯示片名與時鐘、控制列透明度
 - **接著看**：首頁大圖區塊快速接續上次觀看
 
@@ -174,7 +174,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 | 本機 `pnpm dev`              | 開發除錯                                | localStorage 或 Redis | 不建議當正式站               |
 
 > 映像位址：`ghcr.io/berserker8888/lunatv:latest`  
-> 版本標籤可改為 `3.5.0` 或你需要的 tag。
+> 版本標籤可改為 `3.5.1` 或你需要的 tag。
 
 ### Docker Compose + Kvrocks（推薦）
 
@@ -231,7 +231,7 @@ docker compose up -d
 
 說明：
 
-- 容器內建 `HEALTHCHECK`（探測 `/api/server-config`）
+- 容器內建 `HEALTHCHECK`（探測 `/api/health`）
 - Docker 啟動腳本會帶內建 cron，定期做維運工作（含追蹤中內容的更新流程）
 - **兩個服務必須在同一 Docker network**，`KVROCKS_URL` 主機名用 compose service 名（上例是 `kvrocks`）
 
@@ -504,7 +504,7 @@ A: 會爆自架頻寬，也更容易被源站封鎖機房 IP。本專案 VOD 採
 A: 不適合。正式環境請用 Kvrocks／Redis／Upstash。
 
 **Q: 和上游映像能混用嗎？**  
-A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.5.0**）；資料結構多數相容，但升級前請先備份。
+A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.5.1**）；資料結構多數相容，但升級前請先備份。
 
 **Q: 有些源搜得到但黑屏？**  
 A: v3.4.0 起，直連 CORS／網路失敗會自動改走站內 HLS 代理再播一次。平時仍走瀏覽器直連。若代理後仍失敗，畫面上可重試或自動切到下一個 1080p 源。
@@ -517,6 +517,9 @@ A: v3.4.0 起跳過秒數綁片名／豆瓣 ID，同一部片換源會沿用。�
 
 **Q: 可以用 Selene 或 Selene-TV 連這台嗎？**  
 A: 可以。v3.5.0 起對齊 MoonTV v100 客戶端 API。伺服器地址填站台根網址，帳號與網頁相同。詳見 [客戶端](#客戶端seleneselene-tv)。
+
+**Q: 設了密碼還是進警告頁？**  
+A: v3.5.1 起，`admin`／`123456` 這類常見弱密碼也會擋下。請把 `PASSWORD` 改成夠長且不好猜的值，然後重啟。
 
 ## 致謝
 

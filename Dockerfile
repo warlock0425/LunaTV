@@ -56,8 +56,8 @@ USER nextjs
 
 EXPOSE 3000
 
-# /api/server-config 不需認證（middleware 已排除），適合當健康檢查端點
+# /api/health 不需認證、不依賴儲存後端，適合當容器健康檢查
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-  CMD wget -qO /dev/null http://127.0.0.1:3000/api/server-config || exit 1
+  CMD wget -qO /dev/null http://127.0.0.1:3000/api/health || exit 1
 
 CMD ["node", "start.js"]
