@@ -1,4 +1,4 @@
-/** 搜尋熱路徑可調參數。1C1G 預設保守，可用環境變數上調。 */
+/** 搜尋熱路徑可調參數。預設以找齊片源為準。 */
 
 function envInt(
   name: string,
@@ -11,34 +11,34 @@ function envInt(
   return Math.min(max, Math.max(min, Math.trunc(raw)));
 }
 
-/** 同時搜幾條源。預設 8，上限 12，避免小機 outbound 爆掉。 */
+/** 同時搜幾條源。 */
 export function getSearchSourceConcurrency(): number {
-  return envInt('SEARCH_SOURCE_CONCURRENCY', 8, 1, 12);
+  return envInt('SEARCH_SOURCE_CONCURRENCY', 12, 1, 24);
 }
 
 /** 全站搜尋 outbound 同時進行中的 CMS 請求上限。 */
 export function getSearchOutboundCap(): number {
-  return envInt('SEARCH_OUTBOUND_CAP', 16, 1, 32);
+  return envInt('SEARCH_OUTBOUND_CAP', 32, 1, 64);
 }
 
 /** 前 K 個「有結果」的源後截止，其餘 abort。 */
 export function getSearchSuccessSourceCutoff(): number {
-  return envInt('SEARCH_SUCCESS_SOURCE_CUTOFF', 8, 1, 64);
+  return envInt('SEARCH_SUCCESS_SOURCE_CUTOFF', 64, 1, 64);
 }
 
 /** 單次搜尋總 deadline（毫秒）。 */
 export function getSearchDeadlineMs(): number {
-  return envInt('SEARCH_DEADLINE_MS', 8000, 2000, 20000);
+  return envInt('SEARCH_DEADLINE_MS', 20000, 2000, 30000);
 }
 
 /** 熱路徑每個源最多打幾個查詢變體。陸源譯名常靠第 2 個才命中。 */
 export function getSearchHotPathMaxVariants(): number {
-  return envInt('SEARCH_HOT_PATH_MAX_VARIANTS', 2, 1, 4);
+  return envInt('SEARCH_HOT_PATH_MAX_VARIANTS', 3, 1, 6);
 }
 
-/** 單頁 CMS 逾時。外層 6s 仍是單源總預算。 */
+/** 單頁 CMS 逾時。 */
 export function getSearchPageTimeoutMs(): number {
-  return envInt('SEARCH_PAGE_TIMEOUT_MS', 2800, 1500, 6000);
+  return envInt('SEARCH_PAGE_TIMEOUT_MS', 5000, 1500, 12000);
 }
 
 /** EWMA 低於此值視為「已測且快」，排序時排在未知源前面。 */

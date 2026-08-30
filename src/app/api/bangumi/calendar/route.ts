@@ -8,8 +8,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const CACHE_TTL = 6 * 60 * 60 * 1000;
-// api.bgm.tv 是第三方主機，回應大小不在我方控制內。專案的部署目標是 1C1G，
-// 不設上限就等於讓對方決定要不要撐爆我們的記憶體。與 douban 路徑同樣取 5MB。
+// api.bgm.tv 回應大小不在我方控制內；與豆瓣路徑同樣設 5MB 上限。
 const MAX_CALENDAR_RESPONSE_BYTES = 5 * 1024 * 1024;
 let calendarCache: {
   expiresAt: number;

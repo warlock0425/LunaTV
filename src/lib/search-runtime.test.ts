@@ -22,21 +22,21 @@ describe('search runtime env', () => {
     process.env.SEARCH_DEADLINE_MS = originalEnv.SEARCH_DEADLINE_MS;
   });
 
-  it('clamps concurrency to 1–12 and outbound cap to 1–32', () => {
+  it('clamps concurrency to 1–24 and outbound cap to 1–64', () => {
     process.env.SEARCH_SOURCE_CONCURRENCY = '99';
     process.env.SEARCH_OUTBOUND_CAP = '0';
-    expect(getSearchSourceConcurrency()).toBe(12);
+    expect(getSearchSourceConcurrency()).toBe(24);
     expect(getSearchOutboundCap()).toBe(1);
   });
 
-  it('uses conservative defaults', () => {
+  it('uses completeness-first defaults', () => {
     delete process.env.SEARCH_SOURCE_CONCURRENCY;
     delete process.env.SEARCH_OUTBOUND_CAP;
     delete process.env.SEARCH_SUCCESS_SOURCE_CUTOFF;
     delete process.env.SEARCH_DEADLINE_MS;
-    expect(getSearchSourceConcurrency()).toBe(8);
-    expect(getSearchOutboundCap()).toBe(16);
-    expect(getSearchSuccessSourceCutoff()).toBe(8);
-    expect(getSearchDeadlineMs()).toBe(8000);
+    expect(getSearchSourceConcurrency()).toBe(12);
+    expect(getSearchOutboundCap()).toBe(32);
+    expect(getSearchSuccessSourceCutoff()).toBe(64);
+    expect(getSearchDeadlineMs()).toBe(20000);
   });
 });

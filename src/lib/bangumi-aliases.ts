@@ -14,8 +14,7 @@ export type BangumiSubjectInfo = {
 
 const USEFUL_INFOBOX_KEYS = new Set(['中文名', '别名', '別名']);
 const BANGUMI_ALIAS_FETCH_TIMEOUT_MS = 5000;
-// 單一條目的中繼資料，正常只有數 KB；設 2MB 是為了讓第三方主機無法決定
-// 我方要吃下多少記憶體（部署目標是 1C1G）。
+// 單一條目的中繼資料通常只有數 KB；設上限避免異常回應撐爆記憶體。
 const MAX_SUBJECT_RESPONSE_BYTES = 2 * 1024 * 1024;
 
 /**

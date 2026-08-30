@@ -5,7 +5,7 @@
   <p><strong>為繁體中文使用者優化的自架影音聚合平台</strong></p>
   <p>多源搜尋・陸源譯名橋接・集數追更・無廣告 HLS・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-3.2.0-blue)
+![Version](https://img.shields.io/badge/Version-3.3.0-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -22,7 +22,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 
 **搜得到 → 跟得上集 → 播得穩 → 進度不丟 → 源可管**
 
-本倉庫是 [MoonTechLab/LunaTV](https://github.com/MoonTechLab/LunaTV) 的二次開發版本，在保留上游「空殼聚合器」定位的同時，針對**繁體中文使用者**與**長期自架可靠度**做了加深：
+本倉庫是 [MoonTechLab/LunaTV](https://github.com/MoonTechLab/LunaTV) 的二次開發版本，在保留上游「空殼聚合器」定位的同時，針對**繁體中文使用者**與**播放穩定**做了加深。建議部署在 **2 核 4GB 以上**的機器。
 
 | 方向     | 本 fork 強化重點                                                     |
 | -------- | -------------------------------------------------------------------- |
@@ -30,7 +30,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 | 追劇     | 播放中背景刷新詳情、最後一集強制確認新集、集數更新提示               |
 | 片源治理 | 三級檢測（可搜／可解／可播）、熔斷與健康頁、一鍵重置（不自動亂關源） |
 | 安全     | 寫入 API HMAC 驗簽、SSRF 防護、備份加密、管理端點獨立驗簽            |
-| 工程     | Next.js 16 / React 19、Jest + Playwright、multi-arch Docker CI       |
+| 工程     | Next.js 16 / React 19、核心單元測試、multi-arch Docker CI            |
 
 > [!IMPORTANT]
 > **部署後預設為空殼。** 沒有內建播放源／直播源，也不會憑空出現片庫。  
@@ -70,7 +70,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 
 ### 搜尋與探索
 
-- **多源聚合搜尋**：一次查詢所有已啟用 CMS/VOD 來源，支援串流輸出、去重與來源排序
+- **多源聚合搜尋**：一次查詢已啟用 CMS/VOD 來源，串流輸出、去重與來源排序；快取保留完整播放清單（與上游一致），長劇進播放頁即可選集
 - **繁簡／陸源智慧匹配**：繁簡轉換、長標題拆分、季數／Part 解析、hybrid 模糊匹配
 - **台灣片名橋接**：搜尋落空時可走豆瓣／區域別名／Bangumi 等路徑，提高「台譯 → 陸源」命中率
 - **豆瓣／Bangumi 探索**：電影、劇集、動漫（含每日放送）、綜藝分類瀏覽
@@ -118,9 +118,9 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 本 fork **完整保留**這個定位，並把力氣花在繁中使用者真正痛的地方：
 
 1. **搜得到陸源**（譯名、繁簡、別名，而不是只做字面搜尋）
-2. **跟得上連載**（詳情刷新與最後一集確認，而不是只靠進頁那一次）
+2. **播得穩、選集齊**（搜尋快取與上游一樣保留完整播放清單；詳情刷新與最後一集確認）
 3. **源站壞了知道是誰**（三級檢測與健康觀察，而不是整站搜尋變慢卻找不到原因）
-4. **私人實例更耐用**（寫入 API 驗簽、SSRF、備份加密、測試與 CI）
+4. **私人實例更耐用**（寫入 API 驗簽、SSRF、備份加密、CI）
 
 若你需要的是「最貼近上游原版、簡中文件為主」的版本，請直接使用 [MoonTechLab/LunaTV](https://github.com/MoonTechLab/LunaTV)。  
 若你要的是**繁中體驗 + 追劇可靠度 + 自架維運**，用本倉庫。
@@ -162,15 +162,15 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 
 ### 方式選哪一種
 
-| 方式                         | 適合              | 儲存                  | 備註                         |
-| ---------------------------- | ----------------- | --------------------- | ---------------------------- |
-| **Docker Compose + Kvrocks** | VPS／NAS 長期自架 | Kvrocks               | **最推薦**，資料落盤、成本低 |
-| Docker Compose + Redis       | 已有 Redis 環境   | Redis                 | 記得開 AOF／持久化           |
-| Vercel + Upstash             | 不想管機器        | Upstash               | 需設定 `CRON_SECRET`         |
-| 本機 `pnpm dev`              | 開發除錯          | localStorage 或 Redis | 不建議當正式站               |
+| 方式                         | 適合                                    | 儲存                  | 備註                         |
+| ---------------------------- | --------------------------------------- | --------------------- | ---------------------------- |
+| **Docker Compose + Kvrocks** | VPS／NAS 長期自架（建議 2 核 4GB 以上） | Kvrocks               | **最推薦**，資料落盤、成本低 |
+| Docker Compose + Redis       | 已有 Redis 環境                         | Redis                 | 記得開 AOF／持久化           |
+| Vercel + Upstash             | 不想管機器                              | Upstash               | 需設定 `CRON_SECRET`         |
+| 本機 `pnpm dev`              | 開發除錯                                | localStorage 或 Redis | 不建議當正式站               |
 
 > 映像位址：`ghcr.io/berserker8888/lunatv:latest`  
-> 版本標籤可改為 `3.2.0`（發版後）或你需要的 tag。
+> 版本標籤可改為 `3.3.0` 或你需要的 tag。
 
 ### Docker Compose + Kvrocks（推薦）
 
@@ -385,11 +385,13 @@ docker compose up -d
 | `NEXT_PUBLIC_DOUBAN_PROXY_TYPE`       | `cmliussss-cdn-tencent` | 豆瓣資料代理策略                            |
 | `NEXT_PUBLIC_DOUBAN_IMAGE_PROXY_TYPE` | `cmliussss-cdn-tencent` | 豆瓣圖片代理策略                            |
 | `BANGUMI_ACCESS_TOKEN`                | —                       | 提高 Bangumi 別名查詢額度                   |
-| `SEARCH_CACHE_TTL_MINUTES`            | `120`                   | 伺服器搜尋快取                              |
-| `SEARCH_SOURCE_CONCURRENCY`           | `8`                     | 同時搜幾條源（1–12）                        |
-| `SEARCH_OUTBOUND_CAP`                 | `16`                    | 搜尋同時打 CMS 上限                         |
-| `SEARCH_SUCCESS_SOURCE_CUTOFF`        | `8`                     | 前 K 個有結果源後截止                       |
-| `SEARCH_DEADLINE_MS`                  | `8000`                  | 單次搜尋總時限                              |
+| `SEARCH_CACHE_TTL_MINUTES`            | `120`                   | 伺服器搜尋快取（含完整集數清單）            |
+| `SEARCH_SOURCE_CONCURRENCY`           | `12`                    | 同時搜幾條源（1–24）                        |
+| `SEARCH_OUTBOUND_CAP`                 | `32`                    | 搜尋同時打 CMS 上限                         |
+| `SEARCH_SUCCESS_SOURCE_CUTOFF`        | `64`                    | 前 K 個有結果源後截止                       |
+| `SEARCH_DEADLINE_MS`                  | `20000`                 | 單次搜尋總時限（毫秒）                      |
+| `SEARCH_HOT_PATH_MAX_VARIANTS`        | `3`                     | 每個源最多打幾個查詢變體                    |
+| `SEARCH_PAGE_TIMEOUT_MS`              | `5000`                  | 單頁 CMS 逾時（毫秒）                       |
 | `SOURCE_BREAKER_THRESHOLD`            | `3`                     | 熔斷：連續失敗次數                          |
 | `SOURCE_BREAKER_COOLDOWN_MINUTES`     | `10`                    | 熔斷冷卻分鐘                                |
 
@@ -404,7 +406,6 @@ pnpm build
 pnpm lint
 pnpm typecheck
 pnpm test
-pnpm test:coverage
 pnpm test:e2e
 ```
 
@@ -443,9 +444,9 @@ src/
 ## 工程品質
 
 - TypeScript strict、ESLint flat config、React hooks 嚴格規則
-- Jest 單元／整合測試 + Playwright E2E
+- Jest 測搜尋、播放與安全核心；Playwright 覆蓋登入與主要流程
 - husky + lint-staged + commitlint；介面用語維持繁體中文
-- GitHub Actions：lint / typecheck / test / e2e，通過後推送 amd64+arm64 映像到 GHCR
+- GitHub Actions：lint / typecheck / test / e2e 通過後推送 amd64+arm64 映像到 GHCR
 
 ## 安全與合規
 
@@ -466,6 +467,9 @@ A: 正常。請到管理面板自己加源。
 **Q: 搜尋有結果但播放失敗？**  
 A: 先跑三級檢測。若「搜✓ 解✓ 播✗」，多半是該源 m3u8／CDN 問題，換源或稍後再試。
 
+**Q: 選集只有 1 集、換源卻寫一千多集？**  
+A: v3.3.0 起搜尋快取會留下完整播放清單。請拉最新映像並硬重新整理（Ctrl+F5）。若某個源詳情本身只有 1 條網址，換源即可。
+
 **Q: 為什麼不強制所有影片走伺服器代理？**  
 A: 會爆自架頻寬，也更容易被源站封鎖機房 IP。本專案 VOD 採瀏覽器直連、直播才走 proxy。
 
@@ -473,7 +477,7 @@ A: 會爆自架頻寬，也更容易被源站封鎖機房 IP。本專案 VOD 採
 A: 不適合。正式環境請用 Kvrocks／Redis／Upstash。
 
 **Q: 和上游映像能混用嗎？**  
-A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.2.0**）；資料結構多數相容，但升級前請先備份。
+A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.3.0**）；資料結構多數相容，但升級前請先備份。
 
 ## 致謝
 

@@ -20,8 +20,6 @@ export type SearchFanoutSiteResult = {
   skipped?: boolean;
 };
 
-const SOURCE_BUDGET_MS = 6000;
-
 export async function fanoutSearchSources(options: {
   sites: ApiSite[];
   query: string;
@@ -72,7 +70,7 @@ export async function fanoutSearchSources(options: {
         const startedAt = Date.now();
         const linked = createLinkedAbortController(
           controller.signal,
-          SOURCE_BUDGET_MS
+          deadlineMs
         );
         try {
           const results = await searchFromApi(

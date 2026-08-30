@@ -52,7 +52,7 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
-        run: pnpm test:coverage --runInBand
+        run: pnpm test --runInBand
 
   e2e:
     needs: quality

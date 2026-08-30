@@ -25,7 +25,7 @@ COPY . .
 ENV DOCKER_ENV=true
 ENV NEXT_PUBLIC_STORAGE_TYPE=kvrocks
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NODE_OPTIONS="--max-old-space-size=768"
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 # Build-time dummy value. Runtime deployments should provide the real KVROCKS_URL.
 ENV KVROCKS_URL=redis://localhost:6666
 

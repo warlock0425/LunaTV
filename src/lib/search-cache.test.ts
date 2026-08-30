@@ -25,7 +25,7 @@ describe('search cache', () => {
     clearSearchCacheForTests();
   });
 
-  it('keeps one probe URL and episode_count in positive cache', () => {
+  it('keeps the full episode list in positive cache', () => {
     setCachedSearchPage(
       'src',
       'query',
@@ -38,6 +38,7 @@ describe('search cache', () => {
             'https://cdn.example.test/2.m3u8',
             'https://cdn.example.test/3.m3u8',
           ],
+          episodes_titles: ['1', '2', '3'],
           episode_count: 3,
         }),
       ],
@@ -47,9 +48,11 @@ describe('search cache', () => {
     expect(cached?.status).toBe('ok');
     expect(cached?.pageCount).toBe(3);
     expect(cached?.data[0]?.episodes).toEqual([
+      'https://cdn.example.test/1.m3u8',
       'https://cdn.example.test/2.m3u8',
+      'https://cdn.example.test/3.m3u8',
     ]);
-    expect(cached?.data[0]?.episodes_titles).toEqual([]);
+    expect(cached?.data[0]?.episodes_titles).toEqual(['1', '2', '3']);
     expect(cached?.data[0]?.episode_count).toBe(3);
     expect(cached?.data[0]?.title).toBe('測試');
   });
@@ -61,7 +64,7 @@ describe('search cache', () => {
     expect(getCachedSearchPage('src', 'query', 1)?.status).toBe('ok');
   });
 
-  it('stripCachedEpisodes keeps a probe URL and drops the rest', () => {
+  it('stripCachedEpisodes keeps the full list and fills episode_count', () => {
     expect(
       stripCachedEpisodes([
         result({
@@ -69,14 +72,18 @@ describe('search cache', () => {
             'https://cdn.example.test/1.m3u8',
             'https://cdn.example.test/2.m3u8',
           ],
+          episodes_titles: ['1', '2'],
           episode_count: 24,
         }),
       ])[0]
     ).toMatchObject({
       id: '1',
       title: '測試',
-      episodes: ['https://cdn.example.test/2.m3u8'],
-      episodes_titles: [],
+      episodes: [
+        'https://cdn.example.test/1.m3u8',
+        'https://cdn.example.test/2.m3u8',
+      ],
+      episodes_titles: ['1', '2'],
       episode_count: 24,
     });
   });

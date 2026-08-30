@@ -1,4 +1,3 @@
-import { pickSpeedTestEpisodeUrl } from '@/lib/play-page-utils';
 import { SearchResult } from '@/lib/types';
 
 import { setBoundedMapValue } from './bounded-map';
@@ -52,27 +51,25 @@ function ttlFor(status: CachedPageStatus): number {
 }
 
 /**
- * 快取不存完整播放清單（省記憶體／KV），但留 1 個探針網址給換源測速。
- * 探針規則與首播優選相同：第 2 集，沒有再退第一個可播網址。
+ * 與上游／SzeMeng76 相同：搜尋快取保留完整播放清單。
+ * 只補齊 episode_count，不再裁成單顆探針。
  */
 export function stripCachedEpisodes(results: SearchResult[]): SearchResult[] {
   return results.map((item) => {
+    const urls = item.episodes || [];
     const episode_count =
       typeof item.episode_count === 'number' && item.episode_count > 0
-        ? item.episode_count
-        : item.episodes?.length || 0;
-    const probe = pickSpeedTestEpisodeUrl(item.episodes);
+        ? Math.max(item.episode_count, urls.length)
+        : urls.length;
     return {
       ...item,
       episode_count,
-      episodes: probe ? [probe] : [],
-      episodes_titles: [],
     };
   });
 }
 
 function redisKey(cacheKey: string): string {
-  return `lunatv:sc:${cacheKey}`;
+  return `lunatv:sc:v3:${cacheKey}`;
 }
 
 export function getCachedSearchPage(

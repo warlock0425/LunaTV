@@ -164,8 +164,7 @@ export function resolveLoadedEpisodeIndex(
 }
 
 /**
- * 搜尋快取只留 1 個探針網址時，集數清單不完整，換源前要打詳情。
- * 測速可以先用探針，不必等完整清單。
+ * CMS 搜尋列若沒有完整 vod_play_url（或備註集數大於實際網址），換源前要打詳情。
  */
 export function needsEpisodeHydration(
   source: Pick<SearchResult, 'episodes' | 'episode_count' | 'source' | 'id'>

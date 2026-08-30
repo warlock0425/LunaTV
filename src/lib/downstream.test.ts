@@ -247,16 +247,17 @@ describe('downstream query normalization', () => {
     expect(mockedFetchSafeRemoteUrl).toHaveBeenCalledTimes(1);
   });
 
-  it('caps hot-path variants at two', async () => {
+  it('caps hot-path variants at the runtime max', async () => {
     mockSearchResponse([]);
 
     await searchFromApi(site, 'variant-cap', [
       '第一變體',
       '第二變體',
+      '第三變體',
       '不該打到',
     ]);
 
-    expect(getCalledKeywords()).toEqual(['第一变体', '第二变体']);
+    expect(getCalledKeywords()).toEqual(['第一变体', '第二变体', '第三变体']);
   });
 
   it('keeps listings that have no playable episodes', async () => {

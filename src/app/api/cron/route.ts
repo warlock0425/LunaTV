@@ -401,7 +401,7 @@ async function refreshRecordAndFavorites(deadline: number) {
           }
         });
 
-        await runWithConcurrency(tasks, 2); // 限制並發數為 2，降低 1C1G CPU 負載
+        await runWithConcurrency(tasks, 6);
         logger.info(`播放記錄處理完成: ${processedRecords}/${totalRecords}`);
       } catch (err) {
         console.error(`取得使用者播放記錄失敗 (${user}):`, err);
@@ -462,16 +462,15 @@ async function refreshRecordAndFavorites(deadline: number) {
           }
         });
 
-        await runWithConcurrency(tasks, 2); // 限制並發數為 2，降低 1C1G CPU 負載
+        await runWithConcurrency(tasks, 6);
         logger.info(`收藏處理完成: ${processedFavorites}/${totalFavorites}`);
       } catch (err) {
         console.error(`取得使用者收藏失敗 (${user}):`, err);
       }
     };
 
-    // 使用者間並發處理（限制 1 個使用者處理完再處理下一個，防止內存溢出）
     const userTasks = users.map((user) => () => processUser(user));
-    await runWithConcurrency(userTasks, 1);
+    await runWithConcurrency(userTasks, 2);
 
     logger.info('重新整理播放紀錄/收藏任務完成');
   } catch (err) {

@@ -6,6 +6,17 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.3.0',
+    date: '2026-08-30',
+    content: `
+- 播放：搜尋快取與上游一致，保留完整集數清單，不再裁成單顆探針。長劇進播放頁即可選集。
+- 搜尋：單源時間預算改跟整次搜尋 deadline 對齊，不再 6 秒就掐掉後續變體；預設搜更多源、放寬截止。
+- 維運：建議 2 核 4GB 以上；cron 不再用小機低併發。
+- 測試：只留搜尋、播放與安全核心，拿掉覆蓋率堆疊。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.9',
     date: '2026-08-30',
     content: `
