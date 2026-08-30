@@ -845,18 +845,18 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                               className={`px-2 py-0.5 rounded font-bold ${
                                 ['4K', '2K'].includes(videoInfo.quality)
                                   ? 'bg-purple-500/20 text-purple-200 ring-1 ring-purple-400/40'
-                                  : ['1080p', '720p'].includes(
-                                        videoInfo.quality
-                                      )
-                                    ? 'bg-green-500/20 text-green-200 ring-1 ring-green-400/40'
-                                    : videoInfo.quality === '未知'
-                                      ? 'bg-zinc-800 text-zinc-400'
-                                      : 'bg-yellow-500/20 text-yellow-200 ring-1 ring-yellow-400/40'
+                                  : videoInfo.quality === '1080p'
+                                    ? 'bg-emerald-500/20 text-emerald-200 ring-1 ring-emerald-400/40'
+                                    : videoInfo.quality === '720p'
+                                      ? 'bg-sky-500/20 text-sky-200 ring-1 ring-sky-400/40'
+                                      : videoInfo.quality === '未知'
+                                        ? 'bg-zinc-800 text-zinc-400 border border-white/5'
+                                        : 'bg-yellow-500/20 text-yellow-200 ring-1 ring-yellow-400/40'
                               }`}
                             >
                               {videoInfo.quality !== '未知'
                                 ? videoInfo.quality
-                                : '標準'}
+                                : '未測得'}
                             </span>
                             <span className='text-emerald-300 font-medium tabular-nums'>
                               {videoInfo.loadSpeed}

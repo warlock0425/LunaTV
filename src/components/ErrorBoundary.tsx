@@ -15,12 +15,19 @@ type ErrorBoundaryState = {
 };
 
 function isTranslationDomError(error: Error): boolean {
+  if (typeof window === 'undefined') return false;
   const msg = error?.message || '';
-  return (
-    msg.includes('removeChild') ||
-    msg.includes('insertBefore') ||
-    (msg.includes('Node') && msg.includes('Failed to execute'))
-  );
+  const isDomMutationError =
+    (msg.includes('removeChild') || msg.includes('insertBefore')) &&
+    msg.includes('Node');
+  if (!isDomMutationError) return false;
+  // 檢查是否處於翻譯狀態（Google / Chrome / Edge 翻譯外掛會給 html 加上 translated 類或注入 <font> 標籤）
+  const isTranslated =
+    document.documentElement.classList.contains('translated-ltr') ||
+    document.documentElement.classList.contains('translated-rtl') ||
+    document.querySelector('font') !== null ||
+    document.querySelector('.goog-te-banner-frame') !== null;
+  return isTranslated;
 }
 
 export class ErrorBoundary extends Component<

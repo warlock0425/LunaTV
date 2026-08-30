@@ -15,10 +15,12 @@ import React, {
 import { cleanQueryForApi } from '@/lib/chinese';
 import { addSearchHistory } from '@/lib/db.client';
 import { getResultEpisodeCount } from '@/lib/play-page-utils';
+import { buildPlayUrl } from '@/lib/play-url';
 import { getTriedMainlandLabel } from '@/lib/search-tried-mainland';
 import { isFuzzyMatch } from '@/lib/searchEngine';
 import { readStreamingSearchPreference } from '@/lib/streaming-search-preference';
 import { SearchResult } from '@/lib/types';
+import { getProxiedImageUrl, processImageUrl } from '@/lib/utils';
 import { useClientValue } from '@/hooks/useClientMount';
 
 import PageLayout from '@/components/PageLayout';
@@ -100,23 +102,28 @@ function SearchPageClient() {
     }
   };
 
-  // 記錄與還原滾動位置
+  // 記錄與還原滾動位置（依目前搜尋關鍵字分開記，避免不同搜尋互相跳轉高度）
   useEffect(() => {
+    const queryKey = submittedQuery.trim();
+    if (!queryKey) return;
+    const storageKey = `luna_search_scroll_${encodeURIComponent(queryKey)}`;
     const handleScroll = () => {
       try {
-        sessionStorage.setItem('luna_search_scroll', String(window.scrollY));
+        sessionStorage.setItem(storageKey, String(window.scrollY));
       } catch {
         // ignore
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [submittedQuery]);
 
   useEffect(() => {
-    if (!isLoading && searchResults.length > 0) {
+    const queryKey = submittedQuery.trim();
+    if (!isLoading && searchResults.length > 0 && queryKey) {
       try {
-        const savedScroll = sessionStorage.getItem('luna_search_scroll');
+        const storageKey = `luna_search_scroll_${encodeURIComponent(queryKey)}`;
+        const savedScroll = sessionStorage.getItem(storageKey);
         if (savedScroll && Number(savedScroll) > 0) {
           window.scrollTo({ top: Number(savedScroll), behavior: 'instant' });
         }
@@ -124,7 +131,7 @@ function SearchPageClient() {
         // ignore
       }
     }
-  }, [isLoading, searchResults.length]);
+  }, [isLoading, searchResults.length, submittedQuery]);
 
   /**
    * 台灣片名在大陸片源站常有完全不同的譯名（魔戒→指环王），
@@ -1056,29 +1063,26 @@ function SearchPageClient() {
                     <div className='flex flex-col gap-2.5 pb-16'>
                       {viewMode === 'agg'
                         ? filteredAggResults.map(([mapKey, group]) => {
-                            const first = group[0];
-                            const title = first?.title || '';
-                            const poster = first?.poster || '';
-                            const year = first?.year || 'unknown';
+                            const title = group[0]?.title || '';
+                            const poster = group[0]?.poster || '';
+                            const year = group[0]?.year || 'unknown';
                             const { episodes, source_names, type_name } =
                               computeGroupStats(group);
+                            const primary = group[0];
                             return (
                               <div
                                 key={`list-agg-${mapKey}`}
                                 onClick={() => {
-                                  if (first) {
-                                    router.push(
-                                      `/play?source=${encodeURIComponent(
-                                        first.source
-                                      )}&id=${encodeURIComponent(
-                                        first.id
-                                      )}&title=${encodeURIComponent(
-                                        title
-                                      )}&year=${encodeURIComponent(
-                                        year
-                                      )}&from=search`
-                                    );
-                                  }
+                                  if (!primary) return;
+                                  const playUrl = buildPlayUrl({
+                                    source: primary.source,
+                                    id: primary.id,
+                                    title: title,
+                                    year: year !== 'unknown' ? year : undefined,
+                                    stype: type_name,
+                                    stitle: searchQuery.trim() || undefined,
+                                  });
+                                  router.push(playUrl);
                                 }}
                                 className='group flex items-center justify-between gap-4 p-3 rounded-xl bg-zinc-900/50 hover:bg-zinc-800/80 border border-white/5 hover:border-accent/40 transition-all cursor-pointer'
                               >
@@ -1087,10 +1091,18 @@ function SearchPageClient() {
                                     {poster ? (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img
-                                        src={poster}
+                                        src={processImageUrl(poster)}
                                         alt={title}
                                         className='w-full h-full object-cover group-hover:scale-105 transition-transform'
                                         loading='lazy'
+                                        onError={(e) => {
+                                          const img = e.currentTarget;
+                                          if (!img.dataset.retried && poster) {
+                                            img.dataset.retried = 'true';
+                                            img.src =
+                                              getProxiedImageUrl(poster);
+                                          }
+                                        }}
                                       />
                                     ) : (
                                       <div className='w-full h-full flex items-center justify-center text-xs text-zinc-500'>
@@ -1150,17 +1162,18 @@ function SearchPageClient() {
                               <div
                                 key={`list-all-${item.source}-${item.id}`}
                                 onClick={() => {
-                                  router.push(
-                                    `/play?source=${encodeURIComponent(
-                                      item.source
-                                    )}&id=${encodeURIComponent(
-                                      item.id
-                                    )}&title=${encodeURIComponent(
-                                      item.title
-                                    )}&year=${encodeURIComponent(
-                                      item.year || ''
-                                    )}&from=search`
-                                  );
+                                  const playUrl = buildPlayUrl({
+                                    source: item.source,
+                                    id: item.id,
+                                    title: item.title,
+                                    year:
+                                      item.year && item.year !== 'unknown'
+                                        ? item.year
+                                        : undefined,
+                                    stype: item.type_name,
+                                    stitle: searchQuery.trim() || undefined,
+                                  });
+                                  router.push(playUrl);
                                 }}
                                 className='group flex items-center justify-between gap-4 p-3 rounded-xl bg-zinc-900/50 hover:bg-zinc-800/80 border border-white/5 hover:border-accent/40 transition-all cursor-pointer'
                               >
@@ -1169,10 +1182,22 @@ function SearchPageClient() {
                                     {item.poster ? (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img
-                                        src={item.poster}
+                                        src={processImageUrl(item.poster)}
                                         alt={item.title}
                                         className='w-full h-full object-cover group-hover:scale-105 transition-transform'
                                         loading='lazy'
+                                        onError={(e) => {
+                                          const img = e.currentTarget;
+                                          if (
+                                            !img.dataset.retried &&
+                                            item.poster
+                                          ) {
+                                            img.dataset.retried = 'true';
+                                            img.src = getProxiedImageUrl(
+                                              item.poster
+                                            );
+                                          }
+                                        }}
                                       />
                                     ) : (
                                       <div className='w-full h-full flex items-center justify-center text-xs text-zinc-500'>

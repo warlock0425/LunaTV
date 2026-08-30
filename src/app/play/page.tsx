@@ -1699,6 +1699,17 @@ function PlayPageClient() {
     }
 
     try {
+      let initialSavedRatio = 'default';
+      let initialSavedOpacity = 'default';
+      try {
+        initialSavedRatio =
+          localStorage.getItem('player_aspect_ratio') || 'default';
+        initialSavedOpacity =
+          localStorage.getItem('player_control_opacity') || 'default';
+      } catch {
+        // ignore
+      }
+
       // 創建新的播放器實例
       Artplayer.PLAYBACK_RATE = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];
       Artplayer.USE_RAF = false;
@@ -1837,6 +1848,7 @@ function PlayPageClient() {
                   setVodProxySlot(playbackSlotKey);
                   return;
                 }
+                logger.error('無法恢復的致命錯誤，停止加載', data);
                 hls.destroy();
                 setIsVideoLoading(false);
                 setPlaybackSoftError(action.message);
@@ -1901,14 +1913,49 @@ function PlayPageClient() {
           },
           {
             html: '畫面比例',
-            tooltip: '預設 (自適應)',
+            tooltip:
+              initialSavedRatio === 'cover'
+                ? '滿版裁切 (無黑邊)'
+                : initialSavedRatio === 'fill'
+                  ? '拉伸填滿'
+                  : initialSavedRatio === '21:9'
+                    ? '21:9 (超寬屏)'
+                    : initialSavedRatio === '16:9'
+                      ? '16:9'
+                      : initialSavedRatio === '4:3'
+                        ? '4:3'
+                        : '預設 (自適應)',
             selector: [
-              { html: '預設 (自適應)', value: 'default', default: true },
-              { html: '16:9', value: '16:9' },
-              { html: '21:9 (超寬屏)', value: '21:9' },
-              { html: '4:3', value: '4:3' },
-              { html: '滿版裁切 (無黑邊)', value: 'cover' },
-              { html: '拉伸填滿', value: 'fill' },
+              {
+                html: '預設 (自適應)',
+                value: 'default',
+                default: initialSavedRatio === 'default',
+              },
+              {
+                html: '16:9',
+                value: '16:9',
+                default: initialSavedRatio === '16:9',
+              },
+              {
+                html: '21:9 (超寬屏)',
+                value: '21:9',
+                default: initialSavedRatio === '21:9',
+              },
+              {
+                html: '4:3',
+                value: '4:3',
+                default: initialSavedRatio === '4:3',
+              },
+              {
+                html: '滿版裁切 (無黑邊)',
+                value: 'cover',
+                default: initialSavedRatio === 'cover',
+              },
+              {
+                html: '拉伸填滿',
+                value: 'fill',
+                default: initialSavedRatio === 'fill',
+              },
             ],
             onSelect(item: { html: string; value: string }) {
               if (!artPlayerRef.current?.video) return item.html;
@@ -1936,11 +1983,28 @@ function PlayPageClient() {
           },
           {
             html: '底欄透明度',
-            tooltip: '預設漸變',
+            tooltip:
+              initialSavedOpacity === 'transparent'
+                ? '全透明 (0%)'
+                : initialSavedOpacity === 'half'
+                  ? '半透明 (50%)'
+                  : '預設漸變',
             selector: [
-              { html: '預設漸變', value: 'default', default: true },
-              { html: '半透明 (50%)', value: 'half' },
-              { html: '全透明 (0%)', value: 'transparent' },
+              {
+                html: '預設漸變',
+                value: 'default',
+                default: initialSavedOpacity === 'default',
+              },
+              {
+                html: '半透明 (50%)',
+                value: 'half',
+                default: initialSavedOpacity === 'half',
+              },
+              {
+                html: '全透明 (0%)',
+                value: 'transparent',
+                default: initialSavedOpacity === 'transparent',
+              },
             ],
             onSelect(item: { html: string; value: string }) {
               const bottomEl = artPlayerRef.current?.template?.$bottom;
@@ -1990,6 +2054,26 @@ function PlayPageClient() {
           },
         ],
       });
+
+      let clockInterval: ReturnType<typeof setInterval> | null = setInterval(
+        () => {
+          if (!artPlayerRef.current) return;
+          const isFs =
+            artPlayerRef.current.fullscreen ||
+            artPlayerRef.current.fullscreenWeb;
+          if (!isFs) return;
+          const topbarLayer = artPlayerRef.current.layers.topbar;
+          if (!topbarLayer) return;
+          const timeEl = topbarLayer.querySelector('.art-topbar-time');
+          if (timeEl) {
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            timeEl.textContent = `${hh}:${mm}`;
+          }
+        },
+        1000
+      );
 
       const applySavedPreferences = () => {
         try {
@@ -2069,14 +2153,24 @@ function PlayPageClient() {
         }
       });
 
+      artPlayerRef.current.on('destroy', () => {
+        if (clockInterval) {
+          clearInterval(clockInterval);
+          clockInterval = null;
+        }
+      });
+
       artPlayerRef.current.on('control', (state: boolean) => {
         updateTopbar(state);
+        applySavedPreferences();
       });
       artPlayerRef.current.on('fullscreen', (state: boolean) => {
         updateTopbar(state);
+        applySavedPreferences();
       });
       artPlayerRef.current.on('fullscreenWeb', (state: boolean) => {
         updateTopbar(state);
+        applySavedPreferences();
       });
 
       // 監聽播放狀態變化，控製 Wake Lock
