@@ -1079,7 +1079,7 @@ function SearchPageClient() {
                                     id: primary.id,
                                     title: title,
                                     year: year !== 'unknown' ? year : undefined,
-                                    stype: type_name,
+                                    stype: episodes > 1 ? 'tv' : 'movie',
                                     stitle: searchQuery.trim() || undefined,
                                   });
                                   router.push(playUrl);
@@ -1170,7 +1170,7 @@ function SearchPageClient() {
                                       item.year && item.year !== 'unknown'
                                         ? item.year
                                         : undefined,
-                                    stype: item.type_name,
+                                    stype: count > 1 ? 'tv' : 'movie',
                                     stitle: searchQuery.trim() || undefined,
                                   });
                                   router.push(playUrl);
