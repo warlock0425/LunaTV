@@ -270,6 +270,7 @@ function PlayPageClient() {
   });
   const skipHistoryRestoreRef = useRef(false);
   const episodeChangingRef = useRef(false);
+  const pendingEpisodeChangeRef = useRef<number | null>(null);
   const episodeRefreshInFlightRef = useRef(false);
   const refreshEpisodesIfNeededRef = useRef<
     | ((options?: {
@@ -1376,62 +1377,77 @@ function PlayPageClient() {
   // ---------------------------------------------------------------------------
   // 處理集數切換
   const handleEpisodeChange = async (episodeNumber: number) => {
-    if (episodeChangingRef.current) return;
+    if (episodeChangingRef.current) {
+      pendingEpisodeChangeRef.current = episodeNumber;
+      return;
+    }
     episodeChangingRef.current = true;
     try {
-      let currentDetail = detailRef.current;
-      if (
-        !currentDetail ||
-        needsEpisodeHydration(currentDetail) ||
-        !currentDetail.episodes ||
-        episodeNumber >= currentDetail.episodes.length
-      ) {
-        if (currentDetail?.source && currentDetail?.id) {
-          currentDetail = await hydrateSearchResultEpisodes(
-            currentDetail,
-            undefined,
-            { force: true }
-          );
-          if (currentDetail.episodes?.length) {
-            setDetail(currentDetail);
-            detailRef.current = currentDetail;
-            setAvailableSources((prev) =>
-              prev.map((item) =>
-                item.source === currentDetail?.source &&
-                item.id === currentDetail?.id
-                  ? currentDetail
-                  : item
-              )
+      let targetIndex: number | null = episodeNumber;
+      while (targetIndex !== null) {
+        const currentTarget = targetIndex;
+        pendingEpisodeChangeRef.current = null;
+
+        let currentDetail = detailRef.current;
+        if (
+          !currentDetail ||
+          needsEpisodeHydration(currentDetail) ||
+          !currentDetail.episodes ||
+          currentTarget >= currentDetail.episodes.length
+        ) {
+          if (currentDetail?.source && currentDetail?.id) {
+            currentDetail = await hydrateSearchResultEpisodes(
+              currentDetail,
+              undefined,
+              { force: true }
             );
-            setCachedDetail(
-              currentDetail.source,
-              currentDetail.id,
-              currentDetail
-            );
+            if (currentDetail.episodes?.length) {
+              setDetail(currentDetail);
+              detailRef.current = currentDetail;
+              setAvailableSources((prev) =>
+                prev.map((item) =>
+                  item.source === currentDetail?.source &&
+                  item.id === currentDetail?.id
+                    ? currentDetail
+                    : item
+                )
+              );
+              setCachedDetail(
+                currentDetail.source,
+                currentDetail.id,
+                currentDetail
+              );
+            }
           }
         }
-      }
-      const currentTotal = currentDetail?.episodes?.length || totalEpisodes;
-      if (
-        episodeNumber >= 0 &&
-        (episodeNumber < currentTotal || currentTotal === 0)
-      ) {
-        // 手動切集要先取消倒數，否則倒數結束會把使用者拉回自動連播的目標集
-        cancelAutoNextCountdown();
-        // 在更換集數前儲存當前播放進度
-        if (artPlayerRef.current) {
-          saveCurrentPlayProgress();
+
+        const finalTarget =
+          pendingEpisodeChangeRef.current !== null
+            ? pendingEpisodeChangeRef.current
+            : currentTarget;
+        pendingEpisodeChangeRef.current = null;
+
+        const currentTotal = currentDetail?.episodes?.length || 0;
+        if (finalTarget >= 0 && finalTarget < currentTotal) {
+          // 手動切集要先取消倒數，否則倒數結束會把使用者拉回自動連播的目標集
+          cancelAutoNextCountdown();
+          // 在更換集數前儲存當前播放進度
+          if (artPlayerRef.current) {
+            saveCurrentPlayProgress();
+          }
+          lockResumeAndSetEpisode(finalTarget);
+          replacePlaybackUrl({
+            source: currentSourceRef.current,
+            id: currentIdRef.current,
+            title: getStableTitle(videoTitleRef.current, currentDetail?.title),
+            year: videoYearRef.current || currentDetail?.year,
+            episode: finalTarget + 1,
+          });
+        } else {
+          toast('此片源無此集數', 'error');
         }
-        lockResumeAndSetEpisode(episodeNumber);
-        replacePlaybackUrl({
-          source: currentSourceRef.current,
-          id: currentIdRef.current,
-          title: getStableTitle(videoTitleRef.current, currentDetail?.title),
-          year: videoYearRef.current || currentDetail?.year,
-          episode: episodeNumber + 1,
-        });
-      } else {
-        toast('此片源無此集數', 'error');
+
+        targetIndex = pendingEpisodeChangeRef.current;
       }
     } catch (e) {
       logger.error('切換集數失敗:', e);

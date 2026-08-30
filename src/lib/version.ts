@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.5',
+    date: '2026-08-30',
+    content: `
+- 改善：切集佇列支援水合期間快速連點其他集數時，自動定錨至使用者最後點擊的目標集。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.4',
     date: '2026-08-30',
     content: `
