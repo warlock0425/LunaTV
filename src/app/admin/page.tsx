@@ -4,7 +4,6 @@ import {
   Database,
   FileText,
   FolderOpen,
-  Search,
   Settings,
   Tv,
   Users,
@@ -33,7 +32,6 @@ import { ConfigFileComponent } from './components/ConfigFileComponent';
 import { LiveSourceConfig } from './components/LiveSourceConfig';
 import { useLoadingState } from './components/Loading';
 import { PlayStatsPanel } from './components/PlayStatsPanel';
-import { SearchZeroResultsPanel } from './components/SearchZeroResultsPanel';
 import { SiteConfigComponent } from './components/SiteConfigComponent';
 import { UserConfig } from './components/UserConfig';
 import { VideoSourceConfig } from './components/VideoSourceConfig';
@@ -55,7 +53,6 @@ function AdminPageClient() {
     configFile: false,
     dataMigration: false,
     playStats: false,
-    searchZeroResults: false,
   });
 
   // 取得管理員設定
@@ -323,21 +320,6 @@ function AdminPageClient() {
               onToggle={() => toggleTab('playStats')}
             >
               <PlayStatsPanel />
-            </CollapsibleTab>
-
-            {/* 搜尋零結果 - 補台譯表用，owner 和 admin 可見 */}
-            <CollapsibleTab
-              title='搜尋零結果'
-              icon={
-                <Search
-                  size={20}
-                  className='text-zinc-600 dark:text-zinc-400'
-                />
-              }
-              isExpanded={expandedTabs.searchZeroResults}
-              onToggle={() => toggleTab('searchZeroResults')}
-            >
-              <SearchZeroResultsPanel />
             </CollapsibleTab>
           </div>
         </div>

@@ -8,10 +8,6 @@ import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { logger } from '@/lib/logger';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { fanoutSearchSources } from '@/lib/search-fanout';
-import {
-  recordSearchZeroResult,
-  shouldRecordSearchZeroResult,
-} from '@/lib/search-zero-results';
 import { orderSourcesByHealth } from '@/lib/source-health';
 import { orderSourcesByValidation } from '@/lib/source-validation';
 import { SearchResult } from '@/lib/types';
@@ -101,9 +97,6 @@ export async function GET(request: NextRequest) {
       const sendComplete = () => {
         if (completeSent || streamClosed) return;
         completeSent = true;
-        if (shouldRecordSearchZeroResult(allResults, query)) {
-          void recordSearchZeroResult(query);
-        }
         const completeEvent = `data: ${JSON.stringify({
           type: 'complete',
           totalResults: allResults.length,

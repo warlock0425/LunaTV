@@ -15,6 +15,7 @@ import {
   getLoadedEpisodeCount,
   getResultEpisodeCount,
   hydrateSearchResultEpisodes,
+  hydrateSearchResultEpisodesWithRetry,
   needsEpisodeHydration,
   pickFirstPlayableEpisodeUrl,
   pickRecommendedSourceKey,
@@ -199,7 +200,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     }
   }, [showEpisodeTab]);
 
-  // 備註寫 20 集、清單只有探針時，先補詳情再畫格子，避免點了才說無集數
+  // 備註寫 1184 集、清單只有探針時，重試補詳情再畫格子
   useEffect(() => {
     if (!currentSourceInfo || !needsEpisodeHydration(currentSourceInfo)) {
       return;
@@ -207,8 +208,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     const key = `${currentSourceInfo.source}-${currentSourceInfo.id}`;
     if (currentHydrateKeyRef.current === key) return;
     currentHydrateKeyRef.current = key;
-    void hydrateSearchResultEpisodes(currentSourceInfo, undefined, {
+    const snapshot = currentSourceInfo;
+    void hydrateSearchResultEpisodesWithRetry(snapshot, undefined, {
       force: true,
+      attempts: 3,
     })
       .then((hydrated) => {
         if (currentHydrateKeyRef.current !== key) return;

@@ -39,6 +39,8 @@ interface ApiSearchItem {
 
 const MAX_VOD_API_RESPONSE_BYTES = 10 * 1024 * 1024;
 const MAX_DETAIL_HTML_BYTES = 5 * 1024 * 1024;
+/** 長劇詳情 JSON 很大，10 秒容易超時只拿到探針。 */
+const DETAIL_FETCH_TIMEOUT_MS = 25_000;
 
 export class DownstreamNotFoundError extends Error {
   constructor(message = 'The requested media was not found upstream') {
@@ -96,10 +98,6 @@ function isM3u8Link(url: string): boolean {
   return /\.m3u8($|\?)/i.test(url);
 }
 
-/**
- * 解析 vod_play_url（格式為 `播放組$$$播放組`，每組為 `標題$網址#標題$網址`）。
- * 取集數最多的那一組。欄位缺失或型別不符時回傳空結果，不拋錯。
- */
 /** CMS 搜尋列常沒有 vod_play_url，但 remarks 會寫「更新至24集」。 */
 export function parseEpisodeCountFromRemarks(remarks: unknown): number {
   if (typeof remarks !== 'string') return 0;
@@ -120,7 +118,12 @@ export function parseEpisodeCountFromRemarks(remarks: unknown): number {
   return 0;
 }
 
-function parseVodPlayUrl(vodPlayUrl: unknown): {
+/**
+ * 解析 vod_play_url（`播放組$$$播放組`，每組 `標題$網址#標題$網址`）。
+ * 只在第一個 `$` 切開，後面整段當網址（簽名路徑裡也可能有 `$`）。
+ * 沒有標題、只有 m3u8 的格式也收。
+ */
+export function parseVodPlayUrl(vodPlayUrl: unknown): {
   episodes: string[];
   titles: string[];
 } {
@@ -134,11 +137,14 @@ function parseVodPlayUrl(vodPlayUrl: unknown): {
     const matchEpisodes: string[] = [];
     const matchTitles: string[] = [];
     group.split('#').forEach((titleUrl) => {
-      const parts = titleUrl.split('$');
-      if (parts.length === 2 && isM3u8Link(parts[1])) {
-        matchTitles.push(parts[0]);
-        matchEpisodes.push(parts[1]);
-      }
+      const raw = titleUrl.trim();
+      if (!raw) return;
+      const dollar = raw.indexOf('$');
+      const title = dollar >= 0 ? raw.slice(0, dollar).trim() : '';
+      const url = dollar >= 0 ? raw.slice(dollar + 1).trim() : raw;
+      if (!isM3u8Link(url)) return;
+      matchTitles.push(title || `${matchEpisodes.length + 1}`);
+      matchEpisodes.push(url);
     });
     if (matchEpisodes.length > episodes.length) {
       episodes = matchEpisodes;
@@ -367,7 +373,7 @@ export async function getDetailFromApi(
   const timeoutId = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, 10000);
+  }, DETAIL_FETCH_TIMEOUT_MS);
   try {
     const response = await fetchSafeRemoteUrl(detailUrl, {
       headers: API_CONFIG.detail.headers,
@@ -449,7 +455,7 @@ async function handleSpecialSourceDetail(
   const timeoutId = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, 10000);
+  }, DETAIL_FETCH_TIMEOUT_MS);
   try {
     const response = await fetchSafeRemoteUrl(detailUrl, {
       headers: API_CONFIG.detail.headers,

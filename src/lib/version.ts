@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.8',
+    date: '2026-08-30',
+    content: `
+- 修正：長劇詳情逾時與播放網址解析不足時會卡在 1 集；改為重試水合、拉長詳情逾時，並正確拆解含 $ 的 m3u8。
+- 移除：管理端「搜尋零結果」。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.7',
     date: '2026-08-30',
     content: `

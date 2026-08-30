@@ -23,9 +23,10 @@ import {
 import { logger } from '@/lib/logger';
 import {
   formatPlayerTime,
+  getResultEpisodeCount,
   getStableTitle,
   getVodHlsBufferConfig,
-  hydrateSearchResultEpisodes,
+  hydrateSearchResultEpisodesWithRetry,
   isMobileUserAgent,
   needsEpisodeHydration,
   pickFirstPlayableEpisodeUrl,
@@ -748,16 +749,28 @@ function PlayPageClient() {
           ) {
             return candidate;
           }
-          const fresh = await fetchSourceDetail(candidate.source, candidate.id);
-          if (fresh[0]?.episodes?.length) {
-            return {
-              ...candidate,
-              ...fresh[0],
-              source: candidate.source,
-              id: candidate.id,
-            };
+          let last = candidate;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const fresh = await fetchSourceDetail(
+              candidate.source,
+              candidate.id
+            );
+            if (fresh[0]?.episodes?.length) {
+              last = {
+                ...candidate,
+                ...fresh[0],
+                source: candidate.source,
+                id: candidate.id,
+              };
+              if (
+                !needsEpisodeHydration(last) ||
+                last.episodes.length >= getResultEpisodeCount(candidate)
+              ) {
+                return last;
+              }
+            }
           }
-          return candidate.episodes?.length ? candidate : null;
+          return last.episodes?.length ? last : null;
         };
 
         if (sourcesInfo.length === 0) {
@@ -1231,9 +1244,14 @@ function PlayPageClient() {
         needsEpisodeHydration(newDetail) ||
         incompleteForCurrent
       ) {
-        newDetail = await hydrateSearchResultEpisodes(newDetail, undefined, {
-          force: missingPlayable || incompleteForCurrent,
-        });
+        newDetail = await hydrateSearchResultEpisodesWithRetry(
+          newDetail,
+          undefined,
+          {
+            force: missingPlayable || incompleteForCurrent,
+            attempts: 3,
+          }
+        );
         if (!isLatestRequest()) return;
         if (!pickFirstPlayableEpisodeUrl(newDetail.episodes)) {
           setIsVideoLoading(false);
@@ -1407,27 +1425,24 @@ function PlayPageClient() {
           currentTarget >= currentDetail.episodes.length
         ) {
           if (currentDetail?.source && currentDetail?.id) {
-            currentDetail = await hydrateSearchResultEpisodes(
+            const hydrated = await hydrateSearchResultEpisodesWithRetry(
               currentDetail,
               undefined,
-              { force: true }
+              { force: true, attempts: 3 }
             );
-            if (currentDetail.episodes?.length) {
-              setDetail(currentDetail);
-              detailRef.current = currentDetail;
+            currentDetail = hydrated;
+            if (hydrated.episodes?.length) {
+              setDetail(hydrated);
+              detailRef.current = hydrated;
               setAvailableSources((prev) =>
                 prev.map((item) =>
-                  item.source === currentDetail?.source &&
-                  item.id === currentDetail?.id
-                    ? currentDetail
+                  String(item.source) === String(hydrated.source) &&
+                  String(item.id) === String(hydrated.id)
+                    ? hydrated
                     : item
                 )
               );
-              setCachedDetail(
-                currentDetail.source,
-                currentDetail.id,
-                currentDetail
-              );
+              setCachedDetail(hydrated.source, hydrated.id, hydrated);
             }
           }
         }
@@ -2351,15 +2366,17 @@ function PlayPageClient() {
                 onSourceHydrated={(hydrated) => {
                   setAvailableSources((prev) =>
                     prev.map((item) =>
-                      item.source === hydrated.source && item.id === hydrated.id
+                      String(item.source) === String(hydrated.source) &&
+                      String(item.id) === String(hydrated.id)
                         ? hydrated
                         : item
                     )
                   );
                   setCachedDetail(hydrated.source, hydrated.id, hydrated);
                   if (
-                    hydrated.source === currentSourceRef.current &&
-                    hydrated.id === currentIdRef.current &&
+                    String(hydrated.source) ===
+                      String(currentSourceRef.current) &&
+                    String(hydrated.id) === String(currentIdRef.current) &&
                     hydrated.episodes?.length
                   ) {
                     setDetail(hydrated);

@@ -212,6 +212,30 @@ export async function hydrateSearchResultEpisodes(
   };
 }
 
+/** 長劇詳情偶發逾時：連打幾次，直到清單不再比備註集數短。 */
+export async function hydrateSearchResultEpisodesWithRetry(
+  source: SearchResult,
+  signal?: AbortSignal,
+  options?: { force?: boolean; attempts?: number }
+): Promise<SearchResult> {
+  const attempts = Math.max(1, options?.attempts ?? 3);
+  let current = source;
+  for (let i = 0; i < attempts; i++) {
+    if (signal?.aborted) return current;
+    current = await hydrateSearchResultEpisodes(current, signal, {
+      force: options?.force || i > 0,
+    });
+    const loaded = getLoadedEpisodeCount(current);
+    const advertised = getResultEpisodeCount(current);
+    if (loaded > 0 && loaded >= advertised) return current;
+    if (!needsEpisodeHydration(current) && loaded > 0) return current;
+    if (i < attempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, 400 * (i + 1)));
+    }
+  }
+  return current;
+}
+
 /** 1080p 及以上：換源列表優先顯示的畫質 */
 export function isPreferredDisplayQuality(
   quality: string | undefined | null

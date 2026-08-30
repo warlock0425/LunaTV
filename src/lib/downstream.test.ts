@@ -6,6 +6,7 @@ import {
   DownstreamUpstreamError,
   getDetailFromApi,
   parseEpisodeCountFromRemarks,
+  parseVodPlayUrl,
   searchFromApi,
 } from './downstream';
 import { resetOutboundGateForTests } from './outbound-gate';
@@ -66,6 +67,22 @@ function getCalledKeywords(): string[] {
     return new URL(url).searchParams.get('wd') || '';
   });
 }
+
+describe('parseVodPlayUrl', () => {
+  it('accepts title-less urls and urls that themselves contain $', () => {
+    expect(
+      parseVodPlayUrl(
+        [
+          'https://cdn.example/1.m3u8',
+          '第2集$https://cdn.example/$token/2.m3u8?sign=1',
+        ].join('#')
+      ).episodes
+    ).toEqual([
+      'https://cdn.example/1.m3u8',
+      'https://cdn.example/$token/2.m3u8?sign=1',
+    ]);
+  });
+});
 
 describe('parseEpisodeCountFromRemarks', () => {
   it('parses common CMS remark formats', () => {
@@ -432,7 +449,7 @@ describe('downstream detail errors', () => {
     const detailPromise = getDetailFromApi(site, 'slow-body');
     await readStarted;
 
-    jest.advanceTimersByTime(10000);
+    jest.advanceTimersByTime(25000);
 
     await expect(detailPromise).rejects.toBeInstanceOf(DownstreamTimeoutError);
   });

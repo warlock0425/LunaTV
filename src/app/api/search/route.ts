@@ -7,10 +7,6 @@ import { cleanQueryForApi } from '@/lib/chinese';
 import { getAvailableApiSites, getConfig } from '@/lib/config';
 import { getMainlandSearchQueries } from '@/lib/mainland-search';
 import { fanoutSearchSources } from '@/lib/search-fanout';
-import {
-  recordSearchZeroResult,
-  shouldRecordSearchZeroResult,
-} from '@/lib/search-zero-results';
 import { orderSourcesByHealth } from '@/lib/source-health';
 import { orderSourcesByValidation } from '@/lib/source-validation';
 import { yellowWords } from '@/lib/yellow';
@@ -86,11 +82,6 @@ export async function GET(request: NextRequest) {
         return !yellowWords.some((word: string) => typeName.includes(word));
       });
     }
-    // CMS 可能回無關片名，前端 isFuzzyMatch 會濾成空——與「真的 0 筆」一樣記零結果
-    if (shouldRecordSearchZeroResult(flattenedResults, query)) {
-      void recordSearchZeroResult(query);
-    }
-
     if (flattenedResults.length === 0) {
       return NextResponse.json(
         { results: [], primaryQuery: cleanedOriginal },

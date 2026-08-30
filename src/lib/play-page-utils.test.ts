@@ -10,6 +10,7 @@ import {
   getStableTitle,
   getVodHlsBufferConfig,
   hydrateSearchResultEpisodes,
+  hydrateSearchResultEpisodesWithRetry,
   isBelowPreferredDisplayQuality,
   isMobileUserAgent,
   isPreferredDisplayQuality,
@@ -134,6 +135,7 @@ describe('needsEpisodeHydration', () => {
 
 describe('hydrateSearchResultEpisodes', () => {
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -266,6 +268,49 @@ describe('hydrateSearchResultEpisodes', () => {
       '/api/detail?source=src&id=1',
       expect.objectContaining({ cache: 'no-store' })
     );
+  });
+
+  it('retries detail when the first attempt still has only a probe', async () => {
+    jest.useFakeTimers();
+    let calls = 0;
+    const fetchMock = jest.fn(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return { ok: false, json: async () => ({}) };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          episodes: [
+            'https://cdn.example/d1.m3u8',
+            'https://cdn.example/d2.m3u8',
+            'https://cdn.example/d3.m3u8',
+          ],
+        }),
+      };
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const source = {
+      id: '1',
+      title: 'A',
+      poster: '',
+      episodes: ['https://cdn.example/probe.m3u8'],
+      episodes_titles: ['1'],
+      episode_count: 1184,
+      source: 'src',
+      source_name: '源',
+      year: '2024',
+    };
+    const pending = hydrateSearchResultEpisodesWithRetry(source, undefined, {
+      force: true,
+      attempts: 3,
+    });
+    await jest.runAllTimersAsync();
+    const hydrated = await pending;
+    expect(hydrated.episodes).toHaveLength(3);
+    expect(calls).toBe(2);
+    jest.useRealTimers();
   });
 });
 
