@@ -386,7 +386,8 @@ export async function getVideoResolutionFromM3u8(
       );
     }
     try {
-      const { probeM3u8ByHls } = await import('./m3u8-hls-probe');
+      // node16 動態相對 import 必須帶 .js；@/ 別名在此解析不到
+      const { probeM3u8ByHls } = await import('./m3u8-hls-probe.js');
       return await probeM3u8ByHls(m3u8Url, signal);
     } catch (hlsError) {
       if (signal?.aborted) throw hlsError;
