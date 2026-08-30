@@ -787,9 +787,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                           }`}
                           title={source.source_name || source.source}
                         >
-                          {toDisplayLanguage(
-                            source.source_name || source.source
-                          )}
+                          {source.source_name || source.source}
                         </h3>
                         <div className='flex items-center gap-1.5 shrink-0'>
                           {isCurrentSource && (
