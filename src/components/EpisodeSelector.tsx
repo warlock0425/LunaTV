@@ -536,15 +536,16 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
         </button>
       </div>
 
+      {episodeCounts.advertised > selectableEpisodeCount &&
+        selectableEpisodeCount <= 1 && (
+          <p className='px-4 pt-2 text-xs text-zinc-400'>
+            正在取得完整集數（來源標示 {episodeCounts.advertised} 集）
+          </p>
+        )}
+
       {/* 選集 Tab 內容 */}
       {activeTab === 'episodes' && (
         <div className='flex-1 overflow-hidden flex flex-col p-4 sm:p-6'>
-          {episodeCounts.advertised > selectableEpisodeCount && (
-            <p className='mb-3 text-xs text-zinc-400'>
-              正在取得完整集數（目前 {selectableEpisodeCount} 集，來源標示{' '}
-              {episodeCounts.advertised} 集）
-            </p>
-          )}
           {/* 分類標籤 */}
           <div className='flex items-center gap-3 mb-5 flex-shrink-0'>
             <div

@@ -123,8 +123,8 @@ export function getLoadedEpisodeCount(
 }
 
 /**
- * 選集 Tab 可依備註集數出現；格子只能用已載入網址。
- * 備註寫 20 集、實際只有 1 條探針時，不可畫出 20 顆假按鈕。
+ * 與上游一致：選集 Tab 只在已載入超過 1 條播放網址時出現。
+ * 備註「1184 集」只當提示，不能當成可點清單。
  */
 export function getEpisodeSelectorCounts(
   item: Pick<SearchResult, 'episodes' | 'episode_count'> | null | undefined,
@@ -142,7 +142,7 @@ export function getEpisodeSelectorCounts(
   return {
     loaded,
     advertised,
-    showEpisodeTab: Math.max(loaded, advertised) > 1,
+    showEpisodeTab: loaded > 1,
   };
 }
 

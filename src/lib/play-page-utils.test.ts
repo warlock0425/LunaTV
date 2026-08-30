@@ -69,7 +69,7 @@ describe('getEpisodeSelectorCounts / resolveLoadedEpisodeIndex', () => {
     ).toEqual({
       loaded: 1,
       advertised: 20,
-      showEpisodeTab: true,
+      showEpisodeTab: false,
     });
   });
 

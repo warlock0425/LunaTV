@@ -6,6 +6,14 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.9',
+    date: '2026-08-30',
+    content: `
+- 修正：選集對齊上游，只在已載入超過 1 條播放網址時顯示「選集」；備註集數不再當成可點清單。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.8',
     date: '2026-08-30',
     content: `
