@@ -84,8 +84,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
   const attemptedSourcesRef = useRef<Set<string>>(new Set());
   const speedTestInFlightRef = useRef<Set<string>>(new Set());
+  const triedSpeedTestUrlRef = useRef<Set<string>>(new Set());
   const videoInfoMapRef = useRef<Map<string, VideoInfo>>(new Map());
   const onSourceHydratedRef = useRef(onSourceHydrated);
+  const speedTestEpisodeIndexRef = useRef(Math.max(0, value - 1));
 
   useEffect(() => {
     attemptedSourcesRef.current = attemptedSources;
@@ -94,6 +96,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   useEffect(() => {
     onSourceHydratedRef.current = onSourceHydrated;
   }, [onSourceHydrated]);
+
+  useEffect(() => {
+    speedTestEpisodeIndexRef.current = Math.max(0, value - 1);
+  }, [value]);
 
   useEffect(() => {
     videoInfoMapRef.current = videoInfoMap;
@@ -207,7 +213,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     const sourceKey = `${source.source}-${source.id}`;
 
     if (
-      attemptedSourcesRef.current.has(sourceKey) ||
+      triedSpeedTestUrlRef.current.has(sourceKey) ||
       speedTestInFlightRef.current.has(sourceKey)
     ) {
       return;
@@ -216,7 +222,8 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
     try {
       let working = source;
-      let episodeUrl = pickSpeedTestEpisodeUrl(working.episodes);
+      const playingIndex = speedTestEpisodeIndexRef.current;
+      let episodeUrl = pickSpeedTestEpisodeUrl(working.episodes, playingIndex);
       if (
         !episodeUrl &&
         !pickFirstPlayableEpisodeUrl(working.episodes) &&
@@ -228,13 +235,14 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
           if (pickFirstPlayableEpisodeUrl(working.episodes)) {
             onSourceHydratedRef.current?.(working);
           }
-          episodeUrl = pickSpeedTestEpisodeUrl(working.episodes);
+          episodeUrl = pickSpeedTestEpisodeUrl(working.episodes, playingIndex);
         } catch {
           episodeUrl = null;
         }
       }
 
       if (episodeUrl) {
+        triedSpeedTestUrlRef.current.add(sourceKey);
         try {
           const info = await getVideoResolutionFromM3u8(episodeUrl);
           setVideoInfoMap((prev) => new Map(prev).set(sourceKey, info));
@@ -280,6 +288,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       precomputedVideoInfo.forEach((info, key) => {
         if (!info.hasError) {
           attemptedSourcesRef.current.add(key);
+          triedSpeedTestUrlRef.current.add(key);
         }
       });
     }
@@ -305,15 +314,20 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
       const pendingSources = availableSources.filter((source) => {
         const sourceKey = `${source.source}-${source.id}`;
-        return (
-          !attemptedSourcesRef.current.has(sourceKey) &&
-          !speedTestInFlightRef.current.has(sourceKey)
+        if (speedTestInFlightRef.current.has(sourceKey)) return false;
+        if (triedSpeedTestUrlRef.current.has(sourceKey)) return false;
+        if (!attemptedSourcesRef.current.has(sourceKey)) return true;
+        return Boolean(
+          pickSpeedTestEpisodeUrl(
+            source.episodes,
+            speedTestEpisodeIndexRef.current
+          )
         );
       });
 
       if (pendingSources.length === 0) return;
 
-      const batchSize = 2;
+      const batchSize = 4;
 
       for (let start = 0; start < pendingSources.length; start += batchSize) {
         const batch = pendingSources.slice(start, start + batchSize);

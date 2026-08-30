@@ -49,24 +49,44 @@ export function getLiveHlsBufferConfig(isMobile: boolean): {
       };
 }
 
+function episodeUrlAt(episodes: string[], index: number): string | null {
+  if (index < 0 || index >= episodes.length) return null;
+  const url = typeof episodes[index] === 'string' ? episodes[index].trim() : '';
+  return url || null;
+}
+
 /**
  * 畫質／速度測速要打哪一集的 URL。
  *
  * CMS `vod_play_url` 原樣收進 episodes，index 0 常是預告／花絮／重複條目
- * （見 downstream.parseVodPlayUrl，不過濾）。有第二筆就用 [1]，單集才退回 [0]。
+ * （見 downstream.parseVodPlayUrl，不過濾）。
  *
- * 首播優選測速與背景列表測速必須共用此函式，否則 1080p 閘門與換源標籤
- * 可能量到不同 URL、合法地互相矛盾。
+ * 換源請傳正在看的集數（點下去會播那集）。首播優選不要傳，改量第 2 集
+ * 當代表畫質，避開預告。第 2 集空白時再退回第一個可播網址，不能整源放棄。
  *
  * 不適用：source-validation 等「能不能播」探針（仍可用 [0]）。
  */
 export function pickSpeedTestEpisodeUrl(
-  episodes: string[] | undefined | null
+  episodes: string[] | undefined | null,
+  preferredIndex?: number
 ): string | null {
   if (!episodes || episodes.length === 0) return null;
-  const preferred = episodes.length > 1 ? episodes[1] : episodes[0];
-  const url = typeof preferred === 'string' ? preferred.trim() : '';
-  return url || null;
+
+  if (typeof preferredIndex === 'number') {
+    const playing = episodeUrlAt(episodes, preferredIndex);
+    if (playing) return playing;
+  }
+
+  if (episodes.length > 1) {
+    const second = episodeUrlAt(episodes, 1);
+    if (second) return second;
+  }
+
+  for (let index = 0; index < episodes.length; index++) {
+    const url = episodeUrlAt(episodes, index);
+    if (url) return url;
+  }
+  return null;
 }
 
 /** 換源／補詳情：有任一集播放網址即可，不套測速「避開 [0] 預告」規則。 */
@@ -153,8 +173,8 @@ export type SourceQualityInfo = {
 };
 
 /**
- * 換源「推薦」只給測過且成功的源。沒測過的不能當推薦，
- * 否則觀看紀錄那條有速度、旁邊空白源卻掛著推薦。
+ * 換源「推薦」只給測過的 1080p+。沒有高畫質就不掛徽章，
+ * 絕不把先測完的 480p／720p 當成推薦。
  */
 export function pickRecommendedSourceKey<
   T extends { source?: string | number; id?: string | number },
@@ -171,16 +191,12 @@ export function pickRecommendedSourceKey<
     s.source?.toString() === options.currentSource?.toString() &&
     s.id?.toString() === options.currentId?.toString();
 
-  const tested = sources.filter((s) => {
+  const hd = sources.find((s) => {
     if (isCurrent(s)) return false;
     const info = options.getInfo(keyOf(s));
-    return !!info && !info.hasError;
+    return !!info && !info.hasError && isPreferredDisplayQuality(info.quality);
   });
-  const hd = tested.find((s) =>
-    isPreferredDisplayQuality(options.getInfo(keyOf(s))?.quality)
-  );
-  const source = hd || tested[0];
-  return source ? keyOf(source) : null;
+  return hd ? keyOf(hd) : null;
 }
 
 /**

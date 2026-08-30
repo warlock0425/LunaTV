@@ -145,9 +145,25 @@ describe('pickSpeedTestEpisodeUrl（測速取集）', () => {
     expect(pickSpeedTestEpisodeUrl(['', '  '])).toBeNull();
   });
 
-  it('第二集空白時不退回 [0]（避免誤量預告）', () => {
-    // 有 length>1 但 [1] 空字串：視為無可用測速 URL
-    expect(pickSpeedTestEpisodeUrl(['http://a.m3u8', '  '])).toBeNull();
+  it('第二集空白時退回第一個可播網址（否則整源測不到）', () => {
+    expect(pickSpeedTestEpisodeUrl(['http://a.m3u8', '  '])).toBe(
+      'http://a.m3u8'
+    );
+    expect(pickSpeedTestEpisodeUrl(['', '  ', 'http://c.m3u8'])).toBe(
+      'http://c.m3u8'
+    );
+  });
+
+  it('有正在播放的集數時優先測那一集', () => {
+    expect(
+      pickSpeedTestEpisodeUrl(
+        ['http://cdn/ep1.m3u8', 'http://cdn/ep2.m3u8', 'http://cdn/ep3.m3u8'],
+        2
+      )
+    ).toBe('http://cdn/ep3.m3u8');
+    expect(
+      pickSpeedTestEpisodeUrl(['http://cdn/ep1.m3u8', 'http://cdn/ep2.m3u8'], 9)
+    ).toBe('http://cdn/ep2.m3u8');
   });
 });
 
@@ -233,6 +249,40 @@ describe('畫質優先過濾（換源列表）', () => {
         getInfo: (k) => info[k],
       })
     ).toBe('yz-1');
+  });
+
+  it('沒有 1080p+ 時不掛推薦，即使 480p 已經測完', () => {
+    const sources = [
+      { source: 'jy', id: '1' },
+      { source: 'lz', id: '2' },
+      { source: 'ikun', id: '3' },
+    ];
+    const info: Record<string, { quality: string } | undefined> = {
+      'lz-2': { quality: '480p' },
+      'ikun-3': { quality: '720p' },
+    };
+    expect(
+      pickRecommendedSourceKey(sources, {
+        currentSource: 'jy',
+        currentId: '1',
+        getInfo: (k) => info[k],
+      })
+    ).toBeNull();
+  });
+
+  it('已有 1080p 時即使別的源還沒測完也推薦高畫質', () => {
+    const sources = [
+      { source: 'jy', id: '1' },
+      { source: 'tt', id: '2' },
+      { source: 'ikun', id: '3' },
+    ];
+    expect(
+      pickRecommendedSourceKey(sources, {
+        currentSource: 'jy',
+        currentId: '1',
+        getInfo: (k) => (k === 'tt-2' ? { quality: '1080p' } : undefined),
+      })
+    ).toBe('tt-2');
   });
 
   it('尚未測速時不過濾，繼續觀看的源與其他源都會留下', () => {

@@ -279,7 +279,7 @@ export function usePlaybackSourceSearch({
     speedTestedKeys.current.add(key);
 
     try {
-      // 與首播測速同一規則：episodes[1] ?? [0]，見 pickSpeedTestEpisodeUrl
+      // 與換源列表同一規則：見 pickSpeedTestEpisodeUrl
       const episodeUrl = pickSpeedTestEpisodeUrl(res.episodes);
       if (!episodeUrl) {
         speedTestedKeys.current.delete(key);
