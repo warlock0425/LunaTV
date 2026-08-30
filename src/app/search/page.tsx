@@ -83,6 +83,8 @@ function SearchPageClient() {
     null
   );
   const layoutMode = layoutOverride ?? initialLayoutMode;
+  // 播放連結與卡片 query 必須用已送出的關鍵字，不能跟輸入框即時值綁在一起。
+  const resultQuery = submittedQuery.trim();
   const groupRefs = useRef<
     Map<string, React.RefObject<VideoCardHandle | null>>
   >(new Map());
@@ -1080,7 +1082,7 @@ function SearchPageClient() {
                                     title: title,
                                     year: year !== 'unknown' ? year : undefined,
                                     stype: episodes > 1 ? 'tv' : 'movie',
-                                    stitle: searchQuery.trim() || undefined,
+                                    stitle: resultQuery || undefined,
                                   });
                                   router.push(playUrl);
                                 }}
@@ -1171,7 +1173,7 @@ function SearchPageClient() {
                                         ? item.year
                                         : undefined,
                                     stype: count > 1 ? 'tv' : 'movie',
-                                    stitle: searchQuery.trim() || undefined,
+                                    stitle: resultQuery || undefined,
                                   });
                                   router.push(playUrl);
                                 }}
@@ -1281,11 +1283,7 @@ function SearchPageClient() {
                               episodes={episodes || undefined}
                               source_names={source_names}
                               douban_id={douban_id}
-                              query={
-                                searchQuery.trim() !== title
-                                  ? searchQuery.trim()
-                                  : ''
-                              }
+                              query={resultQuery !== title ? resultQuery : ''}
                               type={type}
                               type_name={type_name}
                             />
@@ -1313,9 +1311,7 @@ function SearchPageClient() {
                             source_name={item.source_name}
                             douban_id={item.douban_id}
                             query={
-                              searchQuery.trim() !== item.title
-                                ? searchQuery.trim()
-                                : ''
+                              resultQuery !== item.title ? resultQuery : ''
                             }
                             year={item.year}
                             from='search'

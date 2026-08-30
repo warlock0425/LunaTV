@@ -1798,8 +1798,10 @@ function PlayPageClient() {
             hls.on(
               Hls.Events.ERROR,
               function (event: Events.ERROR, data: ErrorData) {
-                logger.error('HLS Error:', event, data);
-                if (!data.fatal) return;
+                if (!data.fatal) {
+                  logger.debug('HLS Error:', event, data);
+                  return;
+                }
                 const { action, nextNetworkRetries, nextMediaRetries } =
                   nextHlsFatalAction(data.type, networkRetries, mediaRetries);
                 networkRetries = nextNetworkRetries;
@@ -2055,25 +2057,37 @@ function PlayPageClient() {
         ],
       });
 
-      let clockInterval: ReturnType<typeof setInterval> | null = setInterval(
-        () => {
-          if (!artPlayerRef.current) return;
-          const isFs =
-            artPlayerRef.current.fullscreen ||
-            artPlayerRef.current.fullscreenWeb;
-          if (!isFs) return;
-          const topbarLayer = artPlayerRef.current.layers.topbar;
-          if (!topbarLayer) return;
-          const timeEl = topbarLayer.querySelector('.art-topbar-time');
-          if (timeEl) {
-            const now = new Date();
-            const hh = String(now.getHours()).padStart(2, '0');
-            const mm = String(now.getMinutes()).padStart(2, '0');
-            timeEl.textContent = `${hh}:${mm}`;
-          }
-        },
-        1000
-      );
+      let clockInterval: ReturnType<typeof setInterval> | null = null;
+      const tickFullscreenClock = () => {
+        if (!artPlayerRef.current) return;
+        const isFs =
+          artPlayerRef.current.fullscreen || artPlayerRef.current.fullscreenWeb;
+        if (!isFs) return;
+        const topbarLayer = artPlayerRef.current.layers.topbar;
+        const timeEl = topbarLayer?.querySelector('.art-topbar-time');
+        if (timeEl) {
+          const now = new Date();
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(now.getMinutes()).padStart(2, '0');
+          timeEl.textContent = `${hh}:${mm}`;
+        }
+      };
+      const startFullscreenClock = () => {
+        if (clockInterval) return;
+        tickFullscreenClock();
+        clockInterval = setInterval(tickFullscreenClock, 1000);
+      };
+      const stopFullscreenClock = () => {
+        if (!clockInterval) return;
+        clearInterval(clockInterval);
+        clockInterval = null;
+      };
+      const syncFullscreenClock = () => {
+        const player = artPlayerRef.current;
+        const isFs = Boolean(player?.fullscreen || player?.fullscreenWeb);
+        if (isFs) startFullscreenClock();
+        else stopFullscreenClock();
+      };
 
       const applySavedPreferences = () => {
         try {
@@ -2154,10 +2168,7 @@ function PlayPageClient() {
       });
 
       artPlayerRef.current.on('destroy', () => {
-        if (clockInterval) {
-          clearInterval(clockInterval);
-          clockInterval = null;
-        }
+        stopFullscreenClock();
       });
 
       artPlayerRef.current.on('control', (state: boolean) => {
@@ -2165,13 +2176,16 @@ function PlayPageClient() {
         applySavedPreferences();
       });
       artPlayerRef.current.on('fullscreen', (state: boolean) => {
+        syncFullscreenClock();
         updateTopbar(state);
         applySavedPreferences();
       });
       artPlayerRef.current.on('fullscreenWeb', (state: boolean) => {
+        syncFullscreenClock();
         updateTopbar(state);
         applySavedPreferences();
       });
+      syncFullscreenClock();
 
       // 監聽播放狀態變化，控製 Wake Lock
       artPlayerRef.current.on('play', () => {

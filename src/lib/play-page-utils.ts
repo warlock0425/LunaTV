@@ -146,6 +146,61 @@ export function getEpisodeSelectorCounts(
   };
 }
 
+/**
+ * 換源列要顯示的集數：已載入網址優先。
+ * 探針只有 1 條時不要把備註「1184 集」畫成真實集數。
+ */
+export function getDisplayedSourceEpisodeCount(
+  item: Pick<SearchResult, 'episodes' | 'episode_count'> | null | undefined
+): number {
+  const loaded = getLoadedEpisodeCount(item);
+  if (loaded > 0) return loaded;
+  if (!item) return 0;
+  return getResultEpisodeCount(item);
+}
+
+const SOURCE_VERSION_TAG_RE =
+  /\(([^)]+)\)|\[([^\]]+)\]|（([^）]+)）|(?:第[一二三四五六七八九十\d]+[季部])|(?:國語|粤語|粵語|4K|1080P|先行版|劇場版|無修|未刪減)/i;
+
+/** 片源標題相對主片名多出來的版本標籤（國語、第 2 季、4K…）。 */
+export function pickSourceVersionTag(
+  sourceTitle: string | undefined | null,
+  mainTitle: string | undefined | null
+): string | null {
+  const cleanTitle = (sourceTitle || '').trim();
+  const main = (mainTitle || '').trim();
+  if (!cleanTitle || cleanTitle === main) return null;
+  const match = cleanTitle.match(SOURCE_VERSION_TAG_RE);
+  const extraTag = match ? match[0] : null;
+  if (extraTag && !main.includes(extraTag)) return extraTag;
+  return null;
+}
+
+export const EPISODE_DESCENDING_STORAGE_KEY = 'player_episode_descending';
+
+export function readEpisodeDescendingPreference(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return (
+      window.localStorage.getItem(EPISODE_DESCENDING_STORAGE_KEY) === 'true'
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function writeEpisodeDescendingPreference(descending: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      EPISODE_DESCENDING_STORAGE_KEY,
+      String(descending)
+    );
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 /** 點選集數超出已載入清單時夾到最後一集，不要直接說無集數。 */
 export function resolveLoadedEpisodeIndex(
   requestedIndex: number,

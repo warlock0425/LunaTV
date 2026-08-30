@@ -1,8 +1,10 @@
 import {
   calculateSourceScore,
+  EPISODE_DESCENDING_STORAGE_KEY,
   filterSourcesPreferHighQuality,
   filterTitleSafeCandidates,
   formatPlayerTime,
+  getDisplayedSourceEpisodeCount,
   getEpisodeSelectorCounts,
   getLiveHlsBufferConfig,
   getLoadedEpisodeCount,
@@ -19,9 +21,12 @@ import {
   pickFirstPlayableEpisodeUrl,
   pickNextPreferredSource,
   pickRecommendedSourceKey,
+  pickSourceVersionTag,
   pickSpeedTestEpisodeUrl,
+  readEpisodeDescendingPreference,
   resolveLoadedEpisodeIndex,
   selectSourceAfterSpeedTests,
+  writeEpisodeDescendingPreference,
 } from './play-page-utils';
 
 describe('mobile HLS buffers', () => {
@@ -83,6 +88,22 @@ describe('getEpisodeSelectorCounts / resolveLoadedEpisodeIndex', () => {
     ).toMatchObject({ loaded: 12, advertised: 20, showEpisodeTab: true });
   });
 
+  it('displays loaded count instead of the remarks 1184 when only a probe exists', () => {
+    expect(
+      getDisplayedSourceEpisodeCount({
+        episodes: ['https://cdn.example/probe.m3u8'],
+        episode_count: 1184,
+      })
+    ).toBe(1);
+    expect(
+      getDisplayedSourceEpisodeCount({
+        episodes: [],
+        episode_count: 24,
+      })
+    ).toBe(24);
+    expect(getDisplayedSourceEpisodeCount(null)).toBe(0);
+  });
+
   it('clamps an out-of-range click onto the last loaded episode', () => {
     expect(resolveLoadedEpisodeIndex(15, 1)).toEqual({
       index: 0,
@@ -99,6 +120,35 @@ describe('getEpisodeSelectorCounts / resolveLoadedEpisodeIndex', () => {
       empty: true,
       clamped: false,
     });
+  });
+});
+
+describe('pickSourceVersionTag', () => {
+  it('returns null when the source title is the main title', () => {
+    expect(pickSourceVersionTag('海賊王', '海賊王')).toBeNull();
+    expect(pickSourceVersionTag('', '海賊王')).toBeNull();
+  });
+
+  it('picks parenthetical version tags and season markers', () => {
+    expect(pickSourceVersionTag('海賊王(國語)', '海賊王')).toBe('(國語)');
+    expect(pickSourceVersionTag('某劇 第2季', '某劇')).toBe('第2季');
+  });
+});
+
+describe('episode descending preference', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('defaults to ascending and round-trips through localStorage', () => {
+    expect(readEpisodeDescendingPreference()).toBe(false);
+    writeEpisodeDescendingPreference(true);
+    expect(window.localStorage.getItem(EPISODE_DESCENDING_STORAGE_KEY)).toBe(
+      'true'
+    );
+    expect(readEpisodeDescendingPreference()).toBe(true);
+    writeEpisodeDescendingPreference(false);
+    expect(readEpisodeDescendingPreference()).toBe(false);
   });
 });
 

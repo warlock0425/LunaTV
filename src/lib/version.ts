@@ -6,6 +6,17 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.4.2',
+    date: '2026-08-30',
+    content: `
+- 播放：選集正序／倒序會記住，換片或重整後仍沿用。
+- 播放：全螢幕頂欄時鐘只在全螢幕時走動，離開即停止。
+- 播放：換源列改顯示已載入集數，不再把備註「1184 集」當成真實集數。
+- 搜尋：列表／卡片的播放連結改用已送出的關鍵字，不會被輸入框半成品帶跑。
+    `.trim(),
+  },
+
+  {
     version: 'v3.4.1',
     date: '2026-08-30',
     content: `

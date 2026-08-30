@@ -12,15 +12,17 @@ import React, {
 import { toDisplayLanguage } from '@/lib/chinese';
 import {
   filterSourcesPreferHighQuality,
+  getDisplayedSourceEpisodeCount,
   getEpisodeSelectorCounts,
-  getLoadedEpisodeCount,
-  getResultEpisodeCount,
   hydrateSearchResultEpisodes,
   hydrateSearchResultEpisodesWithRetry,
   needsEpisodeHydration,
   pickFirstPlayableEpisodeUrl,
   pickRecommendedSourceKey,
+  pickSourceVersionTag,
   pickSpeedTestEpisodeUrl,
+  readEpisodeDescendingPreference,
+  writeEpisodeDescendingPreference,
 } from '@/lib/play-page-utils';
 import { SearchResult } from '@/lib/types';
 import {
@@ -46,7 +48,6 @@ export interface EpisodeSelectorProps {
   currentSource?: string;
   currentId?: string;
   videoTitle?: string;
-  videoYear?: string;
   availableSources?: SearchResult[];
   sourceSearchLoading?: boolean;
   sourceSearchError?: string | null;
@@ -241,7 +242,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(selectedValuePage);
   const [lastSelectedValuePageKey, setLastSelectedValuePageKey] =
     useState(selectedValuePageKey);
-  const [descending, setDescending] = useState<boolean>(false);
+  const [descending, setDescending] = useState<boolean>(() =>
+    readEpisodeDescendingPreference()
+  );
 
   if (lastSelectedValuePageKey !== selectedValuePageKey) {
     setLastSelectedValuePageKey(selectedValuePageKey);
@@ -579,7 +582,13 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
             </div>
             <button
               className='flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white transition-all duration-200'
-              onClick={() => setDescending((prev) => !prev)}
+              onClick={() => {
+                setDescending((prev) => {
+                  const next = !prev;
+                  writeEpisodeDescendingPreference(next);
+                  return next;
+                });
+              }}
               title={descending ? '切換為正序' : '切換為倒序'}
             >
               <svg
@@ -730,6 +739,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               {displayAvailableSources.map((source) => {
                 const sourceKey = `${source.source}-${source.id}`;
                 const displaySource = source;
+                const displayedEpisodes =
+                  getDisplayedSourceEpisodeCount(displaySource);
+                const extraTag = pickSourceVersionTag(source.title, videoTitle);
                 const isCurrentSource =
                   displaySource.source?.toString() ===
                     currentSource?.toString() &&
@@ -806,35 +818,16 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
 
                       {/* 次標：統一顯示「N 集」，過濾重複主片名，僅保留版本標籤（如國語、4K） */}
                       <div className='flex items-center gap-2 mb-2 min-w-0'>
-                        {(() => {
-                          const loaded = getLoadedEpisodeCount(displaySource);
-                          const advertised =
-                            getResultEpisodeCount(displaySource);
-                          const shown = loaded > 1 ? loaded : advertised;
-                          return (
-                            <span className='text-[12px] font-semibold text-zinc-300 shrink-0 tabular-nums px-1.5 py-0.5 rounded bg-zinc-800/80 border border-white/5'>
-                              {shown > 0 ? `${shown} 集` : '單集'}
-                            </span>
-                          );
-                        })()}
-                        {(() => {
-                          const cleanTitle = (source.title || '').trim();
-                          const mainTitle = (videoTitle || '').trim();
-                          if (!cleanTitle || cleanTitle === mainTitle)
-                            return null;
-                          const remarkMatch = cleanTitle.match(
-                            /\(([^)]+)\)|\[([^\]]+)\]|（([^）]+)）|(?:第[一二三四五六七八九十\d]+[季部])|(?:國語|粤語|4K|1080P|先行版|劇場版|無修|未刪減)/i
-                          );
-                          const extraTag = remarkMatch ? remarkMatch[0] : null;
-                          if (extraTag && !mainTitle.includes(extraTag)) {
-                            return (
-                              <span className='text-[11px] px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0 truncate max-w-[120px] font-medium'>
-                                {toDisplayLanguage(extraTag)}
-                              </span>
-                            );
-                          }
-                          return null;
-                        })()}
+                        <span className='text-[12px] font-semibold text-zinc-300 shrink-0 tabular-nums px-1.5 py-0.5 rounded bg-zinc-800/80 border border-white/5'>
+                          {displayedEpisodes > 0
+                            ? `${displayedEpisodes} 集`
+                            : '單集'}
+                        </span>
+                        {extraTag ? (
+                          <span className='text-[11px] px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0 truncate max-w-[120px] font-medium'>
+                            {toDisplayLanguage(extraTag)}
+                          </span>
+                        ) : null}
                       </div>
 
                       {/* 底欄：統一三格指標（畫質標籤、速度、延遲、穩定度） */}
