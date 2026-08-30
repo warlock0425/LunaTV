@@ -734,7 +734,9 @@ function PlayPageClient() {
         const ensurePlayableEpisodes = async (
           candidate: SearchResult
         ): Promise<SearchResult | null> => {
-          if (candidate.episodes?.length) return candidate;
+          if (candidate.episodes?.length && !needsEpisodeHydration(candidate)) {
+            return candidate;
+          }
           const fresh = await fetchSourceDetail(candidate.source, candidate.id);
           if (fresh[0]?.episodes?.length) {
             return {
@@ -744,7 +746,7 @@ function PlayPageClient() {
               id: candidate.id,
             };
           }
-          return null;
+          return candidate.episodes?.length ? candidate : null;
         };
 
         if (sourcesInfo.length === 0) {
@@ -799,10 +801,7 @@ function PlayPageClient() {
           }
         }
 
-        if (
-          detailData &&
-          (!detailData.episodes || detailData.episodes.length === 0)
-        ) {
+        if (detailData && needsEpisodeHydration(detailData)) {
           setLoadingStage('fetching');
           setLoadingMessage('🎬 正在取得可播放集數...');
           const playable = await ensurePlayableEpisodes(detailData);
