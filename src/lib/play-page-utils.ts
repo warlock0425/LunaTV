@@ -110,6 +110,59 @@ export function getResultEpisodeCount(
   return item.episodes?.length || 0;
 }
 
+/** 已載入、真的點得下去的播放網址條數（不含備註上的「更新至 N 集」）。 */
+export function getLoadedEpisodeCount(
+  item: Pick<SearchResult, 'episodes'> | null | undefined
+): number {
+  if (!item?.episodes?.length) return 0;
+  let count = 0;
+  for (const url of item.episodes) {
+    if (typeof url === 'string' && url.trim()) count += 1;
+  }
+  return count;
+}
+
+/**
+ * 選集 Tab 可依備註集數出現；格子只能用已載入網址。
+ * 備註寫 20 集、實際只有 1 條探針時，不可畫出 20 顆假按鈕。
+ */
+export function getEpisodeSelectorCounts(
+  item: Pick<SearchResult, 'episodes' | 'episode_count'> | null | undefined,
+  fallbackLoaded = 0
+): {
+  loaded: number;
+  advertised: number;
+  showEpisodeTab: boolean;
+} {
+  const loaded = Math.max(getLoadedEpisodeCount(item), fallbackLoaded);
+  const advertised =
+    typeof item?.episode_count === 'number' && item.episode_count > 0
+      ? Math.max(item.episode_count, loaded)
+      : loaded;
+  return {
+    loaded,
+    advertised,
+    showEpisodeTab: Math.max(loaded, advertised) > 1,
+  };
+}
+
+/** 點選集數超出已載入清單時夾到最後一集，不要直接說無集數。 */
+export function resolveLoadedEpisodeIndex(
+  requestedIndex: number,
+  loadedCount: number
+): { index: number; empty: boolean; clamped: boolean } {
+  if (loadedCount <= 0) {
+    return { index: 0, empty: true, clamped: false };
+  }
+  if (requestedIndex < 0) {
+    return { index: 0, empty: false, clamped: true };
+  }
+  if (requestedIndex >= loadedCount) {
+    return { index: loadedCount - 1, empty: false, clamped: true };
+  }
+  return { index: requestedIndex, empty: false, clamped: false };
+}
+
 /**
  * 搜尋快取只留 1 個探針網址時，集數清單不完整，換源前要打詳情。
  * 測速可以先用探針，不必等完整清單。

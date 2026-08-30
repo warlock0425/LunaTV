@@ -3,7 +3,9 @@ import {
   filterSourcesPreferHighQuality,
   filterTitleSafeCandidates,
   formatPlayerTime,
+  getEpisodeSelectorCounts,
   getLiveHlsBufferConfig,
+  getLoadedEpisodeCount,
   getResultEpisodeCount,
   getStableTitle,
   getVodHlsBufferConfig,
@@ -16,6 +18,7 @@ import {
   pickFirstPlayableEpisodeUrl,
   pickRecommendedSourceKey,
   pickSpeedTestEpisodeUrl,
+  resolveLoadedEpisodeIndex,
   selectSourceAfterSpeedTests,
 } from './play-page-utils';
 
@@ -49,6 +52,51 @@ describe('getResultEpisodeCount', () => {
     ).toBe(24);
     expect(getResultEpisodeCount({ episodes: ['a', 'b'] })).toBe(2);
     expect(getResultEpisodeCount({ episodes: [] })).toBe(0);
+  });
+});
+
+describe('getEpisodeSelectorCounts / resolveLoadedEpisodeIndex', () => {
+  it('does not treat remarks count as clickable slots when only a probe exists', () => {
+    expect(
+      getLoadedEpisodeCount({ episodes: ['https://cdn.example/1.m3u8'] })
+    ).toBe(1);
+    expect(
+      getEpisodeSelectorCounts({
+        episodes: ['https://cdn.example/probe.m3u8'],
+        episode_count: 20,
+      })
+    ).toEqual({
+      loaded: 1,
+      advertised: 20,
+      showEpisodeTab: true,
+    });
+  });
+
+  it('uses fallback loaded count from the playing detail', () => {
+    expect(
+      getEpisodeSelectorCounts(
+        { episodes: ['https://a'], episode_count: 20 },
+        12
+      )
+    ).toMatchObject({ loaded: 12, advertised: 20, showEpisodeTab: true });
+  });
+
+  it('clamps an out-of-range click onto the last loaded episode', () => {
+    expect(resolveLoadedEpisodeIndex(15, 1)).toEqual({
+      index: 0,
+      empty: false,
+      clamped: true,
+    });
+    expect(resolveLoadedEpisodeIndex(5, 20)).toEqual({
+      index: 5,
+      empty: false,
+      clamped: false,
+    });
+    expect(resolveLoadedEpisodeIndex(3, 0)).toEqual({
+      index: 0,
+      empty: true,
+      clamped: false,
+    });
   });
 });
 

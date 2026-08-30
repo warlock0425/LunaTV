@@ -11,8 +11,11 @@ import React, {
 
 import {
   filterSourcesPreferHighQuality,
+  getEpisodeSelectorCounts,
+  getLoadedEpisodeCount,
   getResultEpisodeCount,
   hydrateSearchResultEpisodes,
+  needsEpisodeHydration,
   pickFirstPlayableEpisodeUrl,
   pickRecommendedSourceKey,
   pickSpeedTestEpisodeUrl,
@@ -78,14 +81,16 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     );
   }, [availableSources, currentSource, currentId]);
 
-  const effectiveTotalEpisodes = Math.max(
-    totalEpisodes,
-    currentSourceInfo?.episode_count || 0,
-    currentSourceInfo?.episodes?.length || 0
+  const episodeCounts = useMemo(
+    () => getEpisodeSelectorCounts(currentSourceInfo, totalEpisodes),
+    [currentSourceInfo, totalEpisodes]
   );
+  // 格子只畫已載入網址；備註集數只決定要不要出現「選集」Tab
+  const selectableEpisodeCount = episodeCounts.loaded;
+  const showEpisodeTab = episodeCounts.showEpisodeTab;
   const pageCount = Math.max(
     1,
-    Math.ceil(effectiveTotalEpisodes / episodesPerPage)
+    Math.ceil(Math.max(selectableEpisodeCount, 1) / episodesPerPage)
   );
 
   const [videoInfoMap, setVideoInfoMap] = useState<Map<string, VideoInfo>>(
@@ -121,8 +126,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
     videoInfoMapRef.current = videoInfoMap;
   }, [videoInfoMap]);
 
+  const currentHydrateKeyRef = useRef('');
   const [activeTab, setActiveTab] = useState<'episodes' | 'sources'>(
-    effectiveTotalEpisodes > 1 ? 'episodes' : 'sources'
+    showEpisodeTab ? 'episodes' : 'sources'
   );
   const hasUserSelectedTabRef = useRef(false);
 
@@ -188,10 +194,30 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   );
 
   useEffect(() => {
-    if (!hasUserSelectedTabRef.current && effectiveTotalEpisodes > 1) {
+    if (!hasUserSelectedTabRef.current && showEpisodeTab) {
       setActiveTab('episodes');
     }
-  }, [effectiveTotalEpisodes]);
+  }, [showEpisodeTab]);
+
+  // 備註寫 20 集、清單只有探針時，先補詳情再畫格子，避免點了才說無集數
+  useEffect(() => {
+    if (!currentSourceInfo || !needsEpisodeHydration(currentSourceInfo)) {
+      return;
+    }
+    const key = `${currentSourceInfo.source}-${currentSourceInfo.id}`;
+    if (currentHydrateKeyRef.current === key) return;
+    currentHydrateKeyRef.current = key;
+    void hydrateSearchResultEpisodes(currentSourceInfo, undefined, {
+      force: true,
+    })
+      .then((hydrated) => {
+        if (currentHydrateKeyRef.current !== key) return;
+        if (hydrated.episodes?.length) {
+          onSourceHydratedRef.current?.(hydrated);
+        }
+      })
+      .catch(() => undefined);
+  }, [currentSource, currentId, currentSourceInfo]);
 
   // 播放失敗引導換源：render 期同步 tab，避免 effect 內 setState  cascading
   const [prevPreferSourcesTab, setPrevPreferSourcesTab] =
@@ -357,10 +383,10 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const categoriesAsc = useMemo(() => {
     return Array.from({ length: pageCount }, (_, i) => {
       const start = i * episodesPerPage + 1;
-      const end = Math.min(start + episodesPerPage - 1, effectiveTotalEpisodes);
+      const end = Math.min(start + episodesPerPage - 1, selectableEpisodeCount);
       return { start, end };
     });
-  }, [pageCount, episodesPerPage, effectiveTotalEpisodes]);
+  }, [pageCount, episodesPerPage, selectableEpisodeCount]);
 
   const categories = useMemo(() => {
     if (descending) {
@@ -470,14 +496,14 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   const currentStart = currentPage * episodesPerPage + 1;
   const currentEnd = Math.min(
     currentStart + episodesPerPage - 1,
-    effectiveTotalEpisodes
+    selectableEpisodeCount
   );
 
   return (
     <div className='h-full flex flex-col glass-panel rounded-2xl overflow-hidden shadow-2xl'>
       {/* Tab 切換 */}
       <div className='flex flex-shrink-0 bg-black/40'>
-        {effectiveTotalEpisodes > 1 && (
+        {showEpisodeTab && (
           <button
             onClick={handleEpisodeTabClick}
             className={`relative flex-1 py-4 px-6 text-sm font-bold tracking-wider transition-all duration-300 ${
@@ -510,6 +536,12 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
       {/* 選集 Tab 內容 */}
       {activeTab === 'episodes' && (
         <div className='flex-1 overflow-hidden flex flex-col p-4 sm:p-6'>
+          {episodeCounts.advertised > selectableEpisodeCount && (
+            <p className='mb-3 text-xs text-zinc-400'>
+              正在取得完整集數（目前 {selectableEpisodeCount} 集，來源標示{' '}
+              {episodeCounts.advertised} 集）
+            </p>
+          )}
           {/* 分類標籤 */}
           <div className='flex items-center gap-3 mb-5 flex-shrink-0'>
             <div
@@ -563,43 +595,49 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
             </button>
           </div>
 
-          {/* 集數網格 */}
+          {/* 集數網格：只畫已載入網址，不依備註虛增按鈕 */}
           <div className='flex-1 overflow-y-auto scrollbar-hide'>
-            <div className='grid grid-cols-5 sm:grid-cols-8 gap-2.5'>
-              {(() => {
-                const len = currentEnd - currentStart + 1;
-                const episodes = Array.from({ length: len }, (_, i) =>
-                  descending ? currentEnd - i : currentStart + i
-                );
-                return episodes;
-              })().map((episodeNumber) => {
-                const isActive = episodeNumber === value;
-                return (
-                  <button
-                    key={episodeNumber}
-                    onClick={() => handleEpisodeClick(episodeNumber - 1)}
-                    className={`relative aspect-square flex flex-col items-center justify-center text-sm font-bold rounded-xl transition-all duration-200 ${
-                      isActive
-                        ? 'bg-accent text-white font-bold scale-105 shadow-md'
-                        : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white hover:scale-105'
-                    }`}
-                  >
-                    <span className='text-base'>
-                      {(() => {
-                        const title = episodes_titles?.[episodeNumber - 1];
-                        if (!title) return episodeNumber;
-                        const match = title.match(/(?:第)?(\d+)(?:集|話)/);
-                        if (match) return match[1];
-                        return episodeNumber;
-                      })()}
-                    </span>
-                    {isActive && (
-                      <span className='absolute top-1 right-1 w-2 h-2 bg-accent rounded-full animate-pulse' />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+            {selectableEpisodeCount < 1 ? (
+              <div className='h-full flex items-center justify-center text-sm text-zinc-400'>
+                正在取得可選集數…
+              </div>
+            ) : (
+              <div className='grid grid-cols-5 sm:grid-cols-8 gap-2.5'>
+                {(() => {
+                  const len = Math.max(0, currentEnd - currentStart + 1);
+                  const episodes = Array.from({ length: len }, (_, i) =>
+                    descending ? currentEnd - i : currentStart + i
+                  );
+                  return episodes;
+                })().map((episodeNumber) => {
+                  const isActive = episodeNumber === value;
+                  return (
+                    <button
+                      key={episodeNumber}
+                      onClick={() => handleEpisodeClick(episodeNumber - 1)}
+                      className={`relative aspect-square flex flex-col items-center justify-center text-sm font-bold rounded-xl transition-all duration-200 ${
+                        isActive
+                          ? 'bg-accent text-white font-bold scale-105 shadow-md'
+                          : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-white hover:scale-105'
+                      }`}
+                    >
+                      <span className='text-base'>
+                        {(() => {
+                          const title = episodes_titles?.[episodeNumber - 1];
+                          if (!title) return episodeNumber;
+                          const match = title.match(/(?:第)?(\d+)(?:集|話)/);
+                          if (match) return match[1];
+                          return episodeNumber;
+                        })()}
+                      </span>
+                      {isActive && (
+                        <span className='absolute top-1 right-1 w-2 h-2 bg-accent rounded-full animate-pulse' />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -763,11 +801,18 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                       </div>
 
                       <div className='flex items-center gap-2 mb-1.5 min-w-0'>
-                        {getResultEpisodeCount(displaySource) > 1 && (
-                          <span className='text-[12px] text-zinc-400 font-medium shrink-0 tabular-nums'>
-                            {getResultEpisodeCount(displaySource)} 集
-                          </span>
-                        )}
+                        {(() => {
+                          const loaded = getLoadedEpisodeCount(displaySource);
+                          const advertised =
+                            getResultEpisodeCount(displaySource);
+                          const shown = loaded > 1 ? loaded : advertised;
+                          if (shown <= 1) return null;
+                          return (
+                            <span className='text-[12px] text-zinc-400 font-medium shrink-0 tabular-nums'>
+                              {shown} 集
+                            </span>
+                          );
+                        })()}
                         <span
                           className='text-[11px] text-zinc-500 truncate'
                           title={source.title}

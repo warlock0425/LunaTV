@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.6',
+    date: '2026-08-30',
+    content: `
+- 修正：選集格子改為只畫已載入的播放網址，不再把片源備註「20 集」畫成點了才說無集數的假按鈕。
+- 修正：點選超出實際清單的集數時改切到最後一集並提示真實集數；換源若清單不完整會強制打詳情。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.5',
     date: '2026-08-30',
     content: `

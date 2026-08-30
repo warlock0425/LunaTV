@@ -29,6 +29,7 @@ import {
   isMobileUserAgent,
   needsEpisodeHydration,
   pickFirstPlayableEpisodeUrl,
+  resolveLoadedEpisodeIndex,
 } from '@/lib/play-page-utils';
 import {
   buildPlaybackSearchPlan,
@@ -1221,12 +1222,22 @@ function PlayPageClient() {
       if (!isLatestRequest()) return;
 
       let newDetail = targetDetail;
-      if (needsEpisodeHydration(newDetail)) {
-        newDetail = await hydrateSearchResultEpisodes(newDetail);
+      const playingIndex = currentEpisodeIndexRef.current;
+      const missingPlayable = !pickFirstPlayableEpisodeUrl(newDetail.episodes);
+      const incompleteForCurrent =
+        playingIndex >= (newDetail.episodes?.length || 0);
+      if (
+        missingPlayable ||
+        needsEpisodeHydration(newDetail) ||
+        incompleteForCurrent
+      ) {
+        newDetail = await hydrateSearchResultEpisodes(newDetail, undefined, {
+          force: missingPlayable || incompleteForCurrent,
+        });
         if (!isLatestRequest()) return;
         if (!pickFirstPlayableEpisodeUrl(newDetail.episodes)) {
           setIsVideoLoading(false);
-          toast('此來源沒有可播放的集數', 'error');
+          toast('無法取得此來源的播放清單', 'error');
           return;
         }
         setAvailableSources((prev) =>
@@ -1241,7 +1252,7 @@ function PlayPageClient() {
       setCachedDetail(newSource, newId, newDetail);
 
       // 嘗試跳轉到當前正在播放的集數
-      let targetIndex = currentEpisodeIndex;
+      let targetIndex = playingIndex;
 
       // 如果當前集數超出新源的範圍，則跳轉到第一集
       if (!newDetail.episodes || targetIndex >= newDetail.episodes.length) {
@@ -1428,23 +1439,30 @@ function PlayPageClient() {
         pendingEpisodeChangeRef.current = null;
 
         const currentTotal = currentDetail?.episodes?.length || 0;
-        if (finalTarget >= 0 && finalTarget < currentTotal) {
+        const resolved = resolveLoadedEpisodeIndex(finalTarget, currentTotal);
+        if (resolved.empty) {
+          toast('無法取得此來源的播放清單', 'error');
+        } else {
           // 手動切集要先取消倒數，否則倒數結束會把使用者拉回自動連播的目標集
           cancelAutoNextCountdown();
           // 在更換集數前儲存當前播放進度
           if (artPlayerRef.current) {
             saveCurrentPlayProgress();
           }
-          lockResumeAndSetEpisode(finalTarget);
+          lockResumeAndSetEpisode(resolved.index);
           replacePlaybackUrl({
             source: currentSourceRef.current,
             id: currentIdRef.current,
             title: getStableTitle(videoTitleRef.current, currentDetail?.title),
             year: videoYearRef.current || currentDetail?.year,
-            episode: finalTarget + 1,
+            episode: resolved.index + 1,
           });
-        } else {
-          toast('此片源無此集數', 'error');
+          if (resolved.clamped) {
+            toast(
+              `此片源實際只有 ${currentTotal} 集，已切到第 ${resolved.index + 1} 集`,
+              'info'
+            );
+          }
         }
 
         targetIndex = pendingEpisodeChangeRef.current;
