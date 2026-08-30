@@ -133,7 +133,12 @@ export default async function RootLayout({
   };
 
   return (
-    <html lang='zh-Hant' suppressHydrationWarning>
+    <html
+      lang='zh-Hant'
+      translate='no'
+      className='notranslate'
+      suppressHydrationWarning
+    >
       <head>
         <link rel='apple-touch-icon' href='/icons/icon-192x192.png' />
         {APPLE_SPLASH_SCREENS.map((splash) => (
@@ -155,7 +160,8 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${inter.className} ${notoSansTC.variable} font-primary min-h-screen bg-deep text-zinc-200`}
+        translate='no'
+        className={`${inter.className} ${notoSansTC.variable} notranslate font-primary min-h-screen bg-deep text-zinc-200`}
       >
         <ThemeProvider disableTransitionOnChange>
           <ToastProvider>

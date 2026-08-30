@@ -14,6 +14,15 @@ type ErrorBoundaryState = {
   error: Error | null;
 };
 
+function isTranslationDomError(error: Error): boolean {
+  const msg = error?.message || '';
+  return (
+    msg.includes('removeChild') ||
+    msg.includes('insertBefore') ||
+    (msg.includes('Node') && msg.includes('Failed to execute'))
+  );
+}
+
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
@@ -29,11 +38,18 @@ export class ErrorBoundary extends Component<
   componentDidCatch(error: Error) {
     if (isChunkLoadError(error)) {
       void reloadOnceForStaleChunk();
+    } else if (isTranslationDomError(error)) {
+      // 瀏覽器翻譯外掛修改 DOM 節點導致 React 崩潰時，嘗試自動重載恢復
+      void reloadOnceForStaleChunk();
     }
   }
 
   private handleReload = () => {
-    if (this.state.error && isChunkLoadError(this.state.error)) {
+    if (
+      this.state.error &&
+      (isChunkLoadError(this.state.error) ||
+        isTranslationDomError(this.state.error))
+    ) {
       void reloadOnceForStaleChunk();
       return;
     }

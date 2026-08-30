@@ -1848,6 +1848,30 @@ function PlayPageClient() {
           loading:
             '<img aria-hidden="true" src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MCIgaGVpZ2h0PSI1MCIgdmlld0JveD0iMCAwIDUwIDUwIj48cGF0aCBkPSJNMjUuMjUxIDYuNDYxYy0xMC4zMTggMC0xOC42ODMgOC4zNjUtMTguNjgzIDE4LjY4M2g0LjA2OGMwLTguMDcgNi41NDUtMTQuNjE1IDE0LjYxNS0xNC42MTVWNi40NjF6IiBmaWxsPSIjMDA5Njg4Ij48YW5pbWF0ZVRyYW5zZm9ybSBhdHRyaWJ1dGVOYW1lPSJ0cmFuc2Zvcm0iIGF0dHJpYnV0ZVR5cGU9IlhNTCIgZHVyPSIxcyIgZnJvbT0iMCAyNSAyNSIgcmVwZWF0Q291bnQ9ImluZGVmaW5pdGUiIHRvPSIzNjAgMjUgMjUiIHR5cGU9InJvdGF0ZSIvPjwvcGF0aD48L3N2Zz4=">',
         },
+        layers: [
+          {
+            name: 'topbar',
+            html: `
+              <div class="art-topbar flex items-center justify-between w-full px-5 py-3 text-white text-sm font-medium pointer-events-none select-none">
+                <div class="art-topbar-title truncate max-w-[75%] drop-shadow text-white/95 font-semibold text-sm sm:text-base"></div>
+                <div class="art-topbar-time tabular-nums text-xs opacity-90 drop-shadow bg-black/40 px-2.5 py-1 rounded-full border border-white/10 shrink-0 ml-2"></div>
+              </div>
+            `,
+            style: {
+              position: 'absolute',
+              top: '0',
+              left: '0',
+              right: '0',
+              zIndex: '20',
+              pointerEvents: 'none',
+              transition: 'opacity 0.3s ease, transform 0.3s ease',
+              opacity: '0',
+              transform: 'translateY(-10px)',
+              background:
+                'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0) 100%)',
+            },
+          },
+        ],
         settings: [
           {
             html: '去廣告',
@@ -1873,6 +1897,69 @@ function PlayPageClient() {
                 // ignore
               }
               return newVal ? '當前開啟' : '當前關閉';
+            },
+          },
+          {
+            html: '畫面比例',
+            tooltip: '預設 (自適應)',
+            selector: [
+              { html: '預設 (自適應)', value: 'default', default: true },
+              { html: '16:9', value: '16:9' },
+              { html: '21:9 (超寬屏)', value: '21:9' },
+              { html: '4:3', value: '4:3' },
+              { html: '滿版裁切 (無黑邊)', value: 'cover' },
+              { html: '拉伸填滿', value: 'fill' },
+            ],
+            onSelect(item: { html: string; value: string }) {
+              if (!artPlayerRef.current?.video) return item.html;
+              const video = artPlayerRef.current.video;
+              if (item.value === 'cover') {
+                artPlayerRef.current.aspectRatio = 'default';
+                video.style.objectFit = 'cover';
+              } else if (item.value === 'fill') {
+                artPlayerRef.current.aspectRatio = 'default';
+                video.style.objectFit = 'fill';
+              } else if (item.value === 'default') {
+                artPlayerRef.current.aspectRatio = 'default';
+                video.style.objectFit = 'contain';
+              } else {
+                artPlayerRef.current.aspectRatio = item.value;
+                video.style.objectFit = 'contain';
+              }
+              try {
+                localStorage.setItem('player_aspect_ratio', item.value);
+              } catch {
+                // ignore
+              }
+              return item.html;
+            },
+          },
+          {
+            html: '底欄透明度',
+            tooltip: '預設漸變',
+            selector: [
+              { html: '預設漸變', value: 'default', default: true },
+              { html: '半透明 (50%)', value: 'half' },
+              { html: '全透明 (0%)', value: 'transparent' },
+            ],
+            onSelect(item: { html: string; value: string }) {
+              const bottomEl = artPlayerRef.current?.template?.$bottom;
+              if (bottomEl) {
+                if (item.value === 'transparent') {
+                  bottomEl.style.background = 'transparent';
+                } else if (item.value === 'half') {
+                  bottomEl.style.background =
+                    'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%)';
+                } else {
+                  bottomEl.style.background = '';
+                }
+              }
+              try {
+                localStorage.setItem('player_control_opacity', item.value);
+              } catch {
+                // ignore
+              }
+              return item.html;
             },
           },
           skipSettings.skipToggle,
@@ -1904,14 +1991,92 @@ function PlayPageClient() {
         ],
       });
 
+      const applySavedPreferences = () => {
+        try {
+          const savedRatio = localStorage.getItem('player_aspect_ratio');
+          if (savedRatio && artPlayerRef.current?.video) {
+            const video = artPlayerRef.current.video;
+            if (savedRatio === 'cover') {
+              artPlayerRef.current.aspectRatio = 'default';
+              video.style.objectFit = 'cover';
+            } else if (savedRatio === 'fill') {
+              artPlayerRef.current.aspectRatio = 'default';
+              video.style.objectFit = 'fill';
+            } else if (savedRatio !== 'default') {
+              artPlayerRef.current.aspectRatio = savedRatio;
+              video.style.objectFit = 'contain';
+            }
+          }
+          const savedOpacity = localStorage.getItem('player_control_opacity');
+          const bottomEl = artPlayerRef.current?.template?.$bottom;
+          if (savedOpacity && bottomEl) {
+            if (savedOpacity === 'transparent') {
+              bottomEl.style.background = 'transparent';
+            } else if (savedOpacity === 'half') {
+              bottomEl.style.background =
+                'linear-gradient(to top, rgba(0,0,0,0.4) 0%, transparent 100%)';
+            }
+          }
+        } catch {
+          // ignore
+        }
+      };
+
+      const updateTopbar = (show: boolean) => {
+        if (!artPlayerRef.current) return;
+        const topbarLayer = artPlayerRef.current.layers.topbar;
+        if (!topbarLayer) return;
+        const isFs =
+          artPlayerRef.current.fullscreen || artPlayerRef.current.fullscreenWeb;
+        if (!isFs || !show) {
+          topbarLayer.style.opacity = '0';
+          topbarLayer.style.transform = 'translateY(-10px)';
+          return;
+        }
+        const titleEl = topbarLayer.querySelector('.art-topbar-title');
+        const timeEl = topbarLayer.querySelector('.art-topbar-time');
+        const displayTitle = getStableTitle(
+          videoTitleRef.current,
+          detailRef.current?.title
+        );
+        const epIdx = currentEpisodeIndexRef.current;
+        const epTitle = detailRef.current?.episodes_titles?.[epIdx];
+        const total = detailRef.current?.episodes?.length || totalEpisodes;
+        const epText = epTitle || (total > 1 ? `第 ${epIdx + 1} 集` : '');
+        if (titleEl) {
+          titleEl.textContent = epText
+            ? `${displayTitle} · ${epText}`
+            : displayTitle;
+        }
+        if (timeEl) {
+          const now = new Date();
+          const hh = String(now.getHours()).padStart(2, '0');
+          const mm = String(now.getMinutes()).padStart(2, '0');
+          timeEl.textContent = `${hh}:${mm}`;
+        }
+        topbarLayer.style.opacity = '1';
+        topbarLayer.style.transform = 'translateY(0)';
+      };
+
       // 監聽播放器事件
       artPlayerRef.current.on('ready', () => {
         setError(null);
+        applySavedPreferences();
 
         // 播放器就緒後，如果正在播放則請求 Wake Lock
         if (artPlayerRef.current && !artPlayerRef.current.paused) {
           requestWakeLock();
         }
+      });
+
+      artPlayerRef.current.on('control', (state: boolean) => {
+        updateTopbar(state);
+      });
+      artPlayerRef.current.on('fullscreen', (state: boolean) => {
+        updateTopbar(state);
+      });
+      artPlayerRef.current.on('fullscreenWeb', (state: boolean) => {
+        updateTopbar(state);
       });
 
       // 監聽播放狀態變化，控製 Wake Lock

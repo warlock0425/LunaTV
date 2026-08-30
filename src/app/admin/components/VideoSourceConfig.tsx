@@ -243,6 +243,57 @@ export const VideoSourceConfig = ({
       });
   };
 
+  const handleBatchDisableDeadSources = () => {
+    // 找出所有檢測結果為 invalid 的啟用中影片源
+    const deadKeys = sources
+      .filter((s) => {
+        if (s.disabled) return false;
+        const val = validationResults.find((r) => r.key === s.key);
+        return val && val.status === 'invalid';
+      })
+      .map((s) => s.key);
+
+    if (deadKeys.length === 0) {
+      showAlert({
+        type: 'warning',
+        title: '無失效來源',
+        message:
+          validationResults.length === 0
+            ? '請先點擊「三級有效性檢測」檢測來源狀態。'
+            : '目前檢測結果中沒有需要停用的失效影片源。',
+      });
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: '一鍵停用失效源',
+      message: `確定要一鍵停用這 ${deadKeys.length} 個檢測為失效的影片源嗎？`,
+      onCancel: () => setConfirmModal((prev) => ({ ...prev, isOpen: false })),
+      onConfirm: () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        withLoading('batchDisableDead', async () => {
+          await callSourceApi({ action: 'batch_disable', keys: deadKeys });
+          setSelectedSources((prev) => {
+            const next = new Set(prev);
+            deadKeys.forEach((k) => next.delete(k));
+            return next;
+          });
+          showAlert({
+            type: 'success',
+            title: '操作成功',
+            message: `已成功停用 ${deadKeys.length} 個失效影片源。`,
+          });
+        }).catch((err) => {
+          showError(
+            err instanceof Error ? err.message : '批量停用失效源失敗',
+            showAlert
+          );
+        });
+      },
+    });
+  };
+
   // 有效性檢測函數
   const handleValidateSources = async () => {
     if (!searchKeyword.trim()) {
@@ -867,6 +918,17 @@ export const VideoSourceConfig = ({
               }`}
             >
               重置健康狀態
+            </button>
+            <button
+              onClick={handleBatchDisableDeadSources}
+              disabled={isValidating || isLoading('batchDisableDead')}
+              className={`px-3 py-1 text-sm rounded-lg transition-colors ${
+                isValidating || isLoading('batchDisableDead')
+                  ? buttonStyles.disabled
+                  : buttonStyles.warning
+              }`}
+            >
+              {isLoading('batchDisableDead') ? '停用中...' : '一鍵停用失效源'}
             </button>
             <button
               onClick={() => setShowAddForm(!showAddForm)}

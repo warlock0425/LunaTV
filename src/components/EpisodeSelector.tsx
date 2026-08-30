@@ -9,6 +9,7 @@ import React, {
   useState,
 } from 'react';
 
+import { toDisplayLanguage } from '@/lib/chinese';
 import {
   filterSourcesPreferHighQuality,
   getEpisodeSelectorCounts,
@@ -759,7 +760,6 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                           onError={(e) => {
                             const img = e.currentTarget;
                             if (!img.dataset.retried && displaySource.poster) {
-                              // 直連失敗，改走伺服器代理
                               img.dataset.retried = 'true';
                               img.src = getProxiedImageUrl(source.poster);
                               return;
@@ -778,7 +778,7 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                       )}
                     </div>
 
-                    {/* 資訊：主標 = 片源名；片名降為次要 */}
+                    {/* 資訊：主標 = 片源名；次標 = 集數與版本標籤；底欄 = 統一指標 */}
                     <div className='flex-1 min-w-0 pr-1'>
                       <div className='flex items-center justify-between gap-2 mb-1'>
                         <h3
@@ -787,7 +787,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                           }`}
                           title={source.source_name || source.source}
                         >
-                          {source.source_name || source.source}
+                          {toDisplayLanguage(
+                            source.source_name || source.source
+                          )}
                         </h3>
                         <div className='flex items-center gap-1.5 shrink-0'>
                           {isCurrentSource && (
@@ -804,62 +806,75 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
                         </div>
                       </div>
 
-                      <div className='flex items-center gap-2 mb-1.5 min-w-0'>
+                      {/* 次標：統一顯示「N 集」，過濾重複主片名，僅保留版本標籤（如國語、4K） */}
+                      <div className='flex items-center gap-2 mb-2 min-w-0'>
                         {(() => {
                           const loaded = getLoadedEpisodeCount(displaySource);
                           const advertised =
                             getResultEpisodeCount(displaySource);
                           const shown = loaded > 1 ? loaded : advertised;
-                          if (shown <= 1) return null;
                           return (
-                            <span className='text-[12px] text-zinc-400 font-medium shrink-0 tabular-nums'>
-                              {shown} 集
+                            <span className='text-[12px] font-semibold text-zinc-300 shrink-0 tabular-nums px-1.5 py-0.5 rounded bg-zinc-800/80 border border-white/5'>
+                              {shown > 0 ? `${shown} 集` : '單集'}
                             </span>
                           );
                         })()}
-                        <span
-                          className='text-[11px] text-zinc-500 truncate'
-                          title={source.title}
-                        >
-                          {source.title}
-                        </span>
+                        {(() => {
+                          const cleanTitle = (source.title || '').trim();
+                          const mainTitle = (videoTitle || '').trim();
+                          if (!cleanTitle || cleanTitle === mainTitle)
+                            return null;
+                          const remarkMatch = cleanTitle.match(
+                            /\(([^)]+)\)|\[([^\]]+)\]|（([^）]+)）|(?:第[一二三四五六七八九十\d]+[季部])|(?:國語|粤語|4K|1080P|先行版|劇場版|無修|未刪減)/i
+                          );
+                          const extraTag = remarkMatch ? remarkMatch[0] : null;
+                          if (extraTag && !mainTitle.includes(extraTag)) {
+                            return (
+                              <span className='text-[11px] px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0 truncate max-w-[120px] font-medium'>
+                                {toDisplayLanguage(extraTag)}
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
 
-                      <div className='flex items-center gap-2 flex-wrap'>
+                      {/* 底欄：統一三格指標（畫質標籤、速度、延遲、穩定度） */}
+                      <div className='flex items-center gap-2 flex-wrap text-[11px]'>
                         {videoInfo && !videoInfo.hasError && (
                           <>
-                            {videoInfo.quality !== '未知' && (
-                              <span
-                                className={`px-2 py-0.5 rounded text-[11px] font-bold ${
-                                  ['4K', '2K'].includes(videoInfo.quality)
-                                    ? 'bg-purple-500/20 text-purple-200 ring-1 ring-purple-400/40'
-                                    : ['1080p', '720p'].includes(
-                                          videoInfo.quality
-                                        )
-                                      ? 'bg-green-500/20 text-green-200 ring-1 ring-green-400/40'
+                            <span
+                              className={`px-2 py-0.5 rounded font-bold ${
+                                ['4K', '2K'].includes(videoInfo.quality)
+                                  ? 'bg-purple-500/20 text-purple-200 ring-1 ring-purple-400/40'
+                                  : ['1080p', '720p'].includes(
+                                        videoInfo.quality
+                                      )
+                                    ? 'bg-green-500/20 text-green-200 ring-1 ring-green-400/40'
+                                    : videoInfo.quality === '未知'
+                                      ? 'bg-zinc-800 text-zinc-400'
                                       : 'bg-yellow-500/20 text-yellow-200 ring-1 ring-yellow-400/40'
-                                }`}
-                              >
-                                {videoInfo.quality}
-                              </span>
-                            )}
-                            <span className='text-[11px] text-emerald-300 font-medium tabular-nums'>
+                              }`}
+                            >
+                              {videoInfo.quality !== '未知'
+                                ? videoInfo.quality
+                                : '標準'}
+                            </span>
+                            <span className='text-emerald-300 font-medium tabular-nums'>
                               {videoInfo.loadSpeed}
                             </span>
-                            <span className='text-[11px] text-orange-300 font-medium tabular-nums'>
+                            <span className='text-orange-300 font-medium tabular-nums'>
                               {videoInfo.pingTime}ms
                             </span>
                           </>
                         )}
                         {videoInfo?.hasError && (
-                          <span className='px-2 py-0.5 rounded text-[11px] font-semibold bg-red-500/20 text-red-200 ring-1 ring-red-400/40'>
+                          <span className='px-2 py-0.5 rounded font-semibold bg-red-500/20 text-red-200 ring-1 ring-red-400/40'>
                             無法連線
                           </span>
                         )}
                         {!videoInfo && !attemptedSources.has(sourceKey) && (
-                          <span className='text-[11px] text-zinc-500'>
-                            測速中…
-                          </span>
+                          <span className='text-zinc-500'>測速中…</span>
                         )}
                         {videoInfo &&
                           !videoInfo.hasError &&

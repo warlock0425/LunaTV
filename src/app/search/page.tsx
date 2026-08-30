@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps, @typescript-eslint/no-explicit-any,no-empty */
 'use client';
 
-import { ChevronUp, Search, X } from 'lucide-react';
+import { ChevronUp, LayoutGrid, List, Play, Search, X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, {
   startTransition,
@@ -69,6 +69,18 @@ function SearchPageClient() {
   }, true);
   const [fluidOverride, setFluidOverride] = useState<boolean | null>(null);
   const useFluidSearch = fluidOverride ?? initialFluidSearch;
+  const initialLayoutMode = useClientValue(() => {
+    try {
+      const saved = localStorage.getItem('search_layout_mode');
+      return saved === 'list' ? 'list' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  }, 'grid');
+  const [layoutOverride, setLayoutOverride] = useState<'grid' | 'list' | null>(
+    null
+  );
+  const layoutMode = layoutOverride ?? initialLayoutMode;
   const groupRefs = useRef<
     Map<string, React.RefObject<VideoCardHandle | null>>
   >(new Map());
@@ -78,6 +90,41 @@ function SearchPageClient() {
       { douban_id?: number; episodes?: number; source_names: string[] }
     >
   >(new Map());
+
+  const handleLayoutModeChange = (mode: 'grid' | 'list') => {
+    setLayoutOverride(mode);
+    try {
+      localStorage.setItem('search_layout_mode', mode);
+    } catch {
+      // ignore
+    }
+  };
+
+  // 記錄與還原滾動位置
+  useEffect(() => {
+    const handleScroll = () => {
+      try {
+        sessionStorage.setItem('luna_search_scroll', String(window.scrollY));
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading && searchResults.length > 0) {
+      try {
+        const savedScroll = sessionStorage.getItem('luna_search_scroll');
+        if (savedScroll && Number(savedScroll) > 0) {
+          window.scrollTo({ top: Number(savedScroll), behavior: 'instant' });
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [isLoading, searchResults.length]);
 
   /**
    * 台灣片名在大陸片源站常有完全不同的譯名（魔戒→指环王），
@@ -905,23 +952,51 @@ function SearchPageClient() {
                   onOpen={() => setShowMobileFilters(true)}
                   onClose={() => setShowMobileFilters(false)}
                 />
-                <label className='flex items-center gap-2 cursor-pointer select-none shrink-0'>
-                  <span className='text-xs sm:text-sm text-zinc-700 dark:text-zinc-300'>
-                    聚合
-                  </span>
-                  <div className='relative'>
-                    <input
-                      type='checkbox'
-                      className='sr-only peer'
-                      checked={viewMode === 'agg'}
-                      onChange={() =>
-                        setViewMode(viewMode === 'agg' ? 'all' : 'agg')
-                      }
-                    />
-                    <div className='w-9 h-5 bg-zinc-300 rounded-full peer-checked:bg-accent transition-colors dark:bg-zinc-600'></div>
-                    <div className='absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4'></div>
+                <div className='flex items-center gap-3 shrink-0'>
+                  <label className='flex items-center gap-2 cursor-pointer select-none'>
+                    <span className='text-xs sm:text-sm text-zinc-700 dark:text-zinc-300'>
+                      聚合
+                    </span>
+                    <div className='relative'>
+                      <input
+                        type='checkbox'
+                        className='sr-only peer'
+                        checked={viewMode === 'agg'}
+                        onChange={() =>
+                          setViewMode(viewMode === 'agg' ? 'all' : 'agg')
+                        }
+                      />
+                      <div className='w-9 h-5 bg-zinc-300 rounded-full peer-checked:bg-accent transition-colors dark:bg-zinc-600'></div>
+                      <div className='absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4'></div>
+                    </div>
+                  </label>
+                  <div className='flex items-center gap-1 border-l border-zinc-200 dark:border-zinc-800 pl-3'>
+                    <button
+                      type='button'
+                      title='網格視圖'
+                      onClick={() => handleLayoutModeChange('grid')}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        layoutMode === 'grid'
+                          ? 'bg-accent text-white shadow-sm'
+                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      <LayoutGrid className='w-4 h-4' />
+                    </button>
+                    <button
+                      type='button'
+                      title='列表視圖'
+                      onClick={() => handleLayoutModeChange('list')}
+                      className={`p-1.5 rounded-lg transition-colors ${
+                        layoutMode === 'list'
+                          ? 'bg-accent text-white shadow-sm'
+                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
+                      }`}
+                    >
+                      <List className='w-4 h-4' />
+                    </button>
                   </div>
-                </label>
+                </div>
               </div>
               {fuzzySearchResults.length === 0 ? (
                 isLoading ? (
@@ -976,8 +1051,180 @@ function SearchPageClient() {
                   </div>
                 )
               ) : (
-                <div key={`search-results-${viewMode}`}>
-                  {viewMode === 'agg' ? (
+                <div key={`search-results-${viewMode}-${layoutMode}`}>
+                  {layoutMode === 'list' ? (
+                    <div className='flex flex-col gap-2.5 pb-16'>
+                      {viewMode === 'agg'
+                        ? filteredAggResults.map(([mapKey, group]) => {
+                            const first = group[0];
+                            const title = first?.title || '';
+                            const poster = first?.poster || '';
+                            const year = first?.year || 'unknown';
+                            const { episodes, source_names, type_name } =
+                              computeGroupStats(group);
+                            return (
+                              <div
+                                key={`list-agg-${mapKey}`}
+                                onClick={() => {
+                                  if (first) {
+                                    router.push(
+                                      `/play?source=${encodeURIComponent(
+                                        first.source
+                                      )}&id=${encodeURIComponent(
+                                        first.id
+                                      )}&title=${encodeURIComponent(
+                                        title
+                                      )}&year=${encodeURIComponent(
+                                        year
+                                      )}&from=search`
+                                    );
+                                  }
+                                }}
+                                className='group flex items-center justify-between gap-4 p-3 rounded-xl bg-zinc-900/50 hover:bg-zinc-800/80 border border-white/5 hover:border-accent/40 transition-all cursor-pointer'
+                              >
+                                <div className='flex items-center gap-3.5 min-w-0'>
+                                  <div className='relative w-12 h-16 rounded-lg overflow-hidden bg-zinc-800 shrink-0'>
+                                    {poster ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={poster}
+                                        alt={title}
+                                        className='w-full h-full object-cover group-hover:scale-105 transition-transform'
+                                        loading='lazy'
+                                      />
+                                    ) : (
+                                      <div className='w-full h-full flex items-center justify-center text-xs text-zinc-500'>
+                                        無圖
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className='flex flex-col min-w-0'>
+                                    <div className='flex items-center gap-2'>
+                                      <span className='font-semibold text-zinc-100 text-sm sm:text-base group-hover:text-accent transition-colors truncate'>
+                                        {title}
+                                      </span>
+                                      {year !== 'unknown' && (
+                                        <span className='text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0 tabular-nums'>
+                                          {year}
+                                        </span>
+                                      )}
+                                      {type_name && (
+                                        <span className='text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0'>
+                                          {type_name}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className='flex items-center gap-2 mt-1.5 text-xs text-zinc-400'>
+                                      {episodes > 0 && (
+                                        <span className='text-zinc-300 font-medium'>
+                                          {episodes > 1
+                                            ? `共 ${episodes} 集`
+                                            : '單集 / 電影'}
+                                        </span>
+                                      )}
+                                      <span className='text-zinc-600'>•</span>
+                                      <span className='truncate text-zinc-400'>
+                                        {source_names.slice(0, 4).join('、')}
+                                        {source_names.length > 4
+                                          ? ` 等 ${source_names.length} 個來源`
+                                          : ' 來源'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className='shrink-0 flex items-center gap-2'>
+                                  <button
+                                    type='button'
+                                    className='px-3.5 py-1.5 rounded-lg bg-accent/15 hover:bg-accent text-accent hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5'
+                                  >
+                                    <Play className='w-3.5 h-3.5 fill-current' />
+                                    <span>播放</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })
+                        : filteredAllResults.map((item) => {
+                            const count = getResultEpisodeCount(item);
+                            return (
+                              <div
+                                key={`list-all-${item.source}-${item.id}`}
+                                onClick={() => {
+                                  router.push(
+                                    `/play?source=${encodeURIComponent(
+                                      item.source
+                                    )}&id=${encodeURIComponent(
+                                      item.id
+                                    )}&title=${encodeURIComponent(
+                                      item.title
+                                    )}&year=${encodeURIComponent(
+                                      item.year || ''
+                                    )}&from=search`
+                                  );
+                                }}
+                                className='group flex items-center justify-between gap-4 p-3 rounded-xl bg-zinc-900/50 hover:bg-zinc-800/80 border border-white/5 hover:border-accent/40 transition-all cursor-pointer'
+                              >
+                                <div className='flex items-center gap-3.5 min-w-0'>
+                                  <div className='relative w-12 h-16 rounded-lg overflow-hidden bg-zinc-800 shrink-0'>
+                                    {item.poster ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img
+                                        src={item.poster}
+                                        alt={item.title}
+                                        className='w-full h-full object-cover group-hover:scale-105 transition-transform'
+                                        loading='lazy'
+                                      />
+                                    ) : (
+                                      <div className='w-full h-full flex items-center justify-center text-xs text-zinc-500'>
+                                        無圖
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className='flex flex-col min-w-0'>
+                                    <div className='flex items-center gap-2'>
+                                      <span className='font-semibold text-zinc-100 text-sm sm:text-base group-hover:text-accent transition-colors truncate'>
+                                        {item.title}
+                                      </span>
+                                      {item.year && item.year !== 'unknown' && (
+                                        <span className='text-xs px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 shrink-0 tabular-nums'>
+                                          {item.year}
+                                        </span>
+                                      )}
+                                      {item.type_name && (
+                                        <span className='text-xs px-1.5 py-0.5 rounded bg-accent/10 text-accent shrink-0'>
+                                          {item.type_name}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className='flex items-center gap-2 mt-1.5 text-xs text-zinc-400'>
+                                      {count > 0 && (
+                                        <span className='text-zinc-300 font-medium'>
+                                          {count > 1
+                                            ? `共 ${count} 集`
+                                            : '單集 / 電影'}
+                                        </span>
+                                      )}
+                                      <span className='text-zinc-600'>•</span>
+                                      <span className='text-zinc-400'>
+                                        來源：{item.source_name || item.source}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className='shrink-0 flex items-center gap-2'>
+                                  <button
+                                    type='button'
+                                    className='px-3.5 py-1.5 rounded-lg bg-accent/15 hover:bg-accent text-accent hover:text-white text-xs font-semibold transition-colors flex items-center gap-1.5'
+                                  >
+                                    <Play className='w-3.5 h-3.5 fill-current' />
+                                    <span>播放</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                    </div>
+                  ) : viewMode === 'agg' ? (
                     <VirtualGrid
                       items={filteredAggResults}
                       className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
