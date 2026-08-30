@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.1.17',
+    date: '2026-08-30',
+    content: `
+- 修正：換源測速改打正在看的那一集；沒有那一集才退回第 2 集或第一個可播網址。先前固定量第 2 集，長劇看到後面時正在播的源會空白。
+- 修正：推薦只掛 1080p 以上，不再把先測完的 480p 標成推薦。
+- 改善：換源背景測速一次 4 個，後排來源比較快出現畫質，沒測完的會顯示測速中。
+    `.trim(),
+  },
+
+  {
     version: 'v3.1.16',
     date: '2026-08-30',
     content: `
