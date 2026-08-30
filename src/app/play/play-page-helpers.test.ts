@@ -6,11 +6,13 @@ import {
   clampEpisodeIndex,
   clampResumeTarget,
   DETAIL_CACHE_HARD_TTL,
+  DETAIL_CACHE_KEY,
   DETAIL_CACHE_TTL,
   type DetailCacheEntry,
   ensureVideoSource,
   formatEpisodeBadge,
   formatEpisodeUpdateMessage,
+  getCachedDetail,
   getEpisodeCount,
   getEpisodeUrl,
   getPlayPageRemountKey,
@@ -23,6 +25,7 @@ import {
   resolveCachedDetailEntry,
   resolveEpisodeIndexAfterRefresh,
   resolvePlayResume,
+  setCachedDetail,
   shouldApplyBackgroundDetail,
   shouldApplyPlayResume,
   shouldSeekLateResume,
@@ -40,6 +43,7 @@ function makeDetail(
     episodes_titles:
       overrides.episodes_titles ??
       overrides.episodes.map((_, i) => `E${i + 1}`),
+    episode_count: overrides.episode_count,
     source: overrides.source ?? 'srcA',
     source_name: overrides.source_name ?? 'Source A',
     year: overrides.year ?? '2024',
@@ -147,6 +151,25 @@ describe('shouldApplyBackgroundDetail（背景刷新 URL 雙重保險）', () =>
     expect(
       shouldApplyBackgroundDetail(prev, makeDetail({ episodes: [] }), 0)
     ).toBe(false);
+  });
+
+  it('prev 是探針且集數清單不完整時，即使當前集 URL 變更也強制允許套用', () => {
+    const probePrev = makeDetail({
+      source: 'guangsu',
+      id: '1',
+      episode_count: 1184,
+      episodes: ['https://cdn.example/probe.m3u8'],
+    });
+    const fullNext = makeDetail({
+      source: 'guangsu',
+      id: '1',
+      episode_count: 1184,
+      episodes: [
+        'https://cdn.example/ep1.m3u8',
+        'https://cdn.example/ep2.m3u8',
+      ],
+    });
+    expect(shouldApplyBackgroundDetail(probePrev, fullNext, 0)).toBe(true);
   });
 });
 
@@ -322,6 +345,66 @@ describe('play page detail merge helpers', () => {
     expect(merged.applied).toBe(true);
     expect(merged.detail?.episodes).toEqual(['a', 'b', 'c']);
     expect(merged.episodeIndex).toBe(2);
+  });
+
+  it('prev 是未水合探針時直接以 fresh 完整集數覆蓋，不把探針鎖在第 1 集', () => {
+    const prev = makeDetail({
+      source: 'guangsu',
+      id: '1',
+      episode_count: 1184,
+      episodes: ['https://cdn.example/probe-ep2.m3u8'],
+    });
+    const fresh = makeDetail({
+      source: 'guangsu',
+      id: '1',
+      episode_count: 1184,
+      episodes: [
+        'https://cdn.example/real-ep1.m3u8',
+        'https://cdn.example/real-ep2.m3u8',
+      ],
+    });
+    const merged = mergeDetailPreservingPlayback(prev, fresh, 0);
+    expect(merged.applied).toBe(true);
+    expect(merged.detail?.episodes[0]).toBe(
+      'https://cdn.example/real-ep1.m3u8'
+    );
+    expect(merged.detail?.episodes).toHaveLength(2);
+  });
+});
+
+describe('getCachedDetail / setCachedDetail 探針快取過濾', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('setCachedDetail 不會把未水合探針寫入 localStorage', () => {
+    const probe = makeDetail({
+      source: 'guangsu',
+      id: '1',
+      episode_count: 1184,
+      episodes: ['https://cdn.example/probe.m3u8'],
+    });
+    setCachedDetail('guangsu', '1', probe);
+    expect(localStorage.getItem(DETAIL_CACHE_KEY)).toBeNull();
+  });
+
+  it('getCachedDetail 遇到 localStorage 內已有的未水合探針回傳 null', () => {
+    const probe = makeDetail({
+      source: 'guangsu',
+      id: '1',
+      episode_count: 1184,
+      episodes: ['https://cdn.example/probe.m3u8'],
+    });
+    localStorage.setItem(
+      DETAIL_CACHE_KEY,
+      JSON.stringify({
+        guangsu_1: {
+          detail: probe,
+          timestamp: Date.now(),
+        },
+      })
+    );
+    expect(getCachedDetail('guangsu', '1')).toBeNull();
   });
 });
 
