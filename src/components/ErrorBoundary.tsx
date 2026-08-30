@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { Component, ReactNode } from 'react';
 
+import { isChunkLoadError, reloadOnceForStaleChunk } from '@/lib/chunk-reload';
+
 type ErrorBoundaryProps = {
   children: ReactNode;
   fallback?: ReactNode;
@@ -24,7 +26,17 @@ export class ErrorBoundary extends Component<
     return { error };
   }
 
+  componentDidCatch(error: Error) {
+    if (isChunkLoadError(error)) {
+      void reloadOnceForStaleChunk();
+    }
+  }
+
   private handleReload = () => {
+    if (this.state.error && isChunkLoadError(this.state.error)) {
+      void reloadOnceForStaleChunk();
+      return;
+    }
     window.location.reload();
   };
 

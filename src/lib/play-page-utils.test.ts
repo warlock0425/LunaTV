@@ -17,6 +17,7 @@ import {
   needsEpisodeHydration,
   parseLoadSpeedKBps,
   pickFirstPlayableEpisodeUrl,
+  pickNextPreferredSource,
   pickRecommendedSourceKey,
   pickSpeedTestEpisodeUrl,
   resolveLoadedEpisodeIndex,
@@ -378,6 +379,26 @@ describe('pickFirstPlayableEpisodeUrl（換源可播）', () => {
 });
 
 describe('畫質優先過濾（換源列表）', () => {
+  it('自動換源先挑下一個 1080p+', () => {
+    const sources = [
+      { source: 'cur', id: '1' },
+      { source: 'low', id: '2' },
+      { source: 'hd', id: '3' },
+    ];
+    const info: Record<string, { quality: string; hasError?: boolean }> = {
+      'cur-1': { quality: '720p' },
+      'low-2': { quality: '480p' },
+      'hd-3': { quality: '1080p' },
+    };
+    expect(
+      pickNextPreferredSource(sources, {
+        currentSource: 'cur',
+        currentId: '1',
+        getInfo: (k) => info[k],
+      })
+    ).toEqual({ source: 'hd', id: '3' });
+  });
+
   it('識別 1080p+ 與低畫質', () => {
     expect(isPreferredDisplayQuality('1080p')).toBe(true);
     expect(isPreferredDisplayQuality('4K')).toBe(true);

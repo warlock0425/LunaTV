@@ -5,7 +5,7 @@
   <p><strong>為繁體中文使用者優化的自架影音聚合平台</strong></p>
   <p>多源搜尋・陸源譯名橋接・集數追更・無廣告 HLS・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-3.3.0-blue)
+![Version](https://img.shields.io/badge/Version-3.4.0-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -170,7 +170,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 | 本機 `pnpm dev`              | 開發除錯                                | localStorage 或 Redis | 不建議當正式站               |
 
 > 映像位址：`ghcr.io/berserker8888/lunatv:latest`  
-> 版本標籤可改為 `3.3.0` 或你需要的 tag。
+> 版本標籤可改為 `3.4.0` 或你需要的 tag。
 
 ### Docker Compose + Kvrocks（推薦）
 
@@ -477,7 +477,16 @@ A: 會爆自架頻寬，也更容易被源站封鎖機房 IP。本專案 VOD 採
 A: 不適合。正式環境請用 Kvrocks／Redis／Upstash。
 
 **Q: 和上游映像能混用嗎？**  
-A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.3.0**）；資料結構多數相容，但升級前請先備份。
+A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.4.0**）；資料結構多數相容，但升級前請先備份。
+
+**Q: 有些源搜得到但黑屏？**  
+A: v3.4.0 起，直連 CORS／網路失敗會自動改走站內 HLS 代理再播一次。平時仍走瀏覽器直連。若代理後仍失敗，畫面上可重試或自動切到下一個 1080p 源。
+
+**Q: 更新映像後白屏、點了沒反應？**  
+A: v3.4.0 會在舊 JS 檔失效時自動硬重新整理一次。若仍卡住，再手動 Ctrl+F5。
+
+**Q: 換源後片頭片尾設定不見了？**  
+A: v3.4.0 起跳過秒數綁片名／豆瓣 ID，同一部片換源會沿用。舊的「依來源」設定會在第一次讀到時自動帶過去。
 
 ## 致謝
 

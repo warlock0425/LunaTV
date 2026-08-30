@@ -1,28 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import {
-  isValidApiRemoteUrl,
-  isValidApiSource,
-} from '@/lib/api-input-validation';
-import { getConfig } from '@/lib/config';
 import { filterAdsFromM3U8Detailed } from '@/lib/hls-ad-filter';
+import { getBaseUrl, resolveUrl } from '@/lib/live';
 import {
-  getBaseUrl,
-  isWebLiveEnabled,
-  peekCachedLiveChannels,
-  resolveUrl,
-  WEB_LIVE_DISABLED_MESSAGE,
-} from '@/lib/live';
-import {
-  isUrlAllowedForLiveProxy,
-  rememberLiveProxyHost,
-} from '@/lib/live-proxy-allowlist';
+  authorizeProxyFetch,
+  type ProxyKind,
+  proxyKindQuery,
+} from '@/lib/proxy-access';
 import {
   fetchSafeRemoteUrl,
-  isSafeRemoteUrl,
   readResponseTextWithLimit,
   UnsafeRemoteUrlError,
 } from '@/lib/url-safety';
@@ -32,65 +18,12 @@ const M3U8_FETCH_TIMEOUT_MS = 10000;
 const MAX_M3U8_BYTES = 5 * 1024 * 1024;
 
 export async function GET(request: Request) {
-  // 1. 身份與權限驗證
-  const authInfo = await getVerifiedAuthInfo(request);
-  if (!authInfo) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const access = await authorizeProxyFetch(request, 'm3u8');
+  if (!access.ok) return access.response;
 
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
-  const allowCORS = searchParams.get('allowCORS') === 'true';
-  const source = searchParams.get('moontv-source');
-  if (!source) {
-    return NextResponse.json(
-      { error: 'Missing moontv-source parameter' },
-      { status: 400 }
-    );
-  }
-  if (!url || !isValidApiRemoteUrl(url)) {
-    return NextResponse.json(
-      { error: 'Missing or invalid url' },
-      { status: 400 }
-    );
-  }
-
-  // 2. 主機安全驗證 (防 SSRF)
-  if (!isSafeRemoteUrl(url)) {
-    return NextResponse.json({ error: 'Unsafe remote URL' }, { status: 403 });
-  }
-
-  if (!isValidApiSource(source)) {
-    return NextResponse.json(
-      { error: 'Invalid source parameter' },
-      { status: 400 }
-    );
-  }
-
-  const config = await getConfig();
-  if (!isWebLiveEnabled(config)) {
-    return NextResponse.json(
-      { error: WEB_LIVE_DISABLED_MESSAGE },
-      { status: 403 }
-    );
-  }
-  const liveSource = config.LiveConfig?.find(
-    (s: any) => s.key === source && !s.disabled
-  );
-  if (!liveSource) {
-    return NextResponse.json({ error: 'Source not found' }, { status: 404 });
-  }
-
-  const cachedChannels = peekCachedLiveChannels(source);
-  const channelUrls = cachedChannels?.channels.map((ch) => ch.url) ?? [];
-  if (!isUrlAllowedForLiveProxy(source, url, liveSource.url, channelUrls)) {
-    return NextResponse.json(
-      { error: 'URL not allowed for this live source' },
-      { status: 403 }
-    );
-  }
-
-  const ua = liveSource.ua || 'AptvPlayer/1.4.10';
+  const { url, source, kind, fetchHeaders, rememberHost } = access;
+  const allowCORS =
+    new URL(request.url).searchParams.get('allowCORS') === 'true';
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), M3U8_FETCH_TIMEOUT_MS);
 
@@ -101,9 +34,7 @@ export async function GET(request: Request) {
     response = await fetchSafeRemoteUrl(url, {
       cache: 'no-cache',
       credentials: 'same-origin',
-      headers: {
-        'User-Agent': ua,
-      },
+      headers: fetchHeaders,
       signal: controller.signal,
     });
 
@@ -131,8 +62,8 @@ export async function GET(request: Request) {
     }
 
     // 確認是清單後才記住 host，避免開放重導向把攻擊者域名寫進白名單
-    rememberLiveProxyHost(source, url);
-    if (finalUrl) rememberLiveProxyHost(source, finalUrl);
+    rememberHost(url);
+    if (finalUrl) rememberHost(finalUrl);
 
     const filteredContent = m3u8Content.includes('#EXTINF')
       ? filterAdsFromM3U8Detailed(m3u8Content).content
@@ -143,7 +74,9 @@ export async function GET(request: Request) {
       baseUrl,
       request,
       allowCORS,
-      source
+      source,
+      kind,
+      rememberHost
     );
 
     const headers = new Headers();
@@ -189,7 +122,9 @@ function rewriteM3U8Content(
   baseUrl: string,
   req: Request,
   allowCORS: boolean,
-  source: string | null
+  source: string | null,
+  kind: ProxyKind,
+  rememberHost: (fetchedUrl: string) => void
 ) {
   const requestUrl = new URL(req.url);
   const forwardedProtocol = req.headers
@@ -215,9 +150,9 @@ function rewriteM3U8Content(
     req.headers.get('x-forwarded-host')?.split(',')[0].trim() ||
     req.headers.get('host') ||
     requestUrl.host;
-  const sourceParam = source
-    ? `&moontv-source=${encodeURIComponent(source)}`
-    : '';
+  const sourceParam =
+    (source ? `&moontv-source=${encodeURIComponent(source)}` : '') +
+    proxyKindQuery(kind);
   const proxyBase = `${protocol}://${host}/api/proxy`;
 
   const lines = content.split('\n');
@@ -230,7 +165,7 @@ function rewriteM3U8Content(
     if (line && !line.startsWith('#')) {
       const resolvedUrl = resolveUrl(baseUrl, line);
       // 清單內絕對 URL 可能在別的 CDN host——必須記住，否則 segment 會 403
-      if (source) rememberLiveProxyHost(source, resolvedUrl);
+      rememberHost(resolvedUrl);
       const proxyUrl = allowCORS
         ? resolvedUrl
         : `${proxyBase}/segment?url=${encodeURIComponent(
@@ -252,7 +187,7 @@ function rewriteM3U8Content(
         proxyBase,
         sourceParam,
         'segment',
-        source
+        rememberHost
       );
     }
 
@@ -267,7 +202,7 @@ function rewriteM3U8Content(
         proxyBase,
         sourceParam,
         'key',
-        source
+        rememberHost
       );
     }
 
@@ -284,7 +219,7 @@ function rewriteM3U8Content(
         proxyBase,
         sourceParam,
         'm3u8',
-        source
+        rememberHost
       );
     }
 
@@ -297,7 +232,7 @@ function rewriteM3U8Content(
         const nextLine = lines[i].trim();
         if (nextLine && !nextLine.startsWith('#')) {
           const resolvedUrl = resolveUrl(baseUrl, nextLine);
-          if (source) rememberLiveProxyHost(source, resolvedUrl);
+          rememberHost(resolvedUrl);
           const proxyUrl = `${proxyBase}/m3u8?url=${encodeURIComponent(
             resolvedUrl
           )}${sourceParam}`;
@@ -321,15 +256,14 @@ function rewriteTagUri(
   proxyBase: string,
   sourceParam: string,
   endpoint: 'segment' | 'key' | 'm3u8',
-  source: string | null
+  rememberHost: (fetchedUrl: string) => void
 ) {
   const uriMatch = line.match(/\bURI=(["'])(.*?)\1/i);
   if (uriMatch) {
     const quote = uriMatch[1];
     const originalUri = uriMatch[2];
     const resolvedUrl = resolveUrl(baseUrl, originalUri);
-    // 與媒體行相同：tag 裡的 URI 也可能跨 CDN
-    if (source) rememberLiveProxyHost(source, resolvedUrl);
+    rememberHost(resolvedUrl);
     const proxyUrl = `${proxyBase}/${endpoint}?url=${encodeURIComponent(
       resolvedUrl
     )}${sourceParam}`;

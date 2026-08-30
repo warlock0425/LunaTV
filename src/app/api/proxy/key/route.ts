@@ -1,23 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import {
-  isValidApiRemoteUrl,
-  isValidApiSource,
-} from '@/lib/api-input-validation';
-import { getConfig } from '@/lib/config';
-import {
-  isWebLiveEnabled,
-  peekCachedLiveChannels,
-  WEB_LIVE_DISABLED_MESSAGE,
-} from '@/lib/live';
-import { isUrlAllowedForLiveProxy } from '@/lib/live-proxy-allowlist';
 import { logger } from '@/lib/logger';
+import { authorizeProxyFetch } from '@/lib/proxy-access';
 import {
   fetchSafeRemoteUrl,
-  isSafeRemoteUrl,
   readResponseBytesWithLimit,
   UnsafeRemoteUrlError,
 } from '@/lib/url-safety';
@@ -27,73 +13,17 @@ const KEY_FETCH_TIMEOUT_MS = 10000;
 const MAX_KEY_BYTES = 1024 * 1024;
 
 export async function GET(request: Request) {
-  // 1. 身份與權限驗證
-  const authInfo = await getVerifiedAuthInfo(request);
-  if (!authInfo) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const access = await authorizeProxyFetch(request, 'key');
+  if (!access.ok) return access.response;
 
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
-  const source = searchParams.get('moontv-source');
-  if (!url || !isValidApiRemoteUrl(url)) {
-    return NextResponse.json(
-      { error: 'Missing or invalid url' },
-      { status: 400 }
-    );
-  }
-
-  // 2. 主機安全驗證 (防 SSRF)
-  if (!isSafeRemoteUrl(url)) {
-    return NextResponse.json({ error: 'Unsafe remote URL' }, { status: 403 });
-  }
-
-  if (!source) {
-    return NextResponse.json(
-      { error: 'Missing moontv-source parameter' },
-      { status: 400 }
-    );
-  }
-  if (!isValidApiSource(source)) {
-    return NextResponse.json(
-      { error: 'Invalid source parameter' },
-      { status: 400 }
-    );
-  }
-
-  const config = await getConfig();
-  if (!isWebLiveEnabled(config)) {
-    return NextResponse.json(
-      { error: WEB_LIVE_DISABLED_MESSAGE },
-      { status: 403 }
-    );
-  }
-  const liveSource = config.LiveConfig?.find(
-    (s: any) => s.key === source && !s.disabled
-  );
-  if (!liveSource) {
-    return NextResponse.json({ error: 'Source not found' }, { status: 404 });
-  }
-
-  const cachedChannels = peekCachedLiveChannels(source);
-  const channelUrls = cachedChannels?.channels.map((ch) => ch.url) ?? [];
-  if (!isUrlAllowedForLiveProxy(source, url, liveSource.url, channelUrls)) {
-    return NextResponse.json(
-      { error: 'URL not allowed for this live source' },
-      { status: 403 }
-    );
-  }
-
-  const ua = liveSource.ua || 'AptvPlayer/1.4.10';
+  const { url, fetchHeaders } = access;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), KEY_FETCH_TIMEOUT_MS);
 
   try {
     logger.debug('Proxy key request:', url);
     const response = await fetchSafeRemoteUrl(url, {
-      headers: {
-        'User-Agent': ua,
-      },
+      headers: fetchHeaders,
       signal: controller.signal,
     });
     if (!response.ok) {

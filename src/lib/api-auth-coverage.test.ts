@@ -26,6 +26,7 @@ const AUTH_HELPERS = [
   'requireActiveUser',
   'requireAdmin',
   'requireOwner',
+  'authorizeProxyFetch',
 ];
 const HTTP_METHODS = [
   'GET',

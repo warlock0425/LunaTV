@@ -272,6 +272,40 @@ export type SourceQualityInfo = {
  * 換源「推薦」只給測過的 1080p+。沒有高畫質就不掛徽章，
  * 絕不把先測完的 480p／720p 當成推薦。
  */
+/**
+ * 播放失敗時自動換源：先找下一個已測過的 1080p+，否則下一個測過成功的源，再不然清單裡的下一個。
+ */
+export function pickNextPreferredSource<
+  T extends { source?: string | number; id?: string | number },
+>(
+  sources: T[],
+  options: {
+    currentSource?: string | number | null;
+    currentId?: string | number | null;
+    getInfo: (sourceKey: string) => SourceQualityInfo | undefined;
+  }
+): T | null {
+  const keyOf = (item: T) => `${item.source}-${item.id}`;
+  const isCurrent = (item: T) =>
+    item.source?.toString() === options.currentSource?.toString() &&
+    item.id?.toString() === options.currentId?.toString();
+
+  const others = sources.filter((item) => !isCurrent(item));
+  if (others.length === 0) return null;
+
+  const hd = others.find((item) => {
+    const info = options.getInfo(keyOf(item));
+    return !!info && !info.hasError && isPreferredDisplayQuality(info.quality);
+  });
+  if (hd) return hd;
+
+  const testedOk = others.find((item) => {
+    const info = options.getInfo(keyOf(item));
+    return !!info && !info.hasError;
+  });
+  return testedOk || others[0] || null;
+}
+
 export function pickRecommendedSourceKey<
   T extends { source?: string | number; id?: string | number },
 >(

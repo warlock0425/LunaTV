@@ -5,6 +5,7 @@ import {
   getHostnameFromUrl,
   isUrlAllowedForLiveProxy,
   rememberLiveProxyHost,
+  vodProxyMemoryKey,
 } from './live-proxy-allowlist';
 
 describe('live-proxy-allowlist', () => {
@@ -111,6 +112,29 @@ describe('live-proxy-allowlist', () => {
         'live-b',
         'https://cdn-edge.example/seg.ts',
         'https://playlist.example/list.m3u',
+        []
+      )
+    ).toBe(false);
+  });
+
+  it('點播記憶體 key 不與直播源共用白名單', () => {
+    rememberLiveProxyHost(
+      vodProxyMemoryKey('guangsu'),
+      'https://vod-cdn.example/index.m3u8'
+    );
+    expect(
+      isUrlAllowedForLiveProxy(
+        vodProxyMemoryKey('guangsu'),
+        'https://vod-cdn.example/seg.ts',
+        '',
+        []
+      )
+    ).toBe(true);
+    expect(
+      isUrlAllowedForLiveProxy(
+        'guangsu',
+        'https://vod-cdn.example/seg.ts',
+        '',
         []
       )
     ).toBe(false);

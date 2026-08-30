@@ -1,37 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { NextResponse } from 'next/server';
 
-import { getVerifiedAuthInfo } from '@/lib/api-auth';
-import {
-  isValidApiRemoteUrl,
-  isValidApiSource,
-} from '@/lib/api-input-validation';
-import { getConfig } from '@/lib/config';
-import {
-  isWebLiveEnabled,
-  peekCachedLiveChannels,
-  WEB_LIVE_DISABLED_MESSAGE,
-} from '@/lib/live';
-import { isUrlAllowedForLiveProxy } from '@/lib/live-proxy-allowlist';
+import { authorizeProxyFetch } from '@/lib/proxy-access';
 import { RemoteResponseTooLargeError } from '@/lib/response-limit';
-import {
-  fetchSafeRemoteUrl,
-  isSafeRemoteUrl,
-  UnsafeRemoteUrlError,
-} from '@/lib/url-safety';
+import { fetchSafeRemoteUrl, UnsafeRemoteUrlError } from '@/lib/url-safety';
 
 export const runtime = 'nodejs';
 
 const SEGMENT_FETCH_TIMEOUT_MS = 15000;
 /** 單次分片上限：擋大檔濫用，仍覆蓋一般 HLS 分片與 Range 請求 */
 const MAX_SEGMENT_BYTES = 50 * 1024 * 1024;
-
-function channelUrlsForSource(sourceKey: string): string[] {
-  const cached = peekCachedLiveChannels(sourceKey);
-  if (!cached) return [];
-  return cached.channels.map((ch) => ch.url);
-}
 
 function rejectOversizedOrLimitBody(
   response: Response,
@@ -82,68 +59,10 @@ function rejectOversizedOrLimitBody(
 }
 
 export async function GET(request: Request) {
-  const authInfo = await getVerifiedAuthInfo(request);
-  if (!authInfo) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const access = await authorizeProxyFetch(request, 'segment');
+  if (!access.ok) return access.response;
 
-  const { searchParams } = new URL(request.url);
-  const url = searchParams.get('url');
-  const source = searchParams.get('moontv-source');
-  if (!source) {
-    return NextResponse.json(
-      { error: 'Missing moontv-source parameter' },
-      { status: 400 }
-    );
-  }
-  if (!url || !isValidApiRemoteUrl(url)) {
-    return NextResponse.json(
-      { error: 'Missing or invalid url' },
-      { status: 400 }
-    );
-  }
-
-  if (!isSafeRemoteUrl(url)) {
-    return NextResponse.json({ error: 'Unsafe remote URL' }, { status: 403 });
-  }
-
-  if (!isValidApiSource(source)) {
-    return NextResponse.json(
-      { error: 'Invalid source parameter' },
-      { status: 400 }
-    );
-  }
-
-  const config = await getConfig();
-  if (!isWebLiveEnabled(config)) {
-    return NextResponse.json(
-      { error: WEB_LIVE_DISABLED_MESSAGE },
-      { status: 403 }
-    );
-  }
-  const liveSource = config.LiveConfig?.find(
-    (s: any) => s.key === source && !s.disabled
-  );
-  if (!liveSource) {
-    return NextResponse.json({ error: 'Source not found' }, { status: 404 });
-  }
-
-  // 目標 host 必須屬於此直播源（清單／頻道／m3u8 曾合法觸及的 CDN）
-  if (
-    !isUrlAllowedForLiveProxy(
-      source,
-      url,
-      liveSource.url,
-      channelUrlsForSource(source)
-    )
-  ) {
-    return NextResponse.json(
-      { error: 'URL not allowed for this live source' },
-      { status: 403 }
-    );
-  }
-
-  const ua = liveSource.ua || 'AptvPlayer/1.4.10';
+  const { url, fetchHeaders } = access;
   const controller = new AbortController();
   const timeoutId = setTimeout(
     () => controller.abort(),
@@ -154,7 +73,7 @@ export async function GET(request: Request) {
   let responseUsed = false;
 
   try {
-    const upstreamHeaders = new Headers({ 'User-Agent': ua });
+    const upstreamHeaders = new Headers(fetchHeaders);
     const range = request.headers.get('range');
     const ifRange = request.headers.get('if-range');
     if (range) upstreamHeaders.set('Range', range);

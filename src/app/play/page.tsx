@@ -28,8 +28,10 @@ import {
   getVodHlsBufferConfig,
   hydrateSearchResultEpisodesWithRetry,
   isMobileUserAgent,
+  isPreferredDisplayQuality,
   needsEpisodeHydration,
   pickFirstPlayableEpisodeUrl,
+  pickNextPreferredSource,
   resolveLoadedEpisodeIndex,
 } from '@/lib/play-page-utils';
 import {
@@ -39,8 +41,14 @@ import {
   mergePlayingSourceIntoAvailableSources,
   PlaybackSearchPlanStage,
 } from '@/lib/play-search';
+import { makeSkipIdentityParts } from '@/lib/skip-identity';
 import { SearchResult, SkipConfig } from '@/lib/types';
 import { processImageUrl } from '@/lib/utils';
+import {
+  buildVodHlsProxyUrl,
+  isVodHlsProxyUrl,
+  shouldFallbackToVodProxy,
+} from '@/lib/vod-hls-proxy';
 import { useAutoNextCountdown } from '@/hooks/useAutoNextCountdown';
 import { useFavorite } from '@/hooks/useFavorite';
 import { usePlaybackSourceSearch } from '@/hooks/usePlaybackSourceSearch';
@@ -313,7 +321,15 @@ function PlayPageClient() {
   // 影片地址由 detail + 集數索引推導（越界時為空字串）
   // 只依賴「目前集的 URL 字串」，避免 detail 物件被背景刷新置換時
   // 觸發多餘重算；字串相同則播放器 effect 不會重建 HLS。
-  const videoUrl = detail?.episodes?.[currentEpisodeIndex] || '';
+  const directVideoUrl = detail?.episodes?.[currentEpisodeIndex] || '';
+  const playbackSlotKey = `${currentSource}+${currentId}+${currentEpisodeIndex}`;
+  const [vodProxySlot, setVodProxySlot] = useState<string | null>(null);
+  const [playerReloadToken, setPlayerReloadToken] = useState(0);
+  const useVodProxy = vodProxySlot === playbackSlotKey;
+  const videoUrl =
+    useVodProxy && directVideoUrl && currentSource
+      ? buildVodHlsProxyUrl(directVideoUrl, currentSource)
+      : directVideoUrl;
   const totalEpisodes = detail?.episodes?.length || 0;
   const lastVolumeRef = useRef<number>(0.7);
   const lastPlaybackRateRef = useRef<number>(
@@ -449,14 +465,25 @@ function PlayPageClient() {
   }) => {
     if (!currentSourceRef.current || !currentIdRef.current) return;
     const previous = skipConfigRef.current;
+    const identity = makeSkipIdentityParts({
+      doubanId: videoDoubanId,
+      title: videoTitleRef.current,
+      year: videoYearRef.current,
+    });
 
     try {
       setSkipConfig(newConfig);
       skipConfigRef.current = newConfig;
       if (!newConfig.enable && !newConfig.intro_time && !newConfig.outro_time) {
         await deleteSkipConfig(currentSourceRef.current, currentIdRef.current);
+        if (identity) {
+          await deleteSkipConfig(identity.source, identity.id);
+        }
         syncSkipSettingsToPlayer();
       } else {
+        if (identity) {
+          await saveSkipConfig(identity.source, identity.id, newConfig);
+        }
         await saveSkipConfig(
           currentSourceRef.current,
           currentIdRef.current,
@@ -1160,11 +1187,20 @@ function PlayPageClient() {
     };
   }, [currentSource, currentId]);
 
-  // 跳過片頭片尾設定處理
+  // 跳過片頭片尾設定處理：優先用片名／豆瓣身分，換源仍沿用同一套秒數。
   useEffect(() => {
     if (!currentSource || !currentId) return;
 
     let cancelled = false;
+    const identity = makeSkipIdentityParts({
+      doubanId: videoDoubanId,
+      title: videoTitle,
+      year: videoYear,
+    });
+    const identityKey = identity
+      ? generateStorageKey(identity.source, identity.id)
+      : null;
+    const sourceKey = generateStorageKey(currentSource, currentId);
 
     const applySkip = (config: SkipConfig | null | undefined) => {
       if (cancelled) return;
@@ -1174,25 +1210,39 @@ function PlayPageClient() {
       syncSkipSettingsToPlayer();
     };
 
-    skipConfigRef.current = DEFAULT_SKIP_CONFIG;
-
     const initSkipConfig = async () => {
-      setSkipConfig(DEFAULT_SKIP_CONFIG);
       try {
-        const config = await getSkipConfig(currentSource, currentId);
-        applySkip(config);
+        const byIdentity = identity
+          ? await getSkipConfig(identity.source, identity.id)
+          : null;
+        if (cancelled) return;
+        if (byIdentity) {
+          applySkip(byIdentity);
+          return;
+        }
+        const bySource = await getSkipConfig(currentSource, currentId);
+        if (cancelled) return;
+        applySkip(bySource);
+        if (bySource && identity) {
+          try {
+            await saveSkipConfig(identity.source, identity.id, bySource);
+          } catch {
+            // 遷移失敗不擋播放
+          }
+        }
       } catch (err) {
         logger.error('讀取跳過片頭片尾設定失敗:', err);
       }
     };
 
-    initSkipConfig();
+    void initSkipConfig();
 
     const unsubscribe = subscribeToDataUpdates<Record<string, SkipConfig>>(
       'skipConfigsUpdated',
       (configs) => {
-        const key = generateStorageKey(currentSource, currentId);
-        applySkip(configs[key]);
+        applySkip(
+          (identityKey ? configs[identityKey] : undefined) || configs[sourceKey]
+        );
       }
     );
 
@@ -1200,7 +1250,7 @@ function PlayPageClient() {
       cancelled = true;
       unsubscribe();
     };
-  }, [currentSource, currentId]);
+  }, [currentSource, currentId, videoDoubanId, videoTitle, videoYear]);
 
   // 處理換源
   const handleSourceChange = async (
@@ -1769,6 +1819,24 @@ function PlayPageClient() {
                   return;
                 }
                 logger.debug('無法恢復的錯誤');
+                if (
+                  shouldFallbackToVodProxy(
+                    data.type,
+                    isVodHlsProxyUrl(videoUrl)
+                  )
+                ) {
+                  const now = video.currentTime || 0;
+                  const saved =
+                    now > 3
+                      ? now
+                      : resumeTimeRef.current || lastGoodResumeRef.current;
+                  if (typeof saved === 'number' && saved > 3) {
+                    resumeTimeRef.current = saved;
+                    lastGoodResumeRef.current = saved;
+                  }
+                  setVodProxySlot(playbackSlotKey);
+                  return;
+                }
                 hls.destroy();
                 setIsVideoLoading(false);
                 setPlaybackSoftError(action.message);
@@ -2000,6 +2068,13 @@ function PlayPageClient() {
         if (artPlayerRef.current.currentTime > 0) {
           return;
         }
+        if (
+          currentSourceRef.current &&
+          shouldFallbackToVodProxy('networkError', isVodHlsProxyUrl(videoUrl))
+        ) {
+          setVodProxySlot(playbackSlotKey);
+          return;
+        }
         const source = currentSourceRef.current;
         const id = currentIdRef.current;
         const episodeIndex = currentEpisodeIndexRef.current;
@@ -2120,7 +2195,7 @@ function PlayPageClient() {
       logger.error('創建播放器失敗:', err);
       setError('播放器初始化失敗');
     }
-  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
+  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled, playerReloadToken]);
 
   // P 鍵切換子母畫面。
   // 這個監聽必須獨立於播放器建立 effect：後者的依賴含 videoUrl，每換一集就重跑
@@ -2304,13 +2379,52 @@ function PlayPageClient() {
                     message={playbackSoftError}
                     onRetry={() => {
                       setPlaybackSoftError(null);
-                      window.location.reload();
+                      setVodProxySlot(null);
+                      lastLoadedVideoUrlRef.current = '';
+                      setPlayerReloadToken((token) => token + 1);
                     }}
-                    onSwitchSource={() => {
+                    onAutoSwitch={
+                      pickNextPreferredSource(availableSources, {
+                        currentSource,
+                        currentId,
+                        getInfo: (key) => precomputedVideoInfo.get(key),
+                      })
+                        ? () => {
+                            const next = pickNextPreferredSource(
+                              availableSources,
+                              {
+                                currentSource,
+                                currentId,
+                                getInfo: (key) => precomputedVideoInfo.get(key),
+                              }
+                            );
+                            if (!next?.source || !next.id) return;
+                            setPlaybackSoftError(null);
+                            void handleSourceChange(
+                              String(next.source),
+                              String(next.id),
+                              next.title || videoTitle
+                            );
+                          }
+                        : undefined
+                    }
+                    autoSwitchLabel={(() => {
+                      const next = pickNextPreferredSource(availableSources, {
+                        currentSource,
+                        currentId,
+                        getInfo: (key) => precomputedVideoInfo.get(key),
+                      });
+                      if (!next) return undefined;
+                      const info = precomputedVideoInfo.get(
+                        `${next.source}-${next.id}`
+                      );
+                      return info && isPreferredDisplayQuality(info.quality)
+                        ? '自動切換至下一個 1080p 來源'
+                        : '自動切換至下一個可用來源';
+                    })()}
+                    onBrowseSources={() => {
                       setPlaybackSoftError(null);
                       setIsEpisodeSelectorCollapsed(false);
-                      // 行動端選集在下方，桌面展開側欄；統一切到換源 tab 需 EpisodeSelector 支援
-                      // 先滾到側欄／選集區
                       requestAnimationFrame(() => {
                         document
                           .getElementById('play-source-panel')

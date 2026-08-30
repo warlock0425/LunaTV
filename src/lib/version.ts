@@ -6,6 +6,17 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.4.0',
+    date: '2026-08-30',
+    content: `
+- 播放：直連失敗（CORS／網路）時自動改走站內 HLS 代理重播，平時仍不耗主機頻寬。
+- 播放：失敗時可重試目前來源，或自動切到下一個 1080p／可用源。
+- 播放：片頭片尾設定改綁片名／豆瓣 ID，換源仍沿用。
+- 更新：Docker 發布後若舊 JS chunk 失效，自動硬重新整理一次。
+    `.trim(),
+  },
+
+  {
     version: 'v3.3.0',
     date: '2026-08-30',
     content: `

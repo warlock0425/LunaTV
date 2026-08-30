@@ -35,16 +35,20 @@ export function SkipButton({
   );
 }
 
-/** 播放中可恢復的錯誤：不踢出整頁，在播放器上提供換源／重試 */
+/** 播放中可恢復的錯誤：不踢出整頁，在播放器上提供重試／自動換源 */
 export function PlaybackSoftErrorOverlay({
   message,
   onRetry,
-  onSwitchSource,
+  onAutoSwitch,
+  autoSwitchLabel,
+  onBrowseSources,
   onDismiss,
 }: {
   message: string;
   onRetry: () => void;
-  onSwitchSource?: () => void;
+  onAutoSwitch?: () => void;
+  autoSwitchLabel?: string;
+  onBrowseSources?: () => void;
   onDismiss?: () => void;
 }) {
   return (
@@ -54,19 +58,28 @@ export function PlaybackSoftErrorOverlay({
         <p className='text-sm text-zinc-300 leading-relaxed break-words'>
           {message}
         </p>
-        <div className='flex flex-col sm:flex-row gap-2 justify-center'>
+        <div className='flex flex-col gap-2 justify-center'>
           <button
             type='button'
             onClick={onRetry}
             className='px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors'
           >
-            重新整理播放
+            重試目前來源
           </button>
-          {onSwitchSource && (
+          {onAutoSwitch && (
             <button
               type='button'
-              onClick={onSwitchSource}
+              onClick={onAutoSwitch}
               className='px-4 py-2.5 rounded-xl bg-white/10 border border-white/15 text-zinc-100 text-sm font-medium hover:bg-white/15 transition-colors'
+            >
+              {autoSwitchLabel || '自動切換至下一個可用來源'}
+            </button>
+          )}
+          {onBrowseSources && (
+            <button
+              type='button'
+              onClick={onBrowseSources}
+              className='px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-200 text-sm font-medium hover:bg-white/10 transition-colors'
             >
               前往換源
             </button>

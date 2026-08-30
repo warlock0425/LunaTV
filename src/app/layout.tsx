@@ -8,6 +8,8 @@ import { serializeForInlineScript } from '@/lib/safe-json';
 import { DEFAULT_SITE_NAME } from '@/lib/site-defaults';
 import { getServerStorageType } from '@/lib/storage-runtime';
 
+import { ChunkReloadGuard } from '../components/ChunkReloadGuard';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { PwaRegister } from '../components/PwaRegister';
 import { SiteProvider } from '../components/SiteProvider';
@@ -158,8 +160,9 @@ export default async function RootLayout({
         <ThemeProvider disableTransitionOnChange>
           <ToastProvider>
             <SiteProvider siteName={siteName} announcement={announcement}>
-              {children}
+              <ErrorBoundary>{children}</ErrorBoundary>
               <GlobalErrorIndicator />
+              <ChunkReloadGuard />
               <PwaRegister />
               <ThemeColorSync />
             </SiteProvider>

@@ -25,6 +25,11 @@ type RememberedEntry = {
 
 const rememberedBySource = new Map<string, RememberedEntry>();
 
+/** 點播代理的記憶體白名單與直播源隔離。 */
+export function vodProxyMemoryKey(sourceKey: string): string {
+  return `vod:${sourceKey}`;
+}
+
 export function getHostnameFromUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
