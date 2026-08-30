@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.4',
+    date: '2026-08-30',
+    content: `
+- 修正：起播直連與歷史紀錄切集時，若目標集數超出當前列表長度，強制水合完整集數清單，防止 URL 帶大集數時被誤重置回第 1 集。
+- 改善：切換集數加入連點防抖鎖（in-flight lock）與例外錯誤提示，確保切集穩定性。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.3',
     date: '2026-08-30',
     content: `
