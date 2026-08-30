@@ -129,6 +129,20 @@ seg0.ts`);
       global.fetch = originalFetch;
     }
   });
+
+  it('throws the fetch error when HLS fallback is not available', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn(async () => {
+      throw new Error('CORS blocked');
+    }) as unknown as typeof fetch;
+    try {
+      await expect(
+        getVideoResolutionFromM3u8('https://cdn.example.test/blocked.m3u8')
+      ).rejects.toThrow('CORS blocked');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });
 
 describe('processImageUrl', () => {

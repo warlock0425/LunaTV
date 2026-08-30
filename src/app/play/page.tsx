@@ -27,6 +27,7 @@ import {
   getVodHlsBufferConfig,
   hydrateSearchResultEpisodes,
   isMobileUserAgent,
+  needsEpisodeHydration,
   pickFirstPlayableEpisodeUrl,
 } from '@/lib/play-page-utils';
 import {
@@ -1203,7 +1204,7 @@ function PlayPageClient() {
       if (!isLatestRequest()) return;
 
       let newDetail = targetDetail;
-      if (!pickFirstPlayableEpisodeUrl(newDetail.episodes)) {
+      if (needsEpisodeHydration(newDetail)) {
         newDetail = await hydrateSearchResultEpisodes(newDetail);
         if (!isLatestRequest()) return;
         if (!pickFirstPlayableEpisodeUrl(newDetail.episodes)) {

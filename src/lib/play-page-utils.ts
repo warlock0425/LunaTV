@@ -110,12 +110,29 @@ export function getResultEpisodeCount(
   return item.episodes?.length || 0;
 }
 
-/** 搜尋結果常沒有播放網址；測速／換源前打詳情補上。 */
+/**
+ * 搜尋快取只留 1 個探針網址時，集數清單不完整，換源前要打詳情。
+ * 測速可以先用探針，不必等完整清單。
+ */
+export function needsEpisodeHydration(
+  source: Pick<SearchResult, 'episodes' | 'episode_count' | 'source' | 'id'>
+): boolean {
+  if (!source.source || source.id === undefined || source.id === null) {
+    return false;
+  }
+  if (String(source.id) === '') return false;
+  const urls = source.episodes || [];
+  if (!pickFirstPlayableEpisodeUrl(urls)) return true;
+  const count = getResultEpisodeCount(source);
+  return count > 1 && urls.length < count;
+}
+
+/** 搜尋結果常沒有完整播放網址；測速／換源前打詳情補上。 */
 export async function hydrateSearchResultEpisodes(
   source: SearchResult,
   signal?: AbortSignal
 ): Promise<SearchResult> {
-  if (pickFirstPlayableEpisodeUrl(source.episodes)) return source;
+  if (!needsEpisodeHydration(source)) return source;
   if (!source.source || !source.id) return source;
 
   const params = new URLSearchParams({

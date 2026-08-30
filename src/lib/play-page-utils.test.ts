@@ -11,6 +11,7 @@ import {
   isBelowPreferredDisplayQuality,
   isMobileUserAgent,
   isPreferredDisplayQuality,
+  needsEpisodeHydration,
   parseLoadSpeedKBps,
   pickFirstPlayableEpisodeUrl,
   pickRecommendedSourceKey,
@@ -51,6 +52,38 @@ describe('getResultEpisodeCount', () => {
   });
 });
 
+describe('needsEpisodeHydration', () => {
+  it('needs detail when cache only kept a probe for a multi-episode show', () => {
+    expect(
+      needsEpisodeHydration({
+        source: 'src',
+        id: '1',
+        episodes: ['https://cdn.example/probe.m3u8'],
+        episode_count: 20,
+      })
+    ).toBe(true);
+  });
+
+  it('does not hydrate a complete list or a single-episode title', () => {
+    expect(
+      needsEpisodeHydration({
+        source: 'src',
+        id: '1',
+        episodes: ['https://a', 'https://b'],
+        episode_count: 2,
+      })
+    ).toBe(false);
+    expect(
+      needsEpisodeHydration({
+        source: 'src',
+        id: '1',
+        episodes: ['https://movie'],
+        episode_count: 1,
+      })
+    ).toBe(false);
+  });
+});
+
 describe('hydrateSearchResultEpisodes', () => {
   afterEach(() => {
     jest.restoreAllMocks();
@@ -85,6 +118,37 @@ describe('hydrateSearchResultEpisodes', () => {
     };
     await expect(hydrateSearchResultEpisodes(source)).resolves.toBe(source);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('hydrates when cache only kept one probe URL for a series', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        episodes: [
+          'https://cdn.example/d1.m3u8',
+          'https://cdn.example/d2.m3u8',
+          'https://cdn.example/d3.m3u8',
+        ],
+        episodes_titles: ['1', '2', '3'],
+      }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const source = {
+      id: '9',
+      title: 'A',
+      poster: '',
+      episodes: ['https://cdn.example/probe.m3u8'],
+      episodes_titles: [],
+      episode_count: 20,
+      source: 'src',
+      source_name: '源',
+      year: '2024',
+    };
+    expect(needsEpisodeHydration(source)).toBe(true);
+    const hydrated = await hydrateSearchResultEpisodes(source);
+    expect(hydrated.episodes).toHaveLength(3);
+    expect(fetchMock).toHaveBeenCalled();
   });
 
   it('fills episodes from /api/detail when search returned none', async () => {

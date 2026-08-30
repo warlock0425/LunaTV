@@ -271,13 +271,13 @@ async function readResponsePrefix(
   return received;
 }
 
-export async function getVideoResolutionFromM3u8(
+async function probeM3u8ByFetch(
   m3u8Url: string,
   signal?: AbortSignal
 ): Promise<{
-  quality: string; // 如 720p、1080p 等
-  loadSpeed: string; // 自動轉換為 KB/s 或 MB/s
-  pingTime: number; // 網路延遲（毫秒）
+  quality: string;
+  loadSpeed: string;
+  pingTime: number;
 }> {
   const controller = new AbortController();
   const abortFromParent = () => controller.abort();
@@ -351,14 +351,51 @@ export async function getVideoResolutionFromM3u8(
       if (signal?.aborted) throw error;
       throw new Error('Timeout loading video metadata');
     }
-    throw new Error(
-      `Error getting video resolution: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
+    throw error;
   } finally {
     clearTimeout(timeoutId);
     signal?.removeEventListener('abort', abortFromParent);
+  }
+}
+
+/**
+ * 先 fetch 解析播放清單（快、畫質準）。被 CORS 擋住時改走上游同款 hls.js 探針，
+ * 與播放器同一條載入路徑，能播的源盡量能量到。
+ */
+export async function getVideoResolutionFromM3u8(
+  m3u8Url: string,
+  signal?: AbortSignal
+): Promise<{
+  quality: string; // 如 720p、1080p 等
+  loadSpeed: string; // 自動轉換為 KB/s 或 MB/s
+  pingTime: number; // 網路延遲（毫秒）
+}> {
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
+  try {
+    return await probeM3u8ByFetch(m3u8Url, signal);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    if (typeof document === 'undefined') {
+      throw new Error(
+        `Error getting video resolution: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+    try {
+      const { probeM3u8ByHls } = await import('./m3u8-hls-probe');
+      return await probeM3u8ByHls(m3u8Url, signal);
+    } catch (hlsError) {
+      if (signal?.aborted) throw hlsError;
+      throw new Error(
+        `Error getting video resolution: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 }
 
