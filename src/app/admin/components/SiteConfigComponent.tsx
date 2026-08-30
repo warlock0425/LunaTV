@@ -589,7 +589,8 @@ export const SiteConfigComponent = ({
           </button>
         </div>
         <p className='mt-1 text-xs text-zinc-500 dark:text-zinc-400'>
-          網頁直播性能較差，會導致伺服器內存洩露。
+          關閉後停用瀏覽器直播頁與直播 proxy，減少伺服器轉發。Selene／Selene-TV
+          登入後仍可讀直播源列表，在裝置上直連播放。
         </p>
       </div>
 

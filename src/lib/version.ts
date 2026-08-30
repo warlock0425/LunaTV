@@ -6,6 +6,16 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.5.0',
+    date: '2026-08-30',
+    content: `
+- 客戶端：對齊 MoonTV v100，可當 Selene／Selene-TV 後端（進度、收藏與網頁同一組帳號）。
+- 客戶端：新增公開 \`/api/health\` 探測；搜尋源／直播源列表欄位對齊官方 App。
+- 直播：網頁直播開關只擋瀏覽器頁面與直播 proxy；已登入 App 仍可讀源列表並在裝置直連。
+    `.trim(),
+  },
+
+  {
     version: 'v3.4.2',
     date: '2026-08-30',
     content: `

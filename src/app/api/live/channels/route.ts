@@ -3,12 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getVerifiedAuthInfo } from '@/lib/api-auth';
 import { isValidApiSource } from '@/lib/api-input-validation';
 import { enforceRateLimit } from '@/lib/api-rate-limit';
-import { getConfig } from '@/lib/config';
-import {
-  getCachedLiveChannels,
-  isWebLiveEnabled,
-  WEB_LIVE_DISABLED_MESSAGE,
-} from '@/lib/live';
+import { getCachedLiveChannels } from '@/lib/live';
 
 export const runtime = 'nodejs';
 /** 每次換源 1 次 */
@@ -29,14 +24,6 @@ export async function GET(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const config = await getConfig();
-    if (!isWebLiveEnabled(config)) {
-      return NextResponse.json(
-        { error: WEB_LIVE_DISABLED_MESSAGE },
-        { status: 403 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
     const sourceKey = searchParams.get('source');
 

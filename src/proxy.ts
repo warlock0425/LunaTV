@@ -125,6 +125,6 @@ export function shouldSkipAuth(pathname: string): boolean {
 // 設定 proxy 匹配規則（Next 16 起 middleware 更名為 proxy，固定 Node.js runtime）
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|sw.js|login|warning|api/login|api/register|api/logout|api/cron|api/server-config).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw.js|login|warning|api/login|api/register|api/logout|api/cron|api/server-config|api/health).*)',
   ],
 };

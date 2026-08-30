@@ -18,6 +18,10 @@ export async function GET(request: NextRequest) {
     StorageConfigured: storageStatus.configured,
     StorageMessage: storageStatus.message,
     Version: CURRENT_VERSION,
+    ClientCompat: {
+      selene: true,
+      seleneTv: true,
+    },
   };
   return NextResponse.json(result, {
     status: storageStatus.configured ? 200 : 503,

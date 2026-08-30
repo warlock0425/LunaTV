@@ -12,7 +12,11 @@ import {
 
 export const WEB_LIVE_DISABLED_MESSAGE = '網頁直播未開啟';
 
-/** 與前台 ENABLE_WEB_LIVE 對齊：關閉時使用者直播 API／proxy 一律拒絕。 */
+/**
+ * 與前台 ENABLE_WEB_LIVE 對齊：關閉時擋瀏覽器直播頁與直播 proxy（伺服器轉發串流）。
+ * 已登入的 Selene／Selene-TV 仍可讀 /api/live/sources、channels、epg（中繼資料；
+ * 點播串流由客戶端直連源站）。
+ */
 export function isWebLiveEnabled(
   config:
     | {

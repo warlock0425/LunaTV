@@ -5,7 +5,7 @@
   <p><strong>為繁體中文使用者優化的自架影音聚合平台</strong></p>
   <p>多源搜尋・陸源譯名橋接・集數追更・無廣告 HLS・IPTV 直播・雲端進度同步</p>
 
-![Version](https://img.shields.io/badge/Version-3.4.2-blue)
+![Version](https://img.shields.io/badge/Version-3.5.0-blue)
 ![Next.js](https://img.shields.io/badge/Next.js-16-000?logo=nextdotjs)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178c6?logo=typescript)
@@ -56,6 +56,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
   - [Vercel + Upstash](#vercel--upstash)
   - [更新映像](#更新映像)
 - [第一次使用](#第一次使用)
+- [客戶端（Selene／Selene-TV）](#客戶端seleneselene-tv)
 - [播放源與設定檔](#播放源與設定檔)
 - [環境變數](#環境變數)
 - [本機開發](#本機開發)
@@ -101,6 +102,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 
 - **四種儲存後端**：Kvrocks（推薦）／Redis／Upstash／localStorage
 - 觀看紀錄、收藏、搜尋歷史、跳過片頭片尾設定可跨裝置同步（非 localStorage 模式）
+- **Selene／Selene-TV**：可當 MoonTV v100 相容後端，進度與收藏與網頁共用同一組帳號
 - 後台資料匯出／匯入；匯出備份支援強化保護（scrypt + AES-GCM）
 
 ### 管理後台
@@ -172,7 +174,7 @@ LunaTV 是可自架的影音**聚合播放殼**：它本身**不提供、不託�
 | 本機 `pnpm dev`              | 開發除錯                                | localStorage 或 Redis | 不建議當正式站               |
 
 > 映像位址：`ghcr.io/berserker8888/lunatv:latest`  
-> 版本標籤可改為 `3.4.2` 或你需要的 tag。
+> 版本標籤可改為 `3.5.0` 或你需要的 tag。
 
 ### Docker Compose + Kvrocks（推薦）
 
@@ -310,6 +312,29 @@ docker compose up -d
 7. （可選）到 **健康頁** 看儲存、cron、熔斷與最近檢測
 
 若登入後是警告頁：代表 `PASSWORD` 未設定或未正確注入環境變數。
+
+## 客戶端（Selene／Selene-TV）
+
+這份後端對齊 [MoonTV v100](https://github.com/MoonTechLab/LunaTV) 客戶端協定，可直接給官方 App 當伺服器，不必把 App 揉進網頁。
+
+| 客戶端                                                | 平台                         | 下載            |
+| ----------------------------------------------------- | ---------------------------- | --------------- |
+| [Selene](https://github.com/MoonTechLab/Selene)       | Android／iOS／macOS／Windows | GitHub Releases |
+| [Selene-TV](https://github.com/MoonTechLab/Selene-TV) | Android TV（遙控器）         | GitHub Releases |
+
+設定步驟：
+
+1. 後端請用 **Kvrocks／Redis／Upstash**（`localStorage` 模式無法跨裝置同步）
+2. 在 App 填 **伺服器地址**：`https://你的網域`（含協定，不要加 `/api`，不要結尾斜線）
+3. 帳號密碼用站長 `USERNAME`／`PASSWORD`，或後台建立的使用者
+4. 連線探測走公開的 `/api/health`；登入後 cookie `auth` 會同步搜尋、詳情、播放紀錄、收藏、搜尋歷史、直播源列表
+5. 直播：App 在裝置上直連源站。後台「啟用網頁直播」只影響瀏覽器直播頁與直播 proxy，關了也不擋 Selene 拉源列表
+
+注意：
+
+- 豆瓣首頁、Bangumi 日曆由 App 自己打外部 API，不經本站
+- 寫入 API 仍驗登入簽章；沒有為客戶端放寬 CORS／SSRF／HMAC
+- 請只給自己的實例使用，不要公開分享登入連結
 
 ## 播放源與設定檔
 
@@ -479,7 +504,7 @@ A: 會爆自架頻寬，也更容易被源站封鎖機房 IP。本專案 VOD 採
 A: 不適合。正式環境請用 Kvrocks／Redis／Upstash。
 
 **Q: 和上游映像能混用嗎？**  
-A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.4.2**）；資料結構多數相容，但升級前請先備份。
+A: 不建議直接混 tag。本 fork 有自己的行為與版本線（目前 **3.5.0**）；資料結構多數相容，但升級前請先備份。
 
 **Q: 有些源搜得到但黑屏？**  
 A: v3.4.0 起，直連 CORS／網路失敗會自動改走站內 HLS 代理再播一次。平時仍走瀏覽器直連。若代理後仍失敗，畫面上可重試或自動切到下一個 1080p 源。
@@ -489,6 +514,9 @@ A: v3.4.0 會在舊 JS 檔失效時自動硬重新整理一次。若仍卡住，
 
 **Q: 換源後片頭片尾設定不見了？**  
 A: v3.4.0 起跳過秒數綁片名／豆瓣 ID，同一部片換源會沿用。舊的「依來源」設定會在第一次讀到時自動帶過去。
+
+**Q: 可以用 Selene 或 Selene-TV 連這台嗎？**  
+A: 可以。v3.5.0 起對齊 MoonTV v100 客戶端 API。伺服器地址填站台根網址，帳號與網頁相同。詳見 [客戶端](#客戶端seleneselene-tv)。
 
 ## 致謝
 

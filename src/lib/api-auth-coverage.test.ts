@@ -75,6 +75,11 @@ const SECOND_LAYER_EXEMPTIONS: Record<string, Exemption> = {
     reason: '登入頁在登入前就需要；僅回傳站名、儲存型別與版本號',
     requiresRateLimit: false,
   },
+  'health/route.ts': {
+    reason:
+      'Selene／Selene-TV 連線探測；只回 ok 與版本號，不含使用者資料或站內設定',
+    requiresRateLimit: false,
+  },
   'image-proxy/route.ts': {
     reason:
       '見 1ec87a9：這支是 <img src> 的目標，OrionTV 的海報也走它，' +
@@ -147,6 +152,7 @@ const EXPECTED_PROXY_EXCLUSIONS = [
   'api/logout',
   'api/cron',
   'api/server-config',
+  'api/health',
 ];
 
 function listRouteFiles(dir: string): string[] {

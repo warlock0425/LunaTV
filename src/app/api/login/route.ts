@@ -192,6 +192,7 @@ export async function POST(req: NextRequest) {
       const expires = new Date();
       expires.setDate(expires.getDate() + 7); // 7天過期
 
+      // Selene 只取第一個 Set-Cookie 的 name=value，auth 必須排在 user_info 前面。
       response.cookies.set(
         'auth',
         authCookieValue,
