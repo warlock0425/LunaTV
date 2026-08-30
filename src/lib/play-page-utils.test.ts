@@ -183,6 +183,42 @@ describe('hydrateSearchResultEpisodes', () => {
       expect.objectContaining({ cache: 'no-store' })
     );
   });
+
+  it('forces hydration even when needsEpisodeHydration would be false', async () => {
+    const fetchMock = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        episodes: [
+          'https://cdn.example/d1.m3u8',
+          'https://cdn.example/d2.m3u8',
+          'https://cdn.example/d3.m3u8',
+        ],
+        episodes_titles: ['1', '2', '3'],
+      }),
+    }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const source = {
+      id: '1',
+      title: 'A',
+      poster: '',
+      episodes: ['https://cdn.example/1.m3u8'],
+      episodes_titles: ['1'],
+      episode_count: 1,
+      source: 'src',
+      source_name: '源',
+      year: '2024',
+    };
+    expect(needsEpisodeHydration(source)).toBe(false);
+    const hydrated = await hydrateSearchResultEpisodes(source, undefined, {
+      force: true,
+    });
+    expect(hydrated.episodes).toHaveLength(3);
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/detail?source=src&id=1',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+  });
 });
 
 describe('pickSpeedTestEpisodeUrl（測速取集）', () => {

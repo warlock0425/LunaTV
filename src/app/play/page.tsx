@@ -734,7 +734,15 @@ function PlayPageClient() {
         const ensurePlayableEpisodes = async (
           candidate: SearchResult
         ): Promise<SearchResult | null> => {
-          if (candidate.episodes?.length && !needsEpisodeHydration(candidate)) {
+          const targetIndex = Math.max(
+            0,
+            (initialUrlEpisodeRef.current || 1) - 1
+          );
+          if (
+            candidate.episodes?.length &&
+            !needsEpisodeHydration(candidate) &&
+            targetIndex < candidate.episodes.length
+          ) {
             return candidate;
           }
           const fresh = await fetchSourceDetail(candidate.source, candidate.id);
@@ -1360,10 +1368,35 @@ function PlayPageClient() {
   // 處理集數切換
   const handleEpisodeChange = async (episodeNumber: number) => {
     let currentDetail = detailRef.current;
-    if (currentDetail && needsEpisodeHydration(currentDetail)) {
-      currentDetail = await hydrateSearchResultEpisodes(currentDetail);
-      if (currentDetail.episodes?.length) {
-        setDetail(currentDetail);
+    if (
+      !currentDetail ||
+      needsEpisodeHydration(currentDetail) ||
+      !currentDetail.episodes ||
+      episodeNumber >= currentDetail.episodes.length
+    ) {
+      if (currentDetail?.source && currentDetail?.id) {
+        currentDetail = await hydrateSearchResultEpisodes(
+          currentDetail,
+          undefined,
+          { force: true }
+        );
+        if (currentDetail.episodes?.length) {
+          setDetail(currentDetail);
+          detailRef.current = currentDetail;
+          setAvailableSources((prev) =>
+            prev.map((item) =>
+              item.source === currentDetail?.source &&
+              item.id === currentDetail?.id
+                ? currentDetail
+                : item
+            )
+          );
+          setCachedDetail(
+            currentDetail.source,
+            currentDetail.id,
+            currentDetail
+          );
+        }
       }
     }
     const currentTotal = currentDetail?.episodes?.length || totalEpisodes;
@@ -2270,6 +2303,14 @@ function PlayPageClient() {
                     )
                   );
                   setCachedDetail(hydrated.source, hydrated.id, hydrated);
+                  if (
+                    hydrated.source === currentSourceRef.current &&
+                    hydrated.id === currentIdRef.current &&
+                    hydrated.episodes?.length
+                  ) {
+                    setDetail(hydrated);
+                    detailRef.current = hydrated;
+                  }
                 }}
               />
               {/* 自動連播 + 快捷鍵幫助 */}

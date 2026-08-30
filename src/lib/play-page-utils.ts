@@ -130,9 +130,10 @@ export function needsEpisodeHydration(
 /** 搜尋結果常沒有完整播放網址；測速／換源前打詳情補上。 */
 export async function hydrateSearchResultEpisodes(
   source: SearchResult,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: { force?: boolean }
 ): Promise<SearchResult> {
-  if (!needsEpisodeHydration(source)) return source;
+  if (!options?.force && !needsEpisodeHydration(source)) return source;
   if (!source.source || !source.id) return source;
 
   const params = new URLSearchParams({
@@ -150,7 +151,9 @@ export async function hydrateSearchResultEpisodes(
   return {
     ...source,
     episodes: detail.episodes,
-    episodes_titles: detail.episodes_titles || [],
+    episodes_titles: detail.episodes_titles?.length
+      ? detail.episodes_titles
+      : detail.episodes.map((_, i) => `${i + 1}`),
     poster: source.poster || detail.poster,
     episode_count: detail.episodes.length,
   };

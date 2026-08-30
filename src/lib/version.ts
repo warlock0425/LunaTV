@@ -6,6 +6,15 @@ export interface ChangelogItem {
 
 export const CHANGELOGS: ChangelogItem[] = [
   {
+    version: 'v3.2.3',
+    date: '2026-08-30',
+    content: `
+- 修正：點擊集數時若目標集數超出當前記憶體列表或為探針，強制執行詳情水合，徹底修復「點選大集數（如海賊王第 1156 集）無反應」的問題。
+- 修正：當前播放源在背景或選集抽屜水合完成後，同步寫回 detail 狀態機與播放網址。
+    `.trim(),
+  },
+
+  {
     version: 'v3.2.2',
     date: '2026-08-30',
     content: `
